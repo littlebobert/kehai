@@ -11,6 +11,9 @@ struct KehaiApp: App {
                 appearance: appDelegate.coordinator.appearanceSettings,
                 idleGrouping: appDelegate.coordinator.idleGroupingSettings,
                 excludedApps: appDelegate.coordinator.excludedAppStore,
+                permissionManager: appDelegate.coordinator.permissionManager,
+                openAIKeyStore: appDelegate.coordinator.openAIKeyStore,
+                safariService: appDelegate.coordinator.safari,
                 shortcutChanged: appDelegate.coordinator.registerHotKey,
                 appearanceChanged: appDelegate.coordinator.refreshBrowserAppearance,
                 idleGroupingChanged: appDelegate.coordinator.updateIdleGroupingMonitoring,
@@ -30,14 +33,19 @@ struct KehaiApp: App {
                 .disabled(!appDelegate.coordinator.autoUpdates.canCheckForUpdates)
             }
             CommandMenu("View") {
-                Button("Group by Task") {
+                Button("Group by task") {
                     appDelegate.coordinator.setBrowserViewMode(.grouped)
                 }
                 .keyboardShortcut("1", modifiers: .command)
-                Button("Sort All by Recent") {
+                Button("Sort all by recent") {
                     appDelegate.coordinator.setBrowserViewMode(.recent)
                 }
                 .keyboardShortcut("2", modifiers: .command)
+                Divider()
+                Button("Search") {
+                    appDelegate.coordinator.focusBrowserSearch()
+                }
+                .keyboardShortcut("f", modifiers: .command)
             }
         }
     }

@@ -24,6 +24,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         }
     }
 
+    func showAndFocusSearch() {
+        show()
+        DispatchQueue.main.async { [weak self] in
+            self?.model.searchFocusRequest += 1
+        }
+    }
+
     func show(selectedGroupID: String? = nil) {
         if let window {
             if let selectedGroupID {

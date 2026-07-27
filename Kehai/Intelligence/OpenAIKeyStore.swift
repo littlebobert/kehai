@@ -19,6 +19,7 @@ final class OpenAIKeyStore {
     }
 
     var hasKey: Bool { !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var hasSavedKey: Bool { !savedAPIKey.isEmpty }
     var hasUnsavedChanges: Bool { apiKey.trimmingCharacters(in: .whitespacesAndNewlines) != savedAPIKey }
     var canSave: Bool { hasKey && hasUnsavedChanges }
 

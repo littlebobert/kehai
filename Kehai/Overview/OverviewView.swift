@@ -82,6 +82,14 @@ struct OverviewView: View {
             model.keyboardColumnCount = gridColumnCount
         }
         .animation(.easeInOut(duration: 0.16), value: model.thumbnailCardWidth)
+        .alert("OpenAI request failed", isPresented: Binding(
+            get: { model.openAIErrorMessage != nil },
+            set: { if !$0 { model.openAIErrorMessage = nil } }
+        )) {
+            Button("OK") { model.openAIErrorMessage = nil }
+        } message: {
+            Text(model.openAIErrorMessage ?? "OpenAI returned an unexpected error.")
+        }
         .alert("Never capture \(appPendingExclusion?.appName ?? "this app")?", isPresented: Binding(
             get: { appPendingExclusion != nil },
             set: { if !$0 { appPendingExclusion = nil } }

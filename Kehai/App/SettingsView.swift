@@ -7,6 +7,9 @@ struct SettingsView: View {
     @Bindable var appearance: AppearanceSettings
     @Bindable var idleGrouping: IdleGroupingSettings
     @Bindable var excludedApps: ExcludedAppStore
+    @Bindable var permissionManager: PermissionManager
+    @Bindable var openAIKeyStore: OpenAIKeyStore
+    let safariService: SafariTabService
     let shortcutChanged: () -> Void
     let appearanceChanged: () -> Void
     let idleGroupingChanged: () -> Void
@@ -18,10 +21,14 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             appearanceSettings
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
+            aiSettings
+                .tabItem { Label("AI", systemImage: "sparkles") }
+            permissionsSettings
+                .tabItem { Label("Permissions", systemImage: "lock.shield") }
             privacySettings
                 .tabItem { Label("Exclusions", systemImage: "hand.raised") }
         }
-        .frame(width: 520, height: 340)
+        .frame(width: 560, height: 420)
     }
 
     private var generalSettings: some View {
@@ -114,6 +121,99 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var aiSettings: some View {
+        Form {
+            Section("OpenAI API Key") {
+                SecureField("API key", text: $openAIKeyStore.apiKey)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { openAIKeyStore.save() }
+                HStack {
+                    Text(openAIKeyStore.hasUnsavedChanges ? "Save your changes to the login Keychain." : openAIKeyStore.hasSavedKey ? "Saved in your login Keychain." : "Required to generate task groups and use Smart Search.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if openAIKeyStore.hasSavedKey {
+                        Button("Remove Key") {
+                            openAIKeyStore.apiKey = ""
+                            openAIKeyStore.save()
+                        }
+                    }
+                    Button("Save Key") { openAIKeyStore.save() }
+                        .disabled(!openAIKeyStore.canSave)
+                }
+                if let saveError = openAIKeyStore.saveError {
+                    Text(saveError).font(.caption).foregroundStyle(.red)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var permissionsSettings: some View {
+        Form {
+            Section("Permissions") {
+                permissionRow(
+                    title: "Screen Recording",
+                    granted: permissionManager.screenCaptureGranted,
+                    attempted: permissionManager.screenCaptureAttempted,
+                    enable: permissionManager.requestScreenCapture,
+                    openSettings: permissionManager.openScreenCaptureSettings
+                )
+                permissionRow(
+                    title: "Accessibility",
+                    granted: permissionManager.accessibilityGranted,
+                    attempted: permissionManager.accessibilityAttempted,
+                    enable: permissionManager.requestAccessibility,
+                    openSettings: permissionManager.openAccessibilitySettings
+                )
+                permissionRow(
+                    title: "Safari tabs (optional)",
+                    granted: permissionManager.safariAutomationStatus == "Granted",
+                    attempted: permissionManager.safariAutomationStatus == "Needs permission",
+                    requesting: permissionManager.safariAutomationStatus == "Requesting",
+                    enable: { permissionManager.checkSafari(using: safariService) },
+                    openSettings: permissionManager.openAutomationSettings
+                )
+                if let safariError = permissionManager.safariAutomationError {
+                    Text(safariError).font(.caption).foregroundStyle(.red)
+                }
+                HStack {
+                    Text("Permission changes may require restarting Kehai.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Check Again") { permissionManager.refresh() }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear { permissionManager.refresh() }
+    }
+
+    private func permissionRow(
+        title: String,
+        granted: Bool,
+        attempted: Bool,
+        requesting: Bool = false,
+        enable: @escaping () -> Void,
+        openSettings: @escaping () -> Void
+    ) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            if granted {
+                Label("Allowed", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else if requesting {
+                ProgressView().controlSize(.small)
+            } else if attempted {
+                Button("Open Settings", action: openSettings)
+            } else {
+                Button("Enable", action: enable)
+            }
+        }
     }
 
     private var privacySettings: some View {

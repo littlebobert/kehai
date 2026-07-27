@@ -68,6 +68,7 @@ final class OverviewViewModel {
     }
     var thumbnailStatus: String?
     var errorMessage: String?
+    var openAIErrorMessage: String?
 
     private let catalog: WindowCatalog
     private let thumbnails: ThumbnailService
@@ -180,7 +181,7 @@ final class OverviewViewModel {
         } catch {
             smartSearchWindowIDs = nil
             smartSearchStatus = nil
-            errorMessage = error.localizedDescription
+            openAIErrorMessage = error.localizedDescription
             SafeDiagnosticLog.shared.record("smart-search: failed")
         }
         isSmartSearching = false
@@ -476,7 +477,7 @@ final class OverviewViewModel {
             }
             hasGeneratedGroups = true
         } catch {
-            errorMessage = error.localizedDescription
+            openAIErrorMessage = error.localizedDescription
         }
         groupingStatus = nil
         isGrouping = false

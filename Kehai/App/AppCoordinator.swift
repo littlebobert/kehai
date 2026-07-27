@@ -31,6 +31,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         appearance: appearanceSettings,
         idleGrouping: idleGroupingSettings,
         excludedApps: excludedAppStore,
+        permissionManager: permissionManager,
+        openAIKeyStore: openAIKeyStore,
+        safariService: safari,
         shortcutChanged: { [weak self] in self?.registerHotKey() },
         appearanceChanged: { [weak self] in self?.refreshBrowserAppearance() },
         idleGroupingChanged: { [weak self] in self?.updateIdleGroupingMonitoring() },
@@ -222,6 +225,15 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     func setBrowserViewMode(_ mode: BrowserViewMode) {
         viewModel.setViewMode(mode)
+    }
+
+    func focusBrowserSearch() {
+        permissionManager.refresh()
+        guard permissionManager.hasCorePermissions else {
+            showSettings()
+            return
+        }
+        panelController.showAndFocusSearch()
     }
 
     @objc private func quit() {
