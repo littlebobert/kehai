@@ -12,7 +12,7 @@ struct AboutView: View {
     }
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             if let icon = NSApp.applicationIconImage {
                 Image(nsImage: icon)
                     .resizable()
@@ -24,20 +24,21 @@ struct AboutView: View {
             Text(version)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text("Made in Japan")
+            Link("Made in Japan", destination: URL(string: "https://littlebobert.github.io/kehai.html")!)
                 .font(.callout)
+                .foregroundStyle(.link)
             Button("Report a Bug…") {
                 reportError = nil
                 reportBug()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.bordered)
             if let reportError {
                 Text(reportError)
                     .font(.caption)
                     .foregroundStyle(.red)
             }
         }
-        .frame(width: 360, height: 300)
+        .frame(width: 320, height: 260)
     }
 }
 
@@ -45,13 +46,28 @@ struct AboutView: View {
 final class AboutWindowController: NSWindowController, NSWindowDelegate {
     init(reportBug: @escaping () -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 260),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
         window.title = "About Kehai"
+        window.titleVisibility = .hidden
         window.titlebarSeparatorStyle = .none
+
+        if let closeButton = window.standardWindowButton(.closeButton),
+           let titlebarView = closeButton.superview {
+            let titleLabel = NSTextField(labelWithString: "About Kehai")
+            titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            titleLabel.alignment = .center
+            titleLabel.translatesAutoresizingMaskIntoConstraints = false
+            titlebarView.addSubview(titleLabel)
+            NSLayoutConstraint.activate([
+                titleLabel.centerXAnchor.constraint(equalTo: titlebarView.centerXAnchor),
+                titleLabel.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor)
+            ])
+        }
+
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: AboutView(reportBug: reportBug))
         super.init(window: window)

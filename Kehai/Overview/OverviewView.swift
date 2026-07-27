@@ -161,7 +161,7 @@ struct OverviewView: View {
             }
         } else {
             WrappingHStack(horizontalSpacing: 8, verticalSpacing: 8) {
-                taskGroupButton("All", selected: model.selectedTaskGroupID == nil) {
+                taskGroupButton("All", selected: model.selectedTaskGroupID == nil, showsIcon: true) {
                     withAnimation(.easeInOut(duration: 0.14)) {
                         model.selectTaskGroup(nil)
                     }
@@ -179,13 +179,19 @@ struct OverviewView: View {
         }
     }
 
-    private func taskGroupButton(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+    private func taskGroupButton(_ title: String, selected: Bool, showsIcon: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Label(title, systemImage: selected ? "checkmark.circle.fill" : "circle.grid.2x2")
-                .padding(.horizontal, 12)
-                .frame(height: categoryBarHeight)
-                .background(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.thinMaterial), in: Capsule())
-                .foregroundStyle(selected ? Color.white : Color.primary)
+            Group {
+                if showsIcon {
+                    Label(title, systemImage: selected ? "checkmark.circle.fill" : "circle.grid.2x2")
+                } else {
+                    Text(title)
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: categoryBarHeight)
+            .background(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.thinMaterial), in: Capsule())
+            .foregroundStyle(selected ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
     }

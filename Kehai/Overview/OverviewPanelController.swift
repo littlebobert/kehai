@@ -36,7 +36,21 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
         window.title = "Kehai"
         window.titlebarAppearsTransparent = true
-        window.titleVisibility = .visible
+        window.titleVisibility = .hidden
+
+        if let closeButton = window.standardWindowButton(.closeButton),
+           let titlebarView = closeButton.superview {
+            let titleLabel = NSTextField(labelWithString: "Kehai")
+            titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            titleLabel.alignment = .center
+            titleLabel.translatesAutoresizingMaskIntoConstraints = false
+            titlebarView.addSubview(titleLabel)
+            NSLayoutConstraint.activate([
+                titleLabel.centerXAnchor.constraint(equalTo: titlebarView.centerXAnchor),
+                titleLabel.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor)
+            ])
+        }
+
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 760, height: 520)
         window.collectionBehavior = [.managed, .participatesInCycle]

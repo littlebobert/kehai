@@ -14,7 +14,7 @@ Menu-bar utility for returning to interrupted work. See every current window, gr
 - **Accessibility** — opens the selected window.
 - **Automation → Safari** *(optional)* — shows and activates individual Safari tabs.
 
-An OpenAI API key is required to generate task groups and is stored in the login Keychain.
+An OpenAI API key is required to generate task groups.
 
 ## Known limitations
 
