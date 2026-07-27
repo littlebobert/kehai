@@ -19,6 +19,7 @@ struct OverviewView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 14) {
+                controlBar
                 statusRow
                 categoryBar
                     .frame(minHeight: categoryBarHeight)
@@ -90,6 +91,24 @@ struct OverviewView: View {
         } message: { window in
             Text("All current and future \(window.appName) windows will be removed from Kehai. Kehai won’t capture their thumbnails or include them in AI grouping. You can allow the app again in Settings.")
         }
+    }
+
+    private var controlBar: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                GroupingControl(model: model)
+                Spacer(minLength: 12)
+                HiddenWindowsControl(model: model)
+                SearchControl(model: model, submit: openSelectedWindow)
+            }
+
+            WrappingHStack(horizontalSpacing: 12, verticalSpacing: 10) {
+                GroupingControl(model: model)
+                HiddenWindowsControl(model: model)
+                SearchControl(model: model, submit: openSelectedWindow)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

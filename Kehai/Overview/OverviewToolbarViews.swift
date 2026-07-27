@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct GroupingToolbarView: View {
+struct GroupingControl: View {
     @Bindable var model: OverviewViewModel
 
     var body: some View {
@@ -14,26 +14,18 @@ struct GroupingToolbarView: View {
     }
 }
 
-struct HiddenWindowsToolbarView: View {
+struct HiddenWindowsControl: View {
     @Bindable var model: OverviewViewModel
 
     var body: some View {
-        Button {
-            model.excludeHiddenWindows.toggle()
-        } label: {
-            Image(systemName: model.excludeHiddenWindows ? "eye.slash" : "eye")
-                .frame(width: 18, height: 18)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.regular)
-        .tint(model.excludeHiddenWindows ? .accentColor : nil)
-        .help(model.excludeHiddenWindows ? "Hidden windows are excluded" : "Hidden windows are included")
-        .accessibilityLabel("Exclude Hidden Windows")
-        .accessibilityValue(model.excludeHiddenWindows ? "On" : "Off")
+        Toggle("Exclude Hidden Windows", isOn: $model.excludeHiddenWindows)
+            .toggleStyle(.checkbox)
+            .controlSize(.regular)
+            .help("Hide windows you have marked as hidden")
     }
 }
 
-struct SearchToolbarView: View {
+struct SearchControl: View {
     @Bindable var model: OverviewViewModel
     let submit: () -> Void
     @FocusState private var isFocused: Bool

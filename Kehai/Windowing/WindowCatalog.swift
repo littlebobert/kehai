@@ -31,7 +31,7 @@ final class WindowCatalog {
             }
         }
 
-        return candidates.compactMap { window in
+        let items: [(WindowItem, SCWindow)] = candidates.compactMap { window -> (WindowItem, SCWindow)? in
             guard let app = window.owningApplication else { return nil }
             let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !title.isEmpty || app.applicationName == "Terminal" else { return nil }
@@ -51,11 +51,16 @@ final class WindowCatalog {
                 title: title.isEmpty ? app.applicationName : title,
                 frame: window.frame,
                 isOnScreen: window.isOnScreen,
-                lastSeen: lastSeen[window.windowID] ?? Date(),
+                lastSeen: lastSeen[window.windowID],
                 appIcon: NSRunningApplication(processIdentifier: app.processID)?.icon
             )
             return (item, window)
         }
+        let orderedItems = WindowItem.orderedByRecency(items.map { $0.0 })
+        let pairsByID: [CGWindowID: (WindowItem, SCWindow)] = Dictionary(
+            uniqueKeysWithValues: items.map { ($0.0.id, $0) }
+        )
+        return orderedItems.compactMap { pairsByID[$0.id] }
     }
 
     private func accessibilityWindowSignatures(for processID: pid_t) -> [AccessibilityWindowSignature]? {

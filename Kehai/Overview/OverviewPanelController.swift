@@ -2,16 +2,11 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class OverviewPanelController: NSObject, NSWindowDelegate, NSToolbarDelegate {
+final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
-    private var toolbarControllers: [NSToolbarItem.Identifier: NSViewController] = [:]
     private let model: OverviewViewModel
-
-    private static let groupingItem = NSToolbarItem.Identifier("com.justin.Kehai.toolbar.grouping")
-    private static let hiddenWindowsItem = NSToolbarItem.Identifier("com.justin.Kehai.toolbar.hiddenWindows")
-    private static let searchItem = NSToolbarItem.Identifier("com.justin.Kehai.toolbar.search")
 
     init(model: OverviewViewModel) {
         self.model = model
@@ -43,9 +38,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate, NSToolbarDelega
             defer: false
         )
         window.title = "Kehai"
-        window.titlebarAppearsTransparent = true
         window.titleVisibility = .visible
-        configureToolbar(for: window)
 
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 360, height: 520)
@@ -66,52 +59,6 @@ final class OverviewPanelController: NSObject, NSWindowDelegate, NSToolbarDelega
 
     func close() {
         window?.close()
-    }
-
-    private func configureToolbar(for window: NSWindow) {
-        let toolbar = NSToolbar(identifier: "KehaiBrowserToolbar")
-        toolbar.delegate = self
-        toolbar.allowsUserCustomization = true
-        toolbar.autosavesConfiguration = true
-        toolbar.displayMode = .iconOnly
-        toolbar.showsBaselineSeparator = true
-        window.toolbarStyle = .unified
-        window.toolbar = toolbar
-    }
-
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.groupingItem, .flexibleSpace, Self.hiddenWindowsItem, Self.searchItem, .space]
-    }
-
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.groupingItem, .flexibleSpace, Self.hiddenWindowsItem, Self.searchItem]
-    }
-
-    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier, willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
-        let controller: NSViewController
-        let label: String
-        switch itemIdentifier {
-        case Self.groupingItem:
-            controller = NSHostingController(rootView: GroupingToolbarView(model: model))
-            label = "Task Groups"
-        case Self.hiddenWindowsItem:
-            controller = NSHostingController(rootView: HiddenWindowsToolbarView(model: model))
-            label = "Hidden Windows"
-        case Self.searchItem:
-            controller = NSHostingController(rootView: SearchToolbarView(model: model) { [weak self] in
-                guard let self, self.model.activateSelectedWindow() else { return }
-                self.close()
-            })
-            label = "Search"
-        default:
-            return nil
-        }
-        toolbarControllers[itemIdentifier] = controller
-        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        item.label = label
-        item.paletteLabel = label
-        item.view = controller.view
-        return item
     }
 
     func windowWillClose(_ notification: Notification) {

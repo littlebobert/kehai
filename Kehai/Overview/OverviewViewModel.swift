@@ -80,7 +80,7 @@ final class OverviewViewModel {
         let selectedWindowIDs = selectedTaskGroupID.flatMap { selectedID in
             taskGroups.first(where: { $0.id == selectedID }).map { Set($0.windowIDs) }
         }
-        return windows.filter { item in
+        let matchingWindows = windows.filter { item in
             let belongsToSelectedGroup = selectedWindowIDs?.contains(item.id) ?? true
             let includedByHiddenFilter = !excludeHiddenWindows || !hiddenWindowStore.isHidden(item)
             let matchesQuery = query.isEmpty
@@ -89,6 +89,7 @@ final class OverviewViewModel {
                 || item.safariTabs.contains { $0.title.localizedCaseInsensitiveContains(query) || $0.url.localizedCaseInsensitiveContains(query) }
             return belongsToSelectedGroup && includedByHiddenFilter && matchesQuery
         }
+        return WindowItem.orderedByRecency(matchingWindows)
     }
 
     var orderedFilteredWindows: [WindowItem] {

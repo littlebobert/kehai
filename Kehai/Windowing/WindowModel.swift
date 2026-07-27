@@ -9,7 +9,7 @@ struct WindowItem: Identifiable, Hashable, Sendable {
     let title: String
     let frame: CGRect
     let isOnScreen: Bool
-    var lastSeen: Date
+    var lastSeen: Date?
     var thumbnail: NSImage?
     var thumbnailIsUsable = false
     var thumbnailRevision = 0
@@ -26,7 +26,25 @@ struct WindowItem: Identifiable, Hashable, Sendable {
 
     var renderID: String { "\(id)-\(thumbnailRevision)" }
 
-    var isDusty: Bool { Date().timeIntervalSince(lastSeen) > 3 * 24 * 60 * 60 }
+    var isDusty: Bool {
+        guard let lastSeen else { return false }
+        return Date().timeIntervalSince(lastSeen) > 3 * 24 * 60 * 60
+    }
+
+    static func orderedByRecency(_ windows: [WindowItem]) -> [WindowItem] {
+        windows.enumerated().sorted { lhs, rhs in
+            switch (lhs.element.lastSeen, rhs.element.lastSeen) {
+            case let (left?, right?):
+                return left == right ? lhs.offset < rhs.offset : left > right
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return lhs.offset < rhs.offset
+            }
+        }.map(\.element)
+    }
 }
 
 struct SafariTab: Identifiable, Codable, Hashable, Sendable {
