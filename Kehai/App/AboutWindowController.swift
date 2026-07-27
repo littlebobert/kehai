@@ -21,6 +21,7 @@ struct AboutView: View {
             }
             Text("Kehai")
                 .font(.system(size: 22, weight: .semibold))
+                .padding(.bottom, -5)
             Text("Browse windows intelligently grouped by task.")
                 .font(.callout)
                 .foregroundStyle(.secondary)

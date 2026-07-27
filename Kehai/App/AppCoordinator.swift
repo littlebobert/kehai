@@ -9,9 +9,11 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let openAIKeyStore = OpenAIKeyStore()
     let excludedAppStore = ExcludedAppStore()
     let autoUpdates = AutoUpdateService()
+    let appearanceSettings = AppearanceSettings()
+    let idleGroupingSettings = IdleGroupingSettings()
     private lazy var activityMonitor = ActivityMonitor(store: history)
     private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
-    private lazy var panelController = OverviewPanelController(model: viewModel)
+    private lazy var panelController = OverviewPanelController(model: viewModel, appearance: appearanceSettings)
     let shortcutSettings = ShortcutSettings()
     private lazy var onboardingController = OnboardingWindowController(
         permissionManager: permissionManager,
@@ -26,18 +28,26 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     )
     private lazy var settingsController = SettingsWindowController(
         shortcut: shortcutSettings,
+        appearance: appearanceSettings,
+        idleGrouping: idleGroupingSettings,
         excludedApps: excludedAppStore,
         shortcutChanged: { [weak self] in self?.registerHotKey() },
+        appearanceChanged: { [weak self] in self?.refreshBrowserAppearance() },
+        idleGroupingChanged: { [weak self] in self?.updateIdleGroupingMonitoring() },
         exclusionsChanged: { [weak self] in
             Task { await self?.viewModel.refresh() }
         }
     )
     private var activationObserver: NSObjectProtocol?
+    private var idleTimer: Timer?
+    private var handledCurrentIdlePeriod = false
+    private var suppressNextActivationPresentation = false
 
     func start() {
         permissionManager.refresh()
         activityMonitor.start()
         registerHotKey()
+        updateIdleGroupingMonitoring()
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -50,6 +60,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     func stop() {
         hotKey.unregister()
+        idleTimer?.invalidate()
+        idleTimer = nil
         activityMonitor.stop()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
     }
@@ -59,6 +71,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         guard permissionManager.hasCorePermissions else {
             showSettings()
             return
+        }
+        if !NSApp.isActive, !panelController.isVisible {
+            suppressNextActivationPresentation = true
         }
         panelController.toggle()
     }
@@ -91,6 +106,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     private func applicationDidBecomeActive() {
+        if suppressNextActivationPresentation {
+            suppressNextActivationPresentation = false
+            return
+        }
         permissionManager.refresh()
         if !permissionManager.hasCorePermissions {
             if onboardingController.window?.isVisible != true {
@@ -152,11 +171,57 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     func registerHotKey() {
-        hotKey.register(keyCode: shortcutSettings.keyCode, modifiers: shortcutSettings.modifiers)
+        let status = hotKey.register(keyCode: shortcutSettings.keyCode, modifiers: shortcutSettings.modifiers)
+        if status == noErr {
+            shortcutSettings.registrationError = nil
+            SafeDiagnosticLog.shared.record("global-hotkey: registered")
+        } else {
+            shortcutSettings.registrationError = "This shortcut is unavailable. It may already be used by macOS or another app."
+            SafeDiagnosticLog.shared.record("global-hotkey: registration failed status=\(status)")
+        }
     }
 
     func refreshBrowser() {
         Task { await viewModel.refresh() }
+    }
+
+    func updateIdleGroupingMonitoring() {
+        idleTimer?.invalidate()
+        idleTimer = nil
+        handledCurrentIdlePeriod = false
+        guard idleGroupingSettings.isEnabled else { return }
+        idleTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.checkIdleGrouping() }
+        }
+        checkIdleGrouping()
+    }
+
+    private func checkIdleGrouping() {
+        let idleSeconds = CGEventSource.secondsSinceLastEventType(
+            .combinedSessionState,
+            eventType: CGEventType(rawValue: UInt32.max)!
+        )
+        let threshold = TimeInterval(idleGroupingSettings.delayMinutes * 60)
+        if idleSeconds < threshold {
+            handledCurrentIdlePeriod = false
+            return
+        }
+        guard !handledCurrentIdlePeriod,
+              permissionManager.hasCorePermissions,
+              openAIKeyStore.hasKey,
+              !viewModel.isLoading,
+              !viewModel.isGrouping else { return }
+        handledCurrentIdlePeriod = true
+        SafeDiagnosticLog.shared.record("grouping: idle threshold reached")
+        Task { await viewModel.refreshAndRegenerateGroupsIfNeeded() }
+    }
+
+    func refreshBrowserAppearance() {
+        panelController.updateAppearance()
+    }
+
+    func setBrowserViewMode(_ mode: BrowserViewMode) {
+        viewModel.setViewMode(mode)
     }
 
     @objc private func quit() {

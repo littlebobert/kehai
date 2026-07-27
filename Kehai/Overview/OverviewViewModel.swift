@@ -2,6 +2,20 @@ import AppKit
 import OSLog
 import ScreenCaptureKit
 
+enum BrowserViewMode: String, CaseIterable, Identifiable {
+    case grouped
+    case recent
+
+    var id: Self { self }
+    var title: String { self == .grouped ? "Grouped" : "Recent" }
+}
+
+struct BrowserWindowSection: Identifiable {
+    let id: String
+    let title: String?
+    let windows: [WindowItem]
+}
+
 @MainActor
 @Observable
 final class OverviewViewModel {
@@ -10,6 +24,13 @@ final class OverviewViewModel {
     var windows: [WindowItem] = []
     var taskGroups: [TaskGroup] = []
     var selectedTaskGroupID: String?
+    var viewMode: BrowserViewMode {
+        didSet {
+            UserDefaults.standard.set(viewMode.rawValue, forKey: Self.viewModeKey)
+            selectedTaskGroupID = nil
+            preserveSelectionOrSelectFirst()
+        }
+    }
     var selectedWindowID: CGWindowID? {
         didSet {
             guard selectedWindowID != oldValue else { return }
@@ -27,9 +48,13 @@ final class OverviewViewModel {
     var query = "" {
         didSet {
             guard query != oldValue else { return }
+            smartSearchWindowIDs = nil
+            smartSearchStatus = nil
             preserveSelectionOrSelectFirst()
         }
     }
+    var isSmartSearching = false
+    var smartSearchStatus: String?
     var isLoading = true
     var isGrouping = false
     var groupingStatus: String?
@@ -49,16 +74,20 @@ final class OverviewViewModel {
     private let safari: SafariTabService
     private let history: ActivityStore
     private let grouping: TaskGroupingService
+    private let smartSearch = SmartSearchService()
     private let openAIKeyStore: OpenAIKeyStore
     private let excludedAppStore: ExcludedAppStore
     private let activator: WindowActivator
     private let activityMonitor: ActivityMonitor
     private let liveThumbnails = LiveThumbnailService()
     private var liveThumbnailTask: Task<Void, Never>?
+    private var smartSearchWindowIDs: [CGWindowID]?
     private let taskGroupCache = TaskGroupCache()
     private let hiddenWindowStore = HiddenWindowStore()
     private static let excludeHiddenWindowsKey = "overview.excludeHiddenWindows"
     private static let thumbnailCardWidthKey = "overview.thumbnailCardWidth"
+    private static let viewModeKey = "overview.viewMode"
+    private static let automaticGroupingAttemptedKey = "grouping.automaticFirstRunAttempted"
     private static let defaultThumbnailCardWidth: CGFloat = 280
     private static let minimumThumbnailCardWidth: CGFloat = 200
     private static let maximumThumbnailCardWidth: CGFloat = 440
@@ -67,6 +96,7 @@ final class OverviewViewModel {
         let defaults = UserDefaults.standard
         let savedWidth = defaults.double(forKey: Self.thumbnailCardWidthKey)
         thumbnailCardWidth = savedWidth > 0 ? CGFloat(savedWidth) : Self.defaultThumbnailCardWidth
+        viewMode = defaults.string(forKey: Self.viewModeKey).flatMap(BrowserViewMode.init(rawValue:)) ?? .grouped
         excludeHiddenWindows = defaults.object(forKey: Self.excludeHiddenWindowsKey) == nil
             ? true
             : defaults.bool(forKey: Self.excludeHiddenWindowsKey)
@@ -80,20 +110,84 @@ final class OverviewViewModel {
         let selectedWindowIDs = selectedTaskGroupID.flatMap { selectedID in
             taskGroups.first(where: { $0.id == selectedID }).map { Set($0.windowIDs) }
         }
-        let matchingWindows = windows.filter { item in
+        let eligibleWindows = windows.filter { item in
             let belongsToSelectedGroup = selectedWindowIDs?.contains(item.id) ?? true
             let includedByHiddenFilter = !excludeHiddenWindows || !hiddenWindowStore.isHidden(item)
-            let matchesQuery = query.isEmpty
+            return belongsToSelectedGroup && includedByHiddenFilter
+        }
+        if let smartSearchWindowIDs {
+            let windowsByID = Dictionary(uniqueKeysWithValues: eligibleWindows.map { ($0.id, $0) })
+            return smartSearchWindowIDs.compactMap { windowsByID[$0] }
+        }
+        let matchingWindows = eligibleWindows.filter { item in
+            query.isEmpty
                 || item.title.localizedCaseInsensitiveContains(query)
                 || item.appName.localizedCaseInsensitiveContains(query)
                 || item.safariTabs.contains { $0.title.localizedCaseInsensitiveContains(query) || $0.url.localizedCaseInsensitiveContains(query) }
-            return belongsToSelectedGroup && includedByHiddenFilter && matchesQuery
         }
         return WindowItem.orderedByRecency(matchingWindows)
     }
 
+    var windowSections: [BrowserWindowSection] {
+        if smartSearchWindowIDs != nil {
+            return [BrowserWindowSection(id: "smart-search", title: "Smart Results", windows: filteredWindows)]
+        }
+        guard viewMode == .grouped, !taskGroups.isEmpty else {
+            return [BrowserWindowSection(id: "recent", title: nil, windows: filteredWindows)]
+        }
+
+        let visibleByID = Dictionary(uniqueKeysWithValues: filteredWindows.map { ($0.id, $0) })
+        var assignedIDs = Set<CGWindowID>()
+        var sections = taskGroups.compactMap { group -> BrowserWindowSection? in
+            let groupWindows = WindowItem.orderedByRecency(group.windowIDs.compactMap { visibleByID[$0] })
+            guard !groupWindows.isEmpty else { return nil }
+            assignedIDs.formUnion(groupWindows.map(\.id))
+            return BrowserWindowSection(id: group.id, title: group.name, windows: groupWindows)
+        }
+        sections.sort { sectionRecency($0) > sectionRecency($1) }
+
+        let otherWindows = filteredWindows.filter { !assignedIDs.contains($0.id) }
+        if !otherWindows.isEmpty {
+            sections.append(BrowserWindowSection(id: "other", title: "Other Windows", windows: otherWindows))
+        }
+        return sections
+    }
+
     var orderedFilteredWindows: [WindowItem] {
-        filteredWindows.filter { !$0.isDusty } + filteredWindows.filter(\.isDusty)
+        windowSections.flatMap(\.windows)
+    }
+
+    func setViewMode(_ mode: BrowserViewMode) {
+        viewMode = mode
+    }
+
+    func performSmartSearch() async {
+        guard !isSmartSearching else { return }
+        isSmartSearching = true
+        smartSearchStatus = "Searching by meaning…"
+        errorMessage = nil
+        do {
+            let resultIDs = try await smartSearch.search(
+                query: query,
+                windows: windows.filter { !hiddenWindowStore.isHidden($0) || !excludeHiddenWindows },
+                groups: taskGroups,
+                apiKey: openAIKeyStore.apiKey
+            )
+            smartSearchWindowIDs = resultIDs
+            smartSearchStatus = resultIDs.isEmpty ? "No smart results" : "Smart Results"
+            selectFirstFilteredWindow()
+            SafeDiagnosticLog.shared.record("smart-search: completed results=\(resultIDs.count)")
+        } catch {
+            smartSearchWindowIDs = nil
+            smartSearchStatus = nil
+            errorMessage = error.localizedDescription
+            SafeDiagnosticLog.shared.record("smart-search: failed")
+        }
+        isSmartSearching = false
+    }
+
+    private func sectionRecency(_ section: BrowserWindowSection) -> Date {
+        section.windows.compactMap(\.lastSeen).max() ?? .distantPast
     }
 
     func selectTaskGroup(_ group: TaskGroup?) {
@@ -161,8 +255,7 @@ final class OverviewViewModel {
         Task { await liveThumbnails.stop() }
 
         guard let selectedWindowID,
-              let window = windows.first(where: { $0.id == selectedWindowID }),
-              window.thumbnailIsUsable else { return }
+              windows.contains(where: { $0.id == selectedWindowID }) else { return }
 
         liveThumbnailTask = Task { [weak self] in
             do {
@@ -193,21 +286,62 @@ final class OverviewViewModel {
         }
     }
 
+    func moveSelectionToAdjacentGroup(_ direction: Int) {
+        guard viewMode == .grouped, windowSections.count > 1, direction != 0 else { return }
+        let sections = windowSections
+        let currentSectionIndex = selectedWindowID.flatMap { selectedID in
+            sections.firstIndex { section in section.windows.contains { $0.id == selectedID } }
+        } ?? (direction > 0 ? -1 : sections.count)
+        let targetIndex = min(max(currentSectionIndex + direction, 0), sections.count - 1)
+        guard targetIndex != currentSectionIndex,
+              let targetWindow = sections[targetIndex].windows.first else { return }
+        selectedWindowID = targetWindow.id
+    }
+
     func moveSelection(horizontal: Int = 0, vertical: Int = 0, columnCount: Int) {
         let visible = orderedFilteredWindows
         guard !visible.isEmpty else {
             selectedWindowID = nil
             return
         }
-        let currentIndex = selectedWindowID.flatMap { id in visible.firstIndex(where: { $0.id == id }) } ?? 0
-        let stride = max(columnCount, 1)
-        let targetIndex: Int
-        if horizontal != 0 {
-            targetIndex = min(max(currentIndex + horizontal, 0), visible.count - 1)
-        } else {
-            targetIndex = min(max(currentIndex + vertical * stride, 0), visible.count - 1)
+        if vertical != 0, moveSelectionVertically(vertical, columnCount: columnCount) {
+            return
         }
+        let currentIndex = selectedWindowID.flatMap { id in visible.firstIndex(where: { $0.id == id }) } ?? 0
+        let targetIndex = min(max(currentIndex + horizontal, 0), visible.count - 1)
         selectedWindowID = visible[targetIndex].id
+    }
+
+    private func moveSelectionVertically(_ direction: Int, columnCount: Int) -> Bool {
+        let sections = windowSections
+        guard let selectedWindowID,
+              let sectionIndex = sections.firstIndex(where: { section in
+                  section.windows.contains { $0.id == selectedWindowID }
+              }),
+              let itemIndex = sections[sectionIndex].windows.firstIndex(where: { $0.id == selectedWindowID }) else {
+            return false
+        }
+
+        let columns = max(columnCount, 1)
+        let targetInSection = itemIndex + direction * columns
+        if sections[sectionIndex].windows.indices.contains(targetInSection) {
+            self.selectedWindowID = sections[sectionIndex].windows[targetInSection].id
+            return true
+        }
+
+        let adjacentSectionIndex = sectionIndex + direction
+        guard sections.indices.contains(adjacentSectionIndex) else { return true }
+        let column = itemIndex % columns
+        let adjacentWindows = sections[adjacentSectionIndex].windows
+        let targetIndex: Int
+        if direction > 0 {
+            targetIndex = min(column, adjacentWindows.count - 1)
+        } else {
+            let lastRowStart = ((adjacentWindows.count - 1) / columns) * columns
+            targetIndex = min(lastRowStart + column, adjacentWindows.count - 1)
+        }
+        self.selectedWindowID = adjacentWindows[targetIndex].id
+        return true
     }
 
     @discardableResult
@@ -289,6 +423,7 @@ final class OverviewViewModel {
             SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
             thumbnailStatus = nil
             isLoading = false
+            await generateInitialGroupsIfNeeded()
         } catch {
             logger.error("Thumbnail refresh failed")
             SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh failed")
@@ -296,6 +431,26 @@ final class OverviewViewModel {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+
+    func refreshAndRegenerateGroupsIfNeeded() async {
+        await refresh()
+        guard taskGroups.isEmpty || groupsAreStale else {
+            SafeDiagnosticLog.shared.record("grouping: idle regeneration skipped workspace unchanged")
+            return
+        }
+        await refreshTaskGroups()
+    }
+
+    private func generateInitialGroupsIfNeeded() async {
+        let defaults = UserDefaults.standard
+        guard !taskGroupCache.hasCache,
+              !defaults.bool(forKey: Self.automaticGroupingAttemptedKey),
+              openAIKeyStore.hasKey,
+              windows.count >= 2 else { return }
+        defaults.set(true, forKey: Self.automaticGroupingAttemptedKey)
+        SafeDiagnosticLog.shared.record("grouping: automatic first-run generation started")
+        await refreshTaskGroups()
     }
 
     func refreshTaskGroups() async {

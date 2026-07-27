@@ -7,20 +7,29 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private let model: OverviewViewModel
+    private let appearance: AppearanceSettings
 
-    init(model: OverviewViewModel) {
+    init(model: OverviewViewModel, appearance: AppearanceSettings) {
         self.model = model
+        self.appearance = appearance
     }
 
     var isVisible: Bool { window?.isVisible == true }
 
-    func toggle() { window?.isVisible == true ? close() : show() }
+    func toggle() {
+        if NSApp.isActive, window?.isVisible == true {
+            close()
+        } else {
+            show()
+        }
+    }
 
     func show(selectedGroupID: String? = nil) {
         if let window {
             if let selectedGroupID {
                 model.selectTaskGroup(model.taskGroups.first { $0.id == selectedGroupID })
             }
+            updateAppearance()
             installKeyMonitor()
             installMouseMonitor()
             NSApp.activate(ignoringOtherApps: true)
@@ -45,10 +54,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         window.collectionBehavior = [.managed, .participatesInCycle]
         window.setFrame(screen.visibleFrame, display: false)
         window.contentView = NSHostingView(
-            rootView: OverviewView(model: model) { [weak self] in self?.close() }
+            rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
         )
         window.delegate = self
         self.window = window
+        updateAppearance()
         installKeyMonitor()
         installMouseMonitor()
 
@@ -59,6 +69,15 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func close() {
         window?.close()
+    }
+
+    func updateAppearance() {
+        guard let window else { return }
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
+        window.contentView = NSHostingView(
+            rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
+        )
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -98,10 +117,26 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.window else { return event }
 
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "f" {
                 self.model.searchFocusRequest += 1
+                return nil
+            }
+            if modifiers == .command, (event.keyCode == 36 || event.keyCode == 76) {
+                Task { await self.model.performSmartSearch() }
+                return nil
+            }
+            if modifiers == .command, event.charactersIgnoringModifiers == "1" {
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    self.model.setViewMode(.grouped)
+                }
+                return nil
+            }
+            if modifiers == .command, event.charactersIgnoringModifiers == "2" {
+                withAnimation(.easeInOut(duration: 0.14)) {
+                    self.model.setViewMode(.recent)
+                }
                 return nil
             }
             if modifiers.contains(.command),
@@ -130,6 +165,15 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 return nil
             }
             guard !editingText else { return event }
+
+            if modifiers == .option, event.keyCode == 125 {
+                self.model.moveSelectionToAdjacentGroup(1)
+                return nil
+            }
+            if modifiers == .option, event.keyCode == 126 {
+                self.model.moveSelectionToAdjacentGroup(-1)
+                return nil
+            }
 
             switch event.keyCode {
             case 123:

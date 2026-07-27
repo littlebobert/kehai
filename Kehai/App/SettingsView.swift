@@ -4,18 +4,24 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var shortcut: ShortcutSettings
+    @Bindable var appearance: AppearanceSettings
+    @Bindable var idleGrouping: IdleGroupingSettings
     @Bindable var excludedApps: ExcludedAppStore
     let shortcutChanged: () -> Void
+    let appearanceChanged: () -> Void
+    let idleGroupingChanged: () -> Void
     let exclusionsChanged: () -> Void
 
     var body: some View {
         TabView {
             generalSettings
                 .tabItem { Label("General", systemImage: "gearshape") }
+            appearanceSettings
+                .tabItem { Label("Appearance", systemImage: "paintbrush") }
             privacySettings
-                .tabItem { Label("Privacy & Exclusions", systemImage: "hand.raised") }
+                .tabItem { Label("Exclusions", systemImage: "hand.raised") }
         }
-        .frame(width: 580, height: 340)
+        .frame(width: 520, height: 340)
     }
 
     private var generalSettings: some View {
@@ -33,15 +39,78 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Text("Shows or dismisses the Kehai overview from any app.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Shows or dismisses the Kehai overview from any app.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if let registrationError = shortcut.registrationError {
+                            Label(registrationError, systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
                     Spacer()
                     Button("Restore Default") {
                         shortcut.reset()
                         shortcutChanged()
                     }
                 }
+            }
+
+            Section("Task Groups") {
+                HStack {
+                    Text("Regenerate automatically when idle")
+                    Spacer(minLength: 20)
+                    Toggle("", isOn: Binding(
+                        get: { idleGrouping.isEnabled },
+                        set: {
+                            idleGrouping.isEnabled = $0
+                            idleGroupingChanged()
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                HStack {
+                    Text("After")
+                    Spacer(minLength: 20)
+                    Picker("Idle delay", selection: Binding(
+                        get: { idleGrouping.delayMinutes },
+                        set: {
+                            idleGrouping.delayMinutes = $0
+                            idleGroupingChanged()
+                        }
+                    )) {
+                        ForEach(IdleGroupingSettings.availableDelays, id: \.self) { minutes in
+                            Text("\(minutes) minutes").tag(minutes)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                .disabled(!idleGrouping.isEnabled)
+                Text("Runs once per idle period, and only when task groups are missing or the workspace has changed.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var appearanceSettings: some View {
+        Form {
+            Section("Browser Window") {
+                Toggle("Use glassy background", isOn: Binding(
+                    get: { appearance.usesGlassyWindow },
+                    set: {
+                        appearance.usesGlassyWindow = $0
+                        appearanceChanged()
+                    }
+                ))
+                Text("Adds translucent macOS material behind Kehai while keeping window cards readable.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

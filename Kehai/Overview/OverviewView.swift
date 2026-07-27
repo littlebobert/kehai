@@ -3,6 +3,7 @@ import SwiftUI
 
 struct OverviewView: View {
     @Bindable var model: OverviewViewModel
+    let usesGlassyBackground: Bool
     let close: () -> Void
     @State private var appPendingExclusion: WindowItem?
     @State private var gridWidth: CGFloat = 0
@@ -11,18 +12,21 @@ struct OverviewView: View {
     private var columns: [GridItem] { [GridItem(.adaptive(minimum: model.thumbnailCardWidth, maximum: model.thumbnailCardWidth + 80), spacing: gridSpacing)] }
     private var gridColumnCount: Int { max(1, Int((gridWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing))) }
     private var thumbnailHeight: CGFloat { model.thumbnailCardWidth * 0.64 }
-    private let categoryBarHeight: CGFloat = 36
 
     var body: some View {
         ZStack {
-            Color(nsColor: .windowBackgroundColor)
-                .ignoresSafeArea()
+            Group {
+                if usesGlassyBackground {
+                    Rectangle().fill(.ultraThinMaterial)
+                } else {
+                    Color(nsColor: .windowBackgroundColor)
+                }
+            }
+            .ignoresSafeArea()
 
-            VStack(spacing: 14) {
+            VStack(spacing: 8) {
                 controlBar
                 statusRow
-                categoryBar
-                    .frame(minHeight: categoryBarHeight)
 
                 if let error = model.errorMessage {
                     Text(error).foregroundStyle(.red)
@@ -40,16 +44,15 @@ struct OverviewView: View {
                 } else {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 0) {
-                                windowSection(nil, windows: model.filteredWindows.filter { !$0.isDusty })
-                                if model.filteredWindows.contains(where: \.isDusty) {
-                                    windowSection("Dusty", windows: model.filteredWindows.filter(\.isDusty), dusty: true)
+                            LazyVStack(alignment: .leading, spacing: 8) {
+                                ForEach(model.windowSections) { section in
+                                    windowSection(section.title, windows: section.windows)
                                 }
                             }
                             .padding(.horizontal, 6)
-                            .padding(.vertical, 8)
+                            .padding(.top, 2)
                             .padding(.bottom, 30)
-                            .animation(.easeInOut(duration: 0.14), value: model.selectedTaskGroupID)
+                            .animation(.easeInOut(duration: 0.14), value: model.viewMode)
                         }
                         .contentMargins(.trailing, 14, for: .scrollContent)
                         .scrollIndicators(.hidden)
@@ -95,15 +98,17 @@ struct OverviewView: View {
 
     private var controlBar: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 GroupingControl(model: model)
-                Spacer(minLength: 12)
+                ViewModeControl(model: model)
                 HiddenWindowsControl(model: model)
+                Spacer(minLength: 12)
                 SearchControl(model: model, submit: openSelectedWindow)
             }
 
             WrappingHStack(horizontalSpacing: 12, verticalSpacing: 10) {
                 GroupingControl(model: model)
+                ViewModeControl(model: model)
                 HiddenWindowsControl(model: model)
                 SearchControl(model: model, submit: openSelectedWindow)
             }
@@ -113,7 +118,7 @@ struct OverviewView: View {
 
     @ViewBuilder
     private var statusRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 4) {
             if model.isGrouping {
                 ProgressView().controlSize(.small)
                 if let groupingStatus = model.groupingStatus {
@@ -145,56 +150,9 @@ struct OverviewView: View {
     }
 
     @ViewBuilder
-    private var categoryBar: some View {
-        if model.taskGroups.isEmpty {
-            HStack {
-                if model.hasGeneratedGroups {
-                    Text("No confident task groups found")
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-        } else {
-            WrappingHStack(horizontalSpacing: 8, verticalSpacing: 8) {
-                taskGroupButton("All", selected: model.selectedTaskGroupID == nil, showsIcon: true) {
-                    withAnimation(.easeInOut(duration: 0.14)) {
-                        model.selectTaskGroup(nil)
-                    }
-                }
-                ForEach(model.taskGroups) { group in
-                    taskGroupButton(group.name, selected: model.selectedTaskGroupID == group.id) {
-                        withAnimation(.easeInOut(duration: 0.14)) {
-                            model.selectTaskGroup(group)
-                        }
-                    }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .transition(.opacity)
-        }
-    }
-
-    private func taskGroupButton(_ title: String, selected: Bool, showsIcon: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Group {
-                if showsIcon {
-                    Label(title, systemImage: selected ? "checkmark.circle.fill" : "circle.grid.2x2")
-                } else {
-                    Text(title)
-                }
-            }
-            .padding(.horizontal, 12)
-            .frame(height: categoryBarHeight)
-            .background(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.thinMaterial), in: Capsule())
-            .foregroundStyle(selected ? Color.white : Color.primary)
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
     private func windowSection(_ title: String?, windows: [WindowItem], dusty: Bool = false) -> some View {
         if !windows.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let title {
                     Text(title)
                         .font(.title2.bold())
@@ -220,7 +178,8 @@ struct OverviewView: View {
                     }
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.top, 3)
+            .padding(.bottom, 5)
         }
     }
 }
@@ -268,6 +227,16 @@ private struct WindowCard: View {
                                 .frame(width: proxy.size.width, height: proxy.size.height)
                                 .clipped()
                                 .transition(.opacity)
+
+                            Text("Live")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(.black.opacity(0.62), in: Capsule())
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                                .padding(8)
+                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
                         }
                     }
                     .frame(width: proxy.size.width, height: proxy.size.height)

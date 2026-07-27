@@ -18,8 +18,10 @@
 		37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */; };
 		3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF36828CD74B41607115C48 /* GlobalHotKey.swift */; };
 		3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */; };
+		4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD56318C0B786481A7DDEFB /* AppearanceSettings.swift */; };
 		5237186877B286D004B95E8F /* SafeDiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */; };
 		5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A2694A32A4197AFA761F2B /* ThumbnailService.swift */; };
+		6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */; };
 		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
 		7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */; };
 		74738DD10716F4ED75D0AB4D /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9828342C2F7E02777B67673 /* OverviewView.swift */; };
@@ -39,6 +41,7 @@
 		BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */; };
 		C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */; };
 		CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 373E32001D74645B747D9FE4 /* AutoUpdateService.swift */; };
+		CF3336DA77A547E3745C5E16 /* SmartSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DC4DA61575FD4312E376C /* SmartSearchService.swift */; };
 		D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 621EE2F9EC9738189063682A /* KehaiApp.swift */; };
 		F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B555A1137CC688518C03637 /* AppDelegate.swift */; };
 		FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57C5BE757B41B4FD3795131 /* PermissionView.swift */; };
@@ -91,7 +94,10 @@
 		E64C863413D1E203C541734B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9828342C2F7E02777B67673 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		F151B8D770399FA7AA57BEFF /* WrappingHStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WrappingHStack.swift; sourceTree = "<group>"; };
+		F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdleGroupingSettings.swift; sourceTree = "<group>"; };
+		F83DC4DA61575FD4312E376C /* SmartSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartSearchService.swift; sourceTree = "<group>"; };
 		FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIconSource.png; sourceTree = "<group>"; };
+		FDD56318C0B786481A7DDEFB /* AppearanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettings.swift; sourceTree = "<group>"; };
 		FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -128,6 +134,7 @@
 			isa = PBXGroup;
 			children = (
 				6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */,
+				F83DC4DA61575FD4312E376C /* SmartSearchService.swift */,
 				5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */,
 				20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */,
 			);
@@ -206,9 +213,11 @@
 				FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */,
 				3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */,
 				0B555A1137CC688518C03637 /* AppDelegate.swift */,
+				FDD56318C0B786481A7DDEFB /* AppearanceSettings.swift */,
 				373E32001D74645B747D9FE4 /* AutoUpdateService.swift */,
 				E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */,
 				4AF36828CD74B41607115C48 /* GlobalHotKey.swift */,
+				F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */,
 				621EE2F9EC9738189063682A /* KehaiApp.swift */,
 				38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */,
 				A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */,
@@ -335,11 +344,13 @@
 				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
 				BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */,
 				F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */,
+				4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */,
 				CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */,
 				3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
 				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,
+				6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */,
 				D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */,
 				C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */,
 				A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */,
@@ -355,6 +366,7 @@
 				37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */,
 				9BA0D129A644C4FA7DB8D682 /* SettingsWindowController.swift in Sources */,
 				A5D9BFA7FA425515479C1BE9 /* ShortcutSettings.swift in Sources */,
+				CF3336DA77A547E3745C5E16 /* SmartSearchService.swift in Sources */,
 				7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */,
 				0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */,
 				5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */,

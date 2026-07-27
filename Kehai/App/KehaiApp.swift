@@ -8,8 +8,12 @@ struct KehaiApp: App {
         Settings {
             SettingsView(
                 shortcut: appDelegate.coordinator.shortcutSettings,
+                appearance: appDelegate.coordinator.appearanceSettings,
+                idleGrouping: appDelegate.coordinator.idleGroupingSettings,
                 excludedApps: appDelegate.coordinator.excludedAppStore,
                 shortcutChanged: appDelegate.coordinator.registerHotKey,
+                appearanceChanged: appDelegate.coordinator.refreshBrowserAppearance,
+                idleGroupingChanged: appDelegate.coordinator.updateIdleGroupingMonitoring,
                 exclusionsChanged: appDelegate.coordinator.refreshBrowser
             )
         }
@@ -24,6 +28,16 @@ struct KehaiApp: App {
                     appDelegate.coordinator.checkForUpdates()
                 }
                 .disabled(!appDelegate.coordinator.autoUpdates.canCheckForUpdates)
+            }
+            CommandMenu("View") {
+                Button("Group by Task") {
+                    appDelegate.coordinator.setBrowserViewMode(.grouped)
+                }
+                .keyboardShortcut("1", modifiers: .command)
+                Button("Sort All by Recent") {
+                    appDelegate.coordinator.setBrowserViewMode(.recent)
+                }
+                .keyboardShortcut("2", modifiers: .command)
             }
         }
     }

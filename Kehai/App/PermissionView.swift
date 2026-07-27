@@ -14,7 +14,7 @@ struct PermissionView: View {
                     .foregroundStyle(.tint)
                 Text("Welcome to Kehai")
                     .font(.system(size: 26, weight: .semibold))
-                Text("Kehai helps you return to interrupted work. Press Command+Option+K any time you forget where you were.")
+                Text("Kehai helps you return to interrupted work. Press Command+Shift+Space any time you forget where you were.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
