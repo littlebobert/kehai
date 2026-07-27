@@ -5,6 +5,7 @@ import SwiftUI
 final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var keyMonitor: Any?
+    private var mouseMonitor: Any?
     private let model: OverviewViewModel
 
     init(model: OverviewViewModel) {
@@ -21,6 +22,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 model.selectTaskGroup(model.taskGroups.first { $0.id == selectedGroupID })
             }
             installKeyMonitor()
+            installMouseMonitor()
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
             return
@@ -61,6 +63,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         window.delegate = self
         self.window = window
         installKeyMonitor()
+        installMouseMonitor()
 
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -73,7 +76,33 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         model.stopLiveThumbnail()
         removeKeyMonitor()
+        removeMouseMonitor()
         window = nil
+    }
+
+    private func installMouseMonitor() {
+        guard mouseMonitor == nil else { return }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self,
+                  event.window === self.window,
+                  let window = self.window,
+                  let editor = window.firstResponder as? NSTextView,
+                  editor.isFieldEditor,
+                  let textField = editor.delegate as? NSTextField else { return event }
+
+            let location = event.locationInWindow
+            if !textField.frame.contains(textField.superview?.convert(location, from: nil) ?? location) {
+                window.makeFirstResponder(window.contentView)
+            }
+            return event
+        }
+    }
+
+    private func removeMouseMonitor() {
+        if let mouseMonitor {
+            NSEvent.removeMonitor(mouseMonitor)
+            self.mouseMonitor = nil
+        }
     }
 
     private func installKeyMonitor() {

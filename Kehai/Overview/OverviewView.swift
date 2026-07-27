@@ -30,9 +30,6 @@ struct OverviewView: View {
                     .controlSize(.regular)
                     .disabled(model.isLoading || model.isGrouping)
                     .help("Use OpenAI with downsampled window screenshots to infer task groups")
-                    Toggle("Exclude Hidden Windows", isOn: $model.excludeHiddenWindows)
-                        .toggleStyle(.checkbox)
-                        .controlSize(.small)
                     if model.isGrouping {
                         ProgressView().controlSize(.small)
                         if let groupingStatus = model.groupingStatus {
@@ -48,12 +45,18 @@ struct OverviewView: View {
                             .foregroundStyle(.secondary)
                             .contentTransition(.numericText())
                     } else if model.groupsAreStale {
-                        Label("Groups may be outdated", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .help("The open windows have changed substantially since these groups were generated")
+                        HStack(spacing: 3) {
+                            Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                            Text("Groups may be outdated")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help("The open windows have changed substantially since these groups were generated")
                     }
                     Spacer()
+                    Toggle("Exclude Hidden Windows", isOn: $model.excludeHiddenWindows)
+                        .toggleStyle(.checkbox)
+                        .controlSize(.small)
                     TextField("Search windows and Safari tabs", text: $model.query)
                         .textFieldStyle(.roundedBorder)
                         .focused($searchIsFocused)
