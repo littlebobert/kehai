@@ -222,36 +222,46 @@ private struct WindowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: select) {
-                ZStack {
+                GeometryReader { proxy in
                     ZStack {
-                        Rectangle().fill(.quaternary)
-                        if let icon = window.appIcon {
-                            Image(nsImage: icon).resizable().scaledToFit().frame(width: 72, height: 72)
-                        } else {
-                            Image(systemName: "macwindow").font(.largeTitle)
+                        ZStack {
+                            Rectangle().fill(.quaternary)
+                            if let icon = window.appIcon {
+                                Image(nsImage: icon).resizable().scaledToFit().frame(width: 72, height: 72)
+                            } else {
+                                Image(systemName: "macwindow").font(.largeTitle)
+                            }
+                        }
+                        .opacity(window.thumbnailIsUsable && window.thumbnail != nil ? 0 : 1)
+
+                        if let image = window.thumbnail {
+                            Image(nsImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                .clipped()
+                                .opacity(window.thumbnailIsUsable ? 1 : 0)
+                        }
+                        if let liveThumbnail {
+                            Image(nsImage: liveThumbnail)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                .clipped()
+                                .transition(.opacity)
                         }
                     }
-                    .opacity(window.thumbnailIsUsable && window.thumbnail != nil ? 0 : 1)
-
-                    if let image = window.thumbnail {
-                        Image(nsImage: image)
-                            .resizable()
-                            .scaledToFill()
-                            .opacity(window.thumbnailIsUsable ? 1 : 0)
-                    }
-                    if let liveThumbnail {
-                        Image(nsImage: liveThumbnail)
-                            .resizable()
-                            .scaledToFill()
-                            .transition(.opacity)
-                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .clipped()
                 }
                 .animation(.easeInOut(duration: 0.18), value: window.thumbnailRevision)
                 .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
                 .frame(maxWidth: .infinity)
                 .frame(height: thumbnailHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading) { Text(window.title).font(.headline).lineLimit(1); Text(window.appName).foregroundStyle(.secondary) }
                 Spacer()
