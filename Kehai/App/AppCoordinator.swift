@@ -8,11 +8,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private let history = ActivityStore()
     let openAIKeyStore = OpenAIKeyStore()
     let excludedAppStore = ExcludedAppStore()
+    let aiExcludedAppStore = AIExcludedAppStore()
     let autoUpdates = AutoUpdateService()
     let appearanceSettings = AppearanceSettings()
     let idleGroupingSettings = IdleGroupingSettings()
     private lazy var activityMonitor = ActivityMonitor(store: history)
-    private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
+    private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, aiExcludedAppStore: aiExcludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
     private lazy var panelController = OverviewPanelController(model: viewModel, appearance: appearanceSettings)
     let shortcutSettings = ShortcutSettings()
     private lazy var onboardingController = OnboardingWindowController(
@@ -31,6 +32,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         appearance: appearanceSettings,
         idleGrouping: idleGroupingSettings,
         excludedApps: excludedAppStore,
+        aiExcludedApps: aiExcludedAppStore,
         permissionManager: permissionManager,
         openAIKeyStore: openAIKeyStore,
         safariService: safari,

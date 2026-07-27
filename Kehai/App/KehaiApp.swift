@@ -11,6 +11,7 @@ struct KehaiApp: App {
                 appearance: appDelegate.coordinator.appearanceSettings,
                 idleGrouping: appDelegate.coordinator.idleGroupingSettings,
                 excludedApps: appDelegate.coordinator.excludedAppStore,
+                aiExcludedApps: appDelegate.coordinator.aiExcludedAppStore,
                 permissionManager: appDelegate.coordinator.permissionManager,
                 openAIKeyStore: appDelegate.coordinator.openAIKeyStore,
                 safariService: appDelegate.coordinator.safari,

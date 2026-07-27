@@ -78,6 +78,7 @@ final class OverviewViewModel {
     private let smartSearch = SmartSearchService()
     private let openAIKeyStore: OpenAIKeyStore
     private let excludedAppStore: ExcludedAppStore
+    private let aiExcludedAppStore: AIExcludedAppStore
     private let activator: WindowActivator
     private let activityMonitor: ActivityMonitor
     private let liveThumbnails = LiveThumbnailService()
@@ -93,7 +94,7 @@ final class OverviewViewModel {
     private static let minimumThumbnailCardWidth: CGFloat = 200
     private static let maximumThumbnailCardWidth: CGFloat = 440
 
-    init(catalog: WindowCatalog, thumbnails: ThumbnailService, safari: SafariTabService, history: ActivityStore, grouping: TaskGroupingService, openAIKeyStore: OpenAIKeyStore, excludedAppStore: ExcludedAppStore, activator: WindowActivator, activityMonitor: ActivityMonitor) {
+    init(catalog: WindowCatalog, thumbnails: ThumbnailService, safari: SafariTabService, history: ActivityStore, grouping: TaskGroupingService, openAIKeyStore: OpenAIKeyStore, excludedAppStore: ExcludedAppStore, aiExcludedAppStore: AIExcludedAppStore, activator: WindowActivator, activityMonitor: ActivityMonitor) {
         let defaults = UserDefaults.standard
         let savedWidth = defaults.double(forKey: Self.thumbnailCardWidthKey)
         thumbnailCardWidth = savedWidth > 0 ? CGFloat(savedWidth) : Self.defaultThumbnailCardWidth
@@ -102,7 +103,7 @@ final class OverviewViewModel {
             ? true
             : defaults.bool(forKey: Self.excludeHiddenWindowsKey)
         self.catalog = catalog; self.thumbnails = thumbnails; self.safari = safari; self.history = history
-        self.grouping = grouping; self.openAIKeyStore = openAIKeyStore; self.excludedAppStore = excludedAppStore; self.activator = activator; self.activityMonitor = activityMonitor
+        self.grouping = grouping; self.openAIKeyStore = openAIKeyStore; self.excludedAppStore = excludedAppStore; self.aiExcludedAppStore = aiExcludedAppStore; self.activator = activator; self.activityMonitor = activityMonitor
         hasGeneratedGroups = taskGroupCache.hasCache
     }
 
@@ -170,7 +171,10 @@ final class OverviewViewModel {
         do {
             let resultIDs = try await smartSearch.search(
                 query: query,
-                windows: windows.filter { !hiddenWindowStore.isHidden($0) || !excludeHiddenWindows },
+                windows: windows.filter {
+                    (!hiddenWindowStore.isHidden($0) || !excludeHiddenWindows)
+                        && !aiExcludedAppStore.contains(bundleIdentifier: $0.bundleIdentifier)
+                },
                 groups: taskGroups,
                 apiKey: openAIKeyStore.apiKey
             )
@@ -219,6 +223,16 @@ final class OverviewViewModel {
         windows.removeAll { $0.bundleIdentifier == bundleIdentifier }
         reconcileCachedGroups()
         preserveSelectionOrSelectFirst()
+    }
+
+    func canExcludeAppFromAI(_ window: WindowItem) -> Bool {
+        guard let bundleIdentifier = window.bundleIdentifier else { return false }
+        return !bundleIdentifier.isEmpty && !aiExcludedAppStore.contains(bundleIdentifier: bundleIdentifier)
+    }
+
+    func excludeAppFromAI(_ window: WindowItem) {
+        guard let bundleIdentifier = window.bundleIdentifier, !bundleIdentifier.isEmpty else { return }
+        aiExcludedAppStore.exclude(bundleIdentifier: bundleIdentifier, name: window.appName)
     }
 
     func isWindowHidden(_ window: WindowItem) -> Bool {
@@ -463,8 +477,14 @@ final class OverviewViewModel {
         errorMessage = nil
         do {
             let generated = try await grouping.groups(
-                for: windows.filter { !hiddenWindowStore.isHidden($0) },
-                events: await history.recentEvents().filter { !excludedAppStore.contains(appName: $0.appName) },
+                for: windows.filter {
+                    !hiddenWindowStore.isHidden($0)
+                        && !aiExcludedAppStore.contains(bundleIdentifier: $0.bundleIdentifier)
+                },
+                events: await history.recentEvents().filter {
+                    !excludedAppStore.contains(appName: $0.appName)
+                        && !aiExcludedAppStore.contains(appName: $0.appName)
+                },
                 apiKey: openAIKeyStore.apiKey,
                 progress: { [weak self] status in self?.groupingStatus = status }
             )

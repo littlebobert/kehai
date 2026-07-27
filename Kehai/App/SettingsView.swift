@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Bindable var appearance: AppearanceSettings
     @Bindable var idleGrouping: IdleGroupingSettings
     @Bindable var excludedApps: ExcludedAppStore
+    @Bindable var aiExcludedApps: AIExcludedAppStore
     @Bindable var permissionManager: PermissionManager
     @Bindable var openAIKeyStore: OpenAIKeyStore
     let safariService: SafariTabService
@@ -217,42 +218,58 @@ struct SettingsView: View {
     }
 
     private var privacySettings: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Excluded apps are never captured or included in AI grouping. Kehai observes only enough window metadata to apply these bundle-identifier rules.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            if excludedApps.apps.isEmpty {
-                ContentUnavailableView(
-                    "No Excluded Apps",
-                    systemImage: "hand.raised",
-                    description: Text("Use the privacy button on a window card to exclude its entire app.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            } else {
-                List(excludedApps.apps) { app in
-                    HStack(spacing: 12) {
-                        if let icon = app.icon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 32, height: 32)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(app.name).font(.headline)
-                            Text(app.bundleIdentifier).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Allow Again") {
+        Form {
+            Section("Excluded from Kehai") {
+                Text("These apps do not appear in the browser and are never captured or sent to OpenAI.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if excludedApps.apps.isEmpty {
+                    Text("No apps excluded from Kehai.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(excludedApps.apps) { app in
+                        exclusionRow(app, buttonTitle: "Allow Again") {
                             excludedApps.allow(app)
                             exclusionsChanged()
                         }
                     }
-                    .padding(.vertical, 4)
+                }
+            }
+
+            Section("Excluded from AI") {
+                Text("These apps still appear in the browser, but their metadata, Safari tabs, thumbnails, and activity are never sent to OpenAI.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if aiExcludedApps.apps.isEmpty {
+                    Text("No apps excluded from AI.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(aiExcludedApps.apps) { app in
+                        exclusionRow(app, buttonTitle: "Include in AI") {
+                            aiExcludedApps.allow(app)
+                            exclusionsChanged()
+                        }
+                    }
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(20)
+        .formStyle(.grouped)
+    }
+
+    private func exclusionRow(_ app: ExcludedApp, buttonTitle: String, action: @escaping () -> Void) -> some View {
+        HStack(spacing: 12) {
+            if let icon = app.icon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 28, height: 28)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.name).font(.headline)
+                Text(app.bundleIdentifier).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(buttonTitle, action: action)
+        }
+        .padding(.vertical, 2)
     }
 }
 

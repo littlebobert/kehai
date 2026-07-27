@@ -90,17 +90,23 @@ struct OverviewView: View {
         } message: {
             Text(model.openAIErrorMessage ?? "OpenAI returned an unexpected error.")
         }
-        .alert("Never capture \(appPendingExclusion?.appName ?? "this app")?", isPresented: Binding(
+        .alert("Exclude \(appPendingExclusion?.appName ?? "this app")?", isPresented: Binding(
             get: { appPendingExclusion != nil },
             set: { if !$0 { appPendingExclusion = nil } }
         ), presenting: appPendingExclusion) { window in
             Button("Cancel", role: .cancel) { appPendingExclusion = nil }
-            Button("Exclude App", role: .destructive) {
+            if model.canExcludeAppFromAI(window) {
+                Button("From AI Only") {
+                    model.excludeAppFromAI(window)
+                    appPendingExclusion = nil
+                }
+            }
+            Button("From Kehai Entirely", role: .destructive) {
                 model.excludeApp(for: window)
                 appPendingExclusion = nil
             }
         } message: { window in
-            Text("All current and future \(window.appName) windows will be removed from Kehai. Kehai won’t capture their thumbnails or include them in AI grouping. You can allow the app again in Settings.")
+            Text("Choose whether \(window.appName) remains visible locally but is never sent to OpenAI, or is removed from Kehai and never captured.")
         }
     }
 
@@ -274,7 +280,7 @@ private struct WindowCard: View {
                             .foregroundStyle(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("Never capture or send this app")
+                    .help("Exclude this app from AI or Kehai")
                 }
             }
             if !window.safariTabs.isEmpty {
