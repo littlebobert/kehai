@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		019B6099323E2977EA06D824 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 47057DF99485EBC19265B705 /* Sparkle */; };
 		0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */; };
 		0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */; };
 		10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */; };
@@ -37,6 +38,7 @@
 		B1BCDDF3CCE9D52EF3ACA196 /* KehaiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E335A1351B9F8BAD68A631 /* KehaiTests.swift */; };
 		BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */; };
 		C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */; };
+		CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 373E32001D74645B747D9FE4 /* AutoUpdateService.swift */; };
 		D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 621EE2F9EC9738189063682A /* KehaiApp.swift */; };
 		F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B555A1137CC688518C03637 /* AppDelegate.swift */; };
 		FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57C5BE757B41B4FD3795131 /* PermissionView.swift */; };
@@ -59,6 +61,7 @@
 		20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupingService.swift; sourceTree = "<group>"; };
 		2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		30976D9013BB918B61B85C4F /* ShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
+		373E32001D74645B747D9FE4 /* AutoUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoUpdateService.swift; sourceTree = "<group>"; };
 		3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcludedAppStore.swift; sourceTree = "<group>"; };
 		38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
 		3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
@@ -89,6 +92,17 @@
 		FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIconSource.png; sourceTree = "<group>"; };
 		FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		70BB20D748B96965DE47CB1C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				019B6099323E2977EA06D824 /* Sparkle in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		0AE6F65D33E8A1C0254042FF /* Safari */ = {
@@ -189,6 +203,7 @@
 				FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */,
 				3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */,
 				0B555A1137CC688518C03637 /* AppDelegate.swift */,
+				373E32001D74645B747D9FE4 /* AutoUpdateService.swift */,
 				E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */,
 				4AF36828CD74B41607115C48 /* GlobalHotKey.swift */,
 				621EE2F9EC9738189063682A /* KehaiApp.swift */,
@@ -221,6 +236,7 @@
 			buildPhases = (
 				695A10A147DB4CDA94FAFCF3 /* Sources */,
 				79082AF4894A8FB7BA547A00 /* Resources */,
+				70BB20D748B96965DE47CB1C /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -228,6 +244,7 @@
 			);
 			name = Kehai;
 			packageProductDependencies = (
+				47057DF99485EBC19265B705 /* Sparkle */,
 			);
 			productName = Kehai;
 			productReference = C2F443FAB9945628682B0572 /* Kehai.app */;
@@ -279,6 +296,9 @@
 			);
 			mainGroup = A81CC1004B4AE238DF65142A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E82AD48E0293ED8212868950 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0C6E7F65EAB823116816902 /* Products */;
 			projectDirPath = "";
@@ -312,6 +332,7 @@
 				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
 				BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */,
 				F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */,
+				CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */,
 				3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
@@ -363,6 +384,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -383,12 +405,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Kehai/Resources/Kehai.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Kehai/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.justin.Kehai;
 				PRODUCT_NAME = Kehai;
 				SDKROOT = macosx;
@@ -399,6 +423,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -417,6 +442,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -447,8 +473,10 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "Developer ID Application: Justin Henry Garcia (XDWKSAH7W3)";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = XDWKSAH7W3;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -469,10 +497,11 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -487,12 +516,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Kehai/Resources/Kehai.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Kehai/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.justin.Kehai;
 				PRODUCT_NAME = Kehai;
 				SDKROOT = macosx;
@@ -503,6 +534,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = arm64;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -533,8 +565,10 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_IDENTITY = "Developer ID Application: Justin Henry Garcia (XDWKSAH7W3)";
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = XDWKSAH7W3;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -549,9 +583,11 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -591,6 +627,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E82AD48E0293ED8212868950 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.9.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		47057DF99485EBC19265B705 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E82AD48E0293ED8212868950 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C2676DCFF73176DD626B5629 /* Project object */;
 }

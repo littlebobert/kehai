@@ -2,12 +2,13 @@ import AppKit
 import Carbon
 
 @MainActor
-final class AppCoordinator: NSObject {
+final class AppCoordinator: NSObject, NSMenuItemValidation {
     let permissionManager = PermissionManager()
     let safari = SafariTabService()
     private let history = ActivityStore()
     let openAIKeyStore = OpenAIKeyStore()
     let excludedAppStore = ExcludedAppStore()
+    let autoUpdates = AutoUpdateService()
     private lazy var activityMonitor = ActivityMonitor(store: history)
     private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
     private lazy var panelController = OverviewPanelController(model: viewModel)
@@ -51,6 +52,9 @@ final class AppCoordinator: NSObject {
         updateShowBrowserMenuShortcut()
         menu.addItem(withTitle: "Settings…", action: #selector(showPreferences), keyEquivalent: ",")
         menu.addItem(withTitle: "Setup & Permissions…", action: #selector(showSettings), keyEquivalent: "")
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        checkForUpdatesItem.target = self
+        menu.addItem(checkForUpdatesItem)
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Kehai", action: #selector(quit), keyEquivalent: "q")
         menu.items.forEach { $0.target = self }
@@ -123,6 +127,17 @@ final class AppCoordinator: NSObject {
 
     @objc func showAbout() {
         aboutController.present()
+    }
+
+    @objc func checkForUpdates() {
+        autoUpdates.checkForUpdates()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(checkForUpdates) {
+            return autoUpdates.canCheckForUpdates
+        }
+        return true
     }
 
     private func reportBug() {

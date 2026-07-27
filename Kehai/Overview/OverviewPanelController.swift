@@ -25,6 +25,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             installMouseMonitor()
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
+            window.makeFirstResponder(window.contentView)
             return
         }
 
@@ -67,6 +68,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(window.contentView)
     }
 
     func close() {

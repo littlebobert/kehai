@@ -19,6 +19,12 @@ struct KehaiApp: App {
                     appDelegate.coordinator.showAbout()
                 }
             }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    appDelegate.coordinator.checkForUpdates()
+                }
+                .disabled(!appDelegate.coordinator.autoUpdates.canCheckForUpdates)
+            }
         }
     }
 }

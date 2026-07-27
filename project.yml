@@ -2,15 +2,24 @@ name: Kehai
 options:
   bundleIdPrefix: com.justin
   deploymentTarget:
-    macOS: "27.0"
+    macOS: "14.0"
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.4
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    MACOSX_DEPLOYMENT_TARGET: "27.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
     CODE_SIGN_STYLE: Manual
     CODE_SIGN_IDENTITY: "Developer ID Application: Justin Henry Garcia (XDWKSAH7W3)"
     DEVELOPMENT_TEAM: XDWKSAH7W3
     ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
     ENABLE_USER_SCRIPT_SANDBOXING: NO
 targets:
   Kehai:
@@ -25,15 +34,28 @@ targets:
       path: Kehai/Resources/Info.plist
       properties:
         CFBundleDisplayName: Kehai
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: false
         NSAppleEventsUsageDescription: Kehai reads Safari tab titles and URLs and activates the tab you choose.
         NSScreenCaptureUsageDescription: Kehai shows current thumbnails of your open windows.
+        SUFeedURL: https://littlebobert.github.io/kehai-appcast.xml
+        SUPublicEDKey: iFnb+5ddqll3KfOZPkzwU3gCgF3XD1EN8kbpx4lINOI=
+        SUEnableAutomaticChecks: true
+        SUAllowsAutomaticUpdates: false
+        SUAutomaticallyUpdate: false
+        SUVerifyUpdateBeforeExtraction: true
     entitlements:
       path: Kehai/Resources/Kehai.entitlements
+    dependencies:
+      - package: Sparkle
+        product: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.justin.Kehai
         PRODUCT_NAME: Kehai
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: Kehai/Resources/Kehai.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -48,6 +70,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.justin.KehaiTests
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: Apple Development
         GENERATE_INFOPLIST_FILE: YES
 schemes:
   Kehai:

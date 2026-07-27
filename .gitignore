@@ -1,5 +1,6 @@
 .build/
 DerivedData/
+.env.release
 Kehai.xcodeproj/xcuserdata/
 *.xcuserstate
 .DS_Store
