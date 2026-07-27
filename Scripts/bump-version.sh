@@ -21,8 +21,8 @@ from pathlib import Path
 import re, sys
 path = Path(sys.argv[1])
 text = path.read_text()
-text = re.sub(r'MARKETING_VERSION: "[^"]+"', f'MARKETING_VERSION: "{sys.argv[2]}"', text, count=1)
-text = re.sub(r'CURRENT_PROJECT_VERSION: "[^"]+"', f'CURRENT_PROJECT_VERSION: "{sys.argv[3]}"', text, count=1)
+text = re.sub(r'MARKETING_VERSION: "[^"]+"', f'MARKETING_VERSION: "{sys.argv[2]}"', text)
+text = re.sub(r'CURRENT_PROJECT_VERSION: "[^"]+"', f'CURRENT_PROJECT_VERSION: "{sys.argv[3]}"', text)
 path.write_text(text)
 PY
 xcodegen generate --spec "$PROJECT"
