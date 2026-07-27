@@ -286,16 +286,18 @@ final class OverviewViewModel {
         }
     }
 
-    func moveSelectionToAdjacentGroup(_ direction: Int) {
-        guard viewMode == .grouped, windowSections.count > 1, direction != 0 else { return }
+    @discardableResult
+    func moveSelectionToAdjacentGroup(_ direction: Int) -> Bool {
+        guard viewMode == .grouped, windowSections.count > 1, direction != 0 else { return false }
         let sections = windowSections
         let currentSectionIndex = selectedWindowID.flatMap { selectedID in
             sections.firstIndex { section in section.windows.contains { $0.id == selectedID } }
         } ?? (direction > 0 ? -1 : sections.count)
         let targetIndex = min(max(currentSectionIndex + direction, 0), sections.count - 1)
         guard targetIndex != currentSectionIndex,
-              let targetWindow = sections[targetIndex].windows.first else { return }
+              let targetWindow = sections[targetIndex].windows.first else { return false }
         selectedWindowID = targetWindow.id
+        return true
     }
 
     func moveSelection(horizontal: Int = 0, vertical: Int = 0, columnCount: Int) {

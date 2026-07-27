@@ -167,11 +167,15 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             guard !editingText else { return event }
 
             if modifiers == .option, event.keyCode == 125 {
-                self.model.moveSelectionToAdjacentGroup(1)
+                if !self.model.moveSelectionToAdjacentGroup(1) {
+                    self.model.moveSelection(vertical: 1, columnCount: self.model.keyboardColumnCount)
+                }
                 return nil
             }
             if modifiers == .option, event.keyCode == 126 {
-                self.model.moveSelectionToAdjacentGroup(-1)
+                if !self.model.moveSelectionToAdjacentGroup(-1) {
+                    self.model.moveSelection(vertical: -1, columnCount: self.model.keyboardColumnCount)
+                }
                 return nil
             }
 
