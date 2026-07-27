@@ -113,8 +113,6 @@ if [[ -n "$NOTES_FILE_ARG" ]]; then
   cp "$NOTES_FILE_ARG" "$NOTES_FILE"
 elif [[ ${#NOTES[@]} -gt 0 ]]; then
   {
-    echo "Kehai $VERSION"
-    echo
     for note in "${NOTES[@]}"; do echo "- $note"; done
   } > "$NOTES_FILE"
 else
