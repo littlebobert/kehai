@@ -32,34 +32,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             Task { await self?.viewModel.refresh() }
         }
     )
-    private var statusItem: NSStatusItem?
-    private var showBrowserMenuItem: NSMenuItem?
     private var activationObserver: NSObjectProtocol?
 
     func start() {
         permissionManager.refresh()
         activityMonitor.start()
         registerHotKey()
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Kehai")
-        let menu = NSMenu()
-        menu.addItem(withTitle: "About Kehai", action: #selector(showAbout), keyEquivalent: "")
-        menu.addItem(.separator())
-        let showBrowserItem = NSMenuItem(title: "Show Browser", action: #selector(show), keyEquivalent: "")
-        showBrowserItem.target = self
-        menu.addItem(showBrowserItem)
-        showBrowserMenuItem = showBrowserItem
-        updateShowBrowserMenuShortcut()
-        menu.addItem(withTitle: "Settings…", action: #selector(showPreferences), keyEquivalent: ",")
-        menu.addItem(withTitle: "Setup & Permissions…", action: #selector(showSettings), keyEquivalent: "")
-        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
-        checkForUpdatesItem.target = self
-        menu.addItem(checkForUpdatesItem)
-        menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit Kehai", action: #selector(quit), keyEquivalent: "q")
-        menu.items.forEach { $0.target = self }
-        item.menu = menu
-        statusItem = item
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -175,50 +153,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     func registerHotKey() {
         hotKey.register(keyCode: shortcutSettings.keyCode, modifiers: shortcutSettings.modifiers)
-        updateShowBrowserMenuShortcut()
     }
 
     func refreshBrowser() {
         Task { await viewModel.refresh() }
-    }
-
-    private func updateShowBrowserMenuShortcut() {
-        guard let item = showBrowserMenuItem else { return }
-        item.keyEquivalent = keyEquivalent(for: shortcutSettings.keyCode)
-        var mask: NSEvent.ModifierFlags = []
-        if shortcutSettings.modifiers & UInt32(cmdKey) != 0 { mask.insert(.command) }
-        if shortcutSettings.modifiers & UInt32(optionKey) != 0 { mask.insert(.option) }
-        if shortcutSettings.modifiers & UInt32(controlKey) != 0 { mask.insert(.control) }
-        if shortcutSettings.modifiers & UInt32(shiftKey) != 0 { mask.insert(.shift) }
-        item.keyEquivalentModifierMask = mask
-    }
-
-    private func keyEquivalent(for keyCode: UInt32) -> String {
-        let specialKeys: [UInt32: String] = [
-            UInt32(kVK_Space): " ", UInt32(kVK_Return): "\r",
-            UInt32(kVK_Tab): "\t", UInt32(kVK_Delete): "\u{8}",
-            UInt32(kVK_UpArrow): String(Character(UnicodeScalar(NSUpArrowFunctionKey)!)),
-            UInt32(kVK_DownArrow): String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)),
-            UInt32(kVK_LeftArrow): String(Character(UnicodeScalar(NSLeftArrowFunctionKey)!)),
-            UInt32(kVK_RightArrow): String(Character(UnicodeScalar(NSRightArrowFunctionKey)!))
-        ]
-        if let specialKey = specialKeys[keyCode] { return specialKey }
-        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
-              let data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else { return "" }
-        let layoutData = unsafeBitCast(data, to: CFData.self) as Data
-        return layoutData.withUnsafeBytes { bytes in
-            guard let layout = bytes.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return "" }
-            var deadKeyState: UInt32 = 0
-            var length = 0
-            var characters = [UniChar](repeating: 0, count: 4)
-            let status = UCKeyTranslate(
-                layout, UInt16(keyCode), UInt16(kUCKeyActionDisplay), 0,
-                UInt32(LMGetKbdType()), OptionBits(kUCKeyTranslateNoDeadKeysBit),
-                &deadKeyState, characters.count, &length, &characters
-            )
-            guard status == noErr, length > 0 else { return "" }
-            return String(utf16CodeUnits: characters, count: length).lowercased()
-        }
     }
 
     @objc private func quit() {

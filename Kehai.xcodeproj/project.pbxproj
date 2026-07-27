@@ -42,6 +42,7 @@
 		D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 621EE2F9EC9738189063682A /* KehaiApp.swift */; };
 		F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B555A1137CC688518C03637 /* AppDelegate.swift */; };
 		FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57C5BE757B41B4FD3795131 /* PermissionView.swift */; };
+		FE3852AC0962F0A243173825 /* OverviewToolbarViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +58,7 @@
 /* Begin PBXFileReference section */
 		0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPanelController.swift; sourceTree = "<group>"; };
 		0B555A1137CC688518C03637 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewToolbarViews.swift; sourceTree = "<group>"; };
 		1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDiagnosticLog.swift; sourceTree = "<group>"; };
 		20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupingService.swift; sourceTree = "<group>"; };
 		2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -136,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */,
+				0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */,
 				E9828342C2F7E02777B67673 /* OverviewView.swift */,
 				89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */,
 				F151B8D770399FA7AA57BEFF /* WrappingHStack.swift */,
@@ -342,6 +345,7 @@
 				A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */,
 				26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */,
 				A19A7D0DD4DA3D00CDF9BBB6 /* OverviewPanelController.swift in Sources */,
+				FE3852AC0962F0A243173825 /* OverviewToolbarViews.swift in Sources */,
 				74738DD10716F4ED75D0AB4D /* OverviewView.swift in Sources */,
 				9F033371CC4A42572498CB77 /* OverviewViewModel.swift in Sources */,
 				231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */,

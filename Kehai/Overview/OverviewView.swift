@@ -4,7 +4,6 @@ import SwiftUI
 struct OverviewView: View {
     @Bindable var model: OverviewViewModel
     let close: () -> Void
-    @FocusState private var searchIsFocused: Bool
     @State private var appPendingExclusion: WindowItem?
     @State private var gridWidth: CGFloat = 0
 
@@ -20,55 +19,7 @@ struct OverviewView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 14) {
-                HStack {
-                    Button {
-                        Task { await model.refreshTaskGroups() }
-                    } label: {
-                        Text(model.taskGroups.isEmpty ? "Generate Groups" : "Regenerate Groups")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                    .disabled(model.isLoading || model.isGrouping)
-                    .help("Use OpenAI with downsampled window screenshots to infer task groups")
-                    if model.isGrouping {
-                        ProgressView().controlSize(.small)
-                        if let groupingStatus = model.groupingStatus {
-                            Text(groupingStatus)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .contentTransition(.numericText())
-                        }
-                    } else if let thumbnailStatus = model.thumbnailStatus {
-                        ProgressView().controlSize(.small)
-                        Text(thumbnailStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .contentTransition(.numericText())
-                    } else if model.groupsAreStale {
-                        HStack(spacing: 3) {
-                            Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                            Text("Groups may be outdated")
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .help("The open windows have changed substantially since these groups were generated")
-                    }
-                    Spacer()
-                    Toggle("Exclude Hidden Windows", isOn: $model.excludeHiddenWindows)
-                        .toggleStyle(.checkbox)
-                        .controlSize(.small)
-                    TextField("Search windows and Safari tabs", text: $model.query)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($searchIsFocused)
-                        .onSubmit { openSelectedWindow() }
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(searchIsFocused ? Color.accentColor.opacity(0.75) : .clear, lineWidth: 1.5)
-                                .allowsHitTesting(false)
-                        }
-                        .frame(maxWidth: 380)
-                }
-
+                statusRow
                 categoryBar
                     .frame(minHeight: categoryBarHeight)
 
@@ -126,9 +77,7 @@ struct OverviewView: View {
         .onChange(of: model.thumbnailCardWidth) {
             model.keyboardColumnCount = gridColumnCount
         }
-        .onChange(of: model.searchFocusRequest) {
-            searchIsFocused = true
-        }
+        .animation(.easeInOut(duration: 0.16), value: model.thumbnailCardWidth)
         .alert("Never capture \(appPendingExclusion?.appName ?? "this app")?", isPresented: Binding(
             get: { appPendingExclusion != nil },
             set: { if !$0 { appPendingExclusion = nil } }
@@ -141,6 +90,30 @@ struct OverviewView: View {
         } message: { window in
             Text("All current and future \(window.appName) windows will be removed from Kehai. Kehai won’t capture their thumbnails or include them in AI grouping. You can allow the app again in Settings.")
         }
+    }
+
+    @ViewBuilder
+    private var statusRow: some View {
+        HStack(spacing: 8) {
+            if model.isGrouping {
+                ProgressView().controlSize(.small)
+                if let groupingStatus = model.groupingStatus {
+                    Text(groupingStatus)
+                        .contentTransition(.numericText())
+                }
+            } else if let thumbnailStatus = model.thumbnailStatus {
+                ProgressView().controlSize(.small)
+                Text(thumbnailStatus)
+                    .contentTransition(.numericText())
+            } else if model.groupsAreStale {
+                Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                Text("Groups may be outdated")
+            }
+            Spacer()
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 16)
     }
 
     private func updateGridWidth(_ width: CGFloat) {
@@ -263,13 +236,13 @@ private struct WindowCard: View {
                     if let image = window.thumbnail {
                         Image(nsImage: image)
                             .resizable()
-                            .scaledToFit()
+                            .scaledToFill()
                             .opacity(window.thumbnailIsUsable ? 1 : 0)
                     }
                     if let liveThumbnail {
                         Image(nsImage: liveThumbnail)
                             .resizable()
-                            .scaledToFit()
+                            .scaledToFill()
                             .transition(.opacity)
                     }
                 }

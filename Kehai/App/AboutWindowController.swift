@@ -20,7 +20,10 @@ struct AboutView: View {
                     .frame(width: 96, height: 96)
             }
             Text("Kehai")
-                .font(.system(size: 26, weight: .semibold))
+                .font(.system(size: 22, weight: .semibold))
+            Text("Browse windows intelligently grouped by task.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
             Text(version)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -38,7 +41,7 @@ struct AboutView: View {
                     .foregroundStyle(.red)
             }
         }
-        .frame(width: 320, height: 260)
+        .frame(width: 320, height: 280)
     }
 }
 
@@ -46,7 +49,7 @@ struct AboutView: View {
 final class AboutWindowController: NSWindowController, NSWindowDelegate {
     init(reportBug: @escaping () -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 280),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

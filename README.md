@@ -1,6 +1,6 @@
 # Kehai
 
-Menu-bar utility for returning to interrupted work. See every current window, grouped intelligently by task instead of by app.
+Mac utility for returning to interrupted work. See every current window, grouped intelligently by task instead of by app.
 
 ## Build and run
 
