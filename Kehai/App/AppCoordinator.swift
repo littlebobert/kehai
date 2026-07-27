@@ -19,6 +19,10 @@ final class AppCoordinator: NSObject {
         proceed: { [weak self] in self?.panelController.show() }
     )
     private lazy var hotKey = GlobalHotKey { [weak self] in self?.show() }
+    private let diagnosticReports = DiagnosticReportService()
+    private lazy var aboutController = AboutWindowController(
+        reportBug: { [weak self] in self?.reportBug() }
+    )
     private lazy var settingsController = SettingsWindowController(
         shortcut: shortcutSettings,
         excludedApps: excludedAppStore,
@@ -38,6 +42,8 @@ final class AppCoordinator: NSObject {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "rectangle.3.group", accessibilityDescription: "Kehai")
         let menu = NSMenu()
+        menu.addItem(withTitle: "About Kehai", action: #selector(showAbout), keyEquivalent: "")
+        menu.addItem(.separator())
         let showBrowserItem = NSMenuItem(title: "Show Browser", action: #selector(show), keyEquivalent: "")
         showBrowserItem.target = self
         menu.addItem(showBrowserItem)
@@ -112,6 +118,34 @@ final class AppCoordinator: NSObject {
                   settingsController.window?.isVisible != true,
                   !panelController.isVisible {
             panelController.show()
+        }
+    }
+
+    @objc func showAbout() {
+        aboutController.present()
+    }
+
+    private func reportBug() {
+        permissionManager.refresh()
+        let snapshot = DiagnosticSnapshot(
+            windowCount: viewModel.windows.count,
+            usableThumbnailCount: viewModel.windows.filter(\.thumbnailIsUsable).count,
+            groupCount: viewModel.taskGroups.count,
+            excludedAppCount: excludedAppStore.apps.count,
+            screenCaptureGranted: permissionManager.screenCaptureGranted,
+            accessibilityGranted: permissionManager.accessibilityGranted,
+            safariAutomationStatus: permissionManager.safariAutomationStatus,
+            isLoading: viewModel.isLoading,
+            isGrouping: viewModel.isGrouping
+        )
+        do {
+            try diagnosticReports.draftBugReport(snapshot: snapshot)
+            SafeDiagnosticLog.shared.record("bug-report: email draft requested")
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Could Not Draft Bug Report"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
         }
     }
 

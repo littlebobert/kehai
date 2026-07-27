@@ -9,12 +9,15 @@
 /* Begin PBXBuildFile section */
 		0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */; };
 		0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */; };
+		10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */; };
 		231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */; };
 		26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */; };
 		29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */; };
 		377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */; };
 		37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */; };
 		3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF36828CD74B41607115C48 /* GlobalHotKey.swift */; };
+		3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */; };
+		5237186877B286D004B95E8F /* SafeDiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */; };
 		5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A2694A32A4197AFA761F2B /* ThumbnailService.swift */; };
 		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
 		7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */; };
@@ -52,6 +55,7 @@
 /* Begin PBXFileReference section */
 		0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPanelController.swift; sourceTree = "<group>"; };
 		0B555A1137CC688518C03637 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDiagnosticLog.swift; sourceTree = "<group>"; };
 		20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupingService.swift; sourceTree = "<group>"; };
 		2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		30976D9013BB918B61B85C4F /* ShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
@@ -78,10 +82,12 @@
 		D57C5BE757B41B4FD3795131 /* PermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionView.swift; sourceTree = "<group>"; };
 		D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariTabService.swift; sourceTree = "<group>"; };
 		E2E335A1351B9F8BAD68A631 /* KehaiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiTests.swift; sourceTree = "<group>"; };
+		E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticReportService.swift; sourceTree = "<group>"; };
 		E64C863413D1E203C541734B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E9828342C2F7E02777B67673 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
 		F151B8D770399FA7AA57BEFF /* WrappingHStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WrappingHStack.swift; sourceTree = "<group>"; };
 		FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIconSource.png; sourceTree = "<group>"; };
+		FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -180,13 +186,16 @@
 		E15B1B6070FA5557C9211BF3 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */,
 				3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */,
 				0B555A1137CC688518C03637 /* AppDelegate.swift */,
+				E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */,
 				4AF36828CD74B41607115C48 /* GlobalHotKey.swift */,
 				621EE2F9EC9738189063682A /* KehaiApp.swift */,
 				38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */,
 				A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */,
 				D57C5BE757B41B4FD3795131 /* PermissionView.swift */,
+				1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */,
 				2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */,
 				9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */,
 				30976D9013BB918B61B85C4F /* ShortcutSettings.swift */,
@@ -298,10 +307,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */,
 				0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */,
 				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
 				BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */,
 				F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */,
+				3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
 				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,
@@ -315,6 +326,7 @@
 				231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */,
 				FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */,
 				7E737B2A17D9781F37E42E52 /* SafariTabService.swift in Sources */,
+				5237186877B286D004B95E8F /* SafeDiagnosticLog.swift in Sources */,
 				37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */,
 				9BA0D129A644C4FA7DB8D682 /* SettingsWindowController.swift in Sources */,
 				A5D9BFA7FA425515479C1BE9 /* ShortcutSettings.swift in Sources */,

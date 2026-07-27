@@ -228,6 +228,7 @@ final class OverviewViewModel {
 
     func refresh() async {
         logger.notice("Thumbnail refresh started")
+        SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh started")
         isLoading = true; errorMessage = nil
         do {
             let seen = await history.lastSeen()
@@ -268,7 +269,7 @@ final class OverviewViewModel {
                     capture = await thumbnails.image(for: window)
                 }
                 if let capture, let index = windows.firstIndex(where: { $0.id == item.id }) {
-                    logger.notice("Thumbnail result id=\(item.id) accepted=\(capture.isUsable) variance=\(capture.luminanceVariance, format: .fixed(precision: 1)) edges=\(capture.edgeRatio, format: .fixed(precision: 4)) coverage=\(capture.detailCoverage, format: .fixed(precision: 3)) reason=\(capture.rejectionReason ?? "none", privacy: .public)")
+                    logger.notice("Thumbnail result accepted=\(capture.isUsable) variance=\(capture.luminanceVariance, format: .fixed(precision: 1)) edges=\(capture.edgeRatio, format: .fixed(precision: 4)) coverage=\(capture.detailCoverage, format: .fixed(precision: 3))")
                     var updatedWindows = windows
                     updatedWindows[index].thumbnail = capture.image
                     updatedWindows[index].thumbnailIsUsable = capture.isUsable
@@ -276,17 +277,20 @@ final class OverviewViewModel {
                     windows = updatedWindows
                     if selectedWindowID == item.id { scheduleLiveThumbnail() }
                 } else if capture == nil {
-                    logger.error("No thumbnail captured id=\(item.id) title=\(item.title, privacy: .public)")
+                    logger.error("No thumbnail captured")
+                    SafeDiagnosticLog.shared.record("thumbnail-pipeline: no capture returned")
                 } else {
-                    logger.error("Captured thumbnail no longer has a matching window id=\(item.id)")
+                    logger.error("Captured thumbnail no longer has a matching window")
                 }
             }
             let acceptedCount = windows.filter(\.thumbnailIsUsable).count
             logger.notice("Thumbnail refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
+            SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
             thumbnailStatus = nil
             isLoading = false
         } catch {
-            logger.error("Thumbnail refresh failed error=\(error.localizedDescription, privacy: .public)")
+            logger.error("Thumbnail refresh failed")
+            SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh failed")
             thumbnailStatus = nil
             errorMessage = error.localizedDescription
         }

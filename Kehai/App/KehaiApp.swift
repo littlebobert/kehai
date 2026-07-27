@@ -13,5 +13,12 @@ struct KehaiApp: App {
                 exclusionsChanged: appDelegate.coordinator.refreshBrowser
             )
         }
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Kehai") {
+                    appDelegate.coordinator.showAbout()
+                }
+            }
+        }
     }
 }

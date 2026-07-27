@@ -53,10 +53,11 @@ final class LiveThumbnailService {
             self.output = output
             self.stream = stream
             try await stream.startCapture()
-            logger.notice("Live capture started id=\(windowID)")
+            logger.notice("Live capture started")
         } catch {
             guard currentGeneration == generation else { return }
-            logger.error("Live capture failed id=\(windowID) error=\(error.localizedDescription, privacy: .public)")
+            logger.error("Live capture failed")
+            SafeDiagnosticLog.shared.record("live-thumbnail: capture failed")
             stream = nil
             output = nil
         }

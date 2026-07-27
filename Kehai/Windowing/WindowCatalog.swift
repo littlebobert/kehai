@@ -38,7 +38,8 @@ final class WindowCatalog {
 
             if let signatures = accessibilityWindows[app.processID],
                !signatures.contains(where: { $0.matches(title: title, frame: window.frame) }) {
-                logger.notice("Excluded non-AX window id=\(window.windowID) app=\(app.applicationName, privacy: .public) title=\(title, privacy: .public) onScreen=\(window.isOnScreen)")
+                logger.notice("Excluded ScreenCaptureKit window without a matching Accessibility window")
+                SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched window")
                 return nil
             }
 

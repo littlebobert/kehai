@@ -24,7 +24,7 @@ final class ThumbnailService {
         configuration.showsCursor = false
         configuration.ignoreShadowsSingleWindow = false
         let filter = SCContentFilter(desktopIndependentWindow: window)
-        logger.notice("Capture started id=\(window.windowID) title=\(title, privacy: .public) size=\(configuration.width)x\(configuration.height)")
+            logger.notice("Thumbnail capture started size=\(configuration.width)x\(configuration.height)")
         do {
             let source = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
             let flattened = flatten(source)
@@ -39,7 +39,7 @@ final class ThumbnailService {
             } else {
                 nil
             }
-            logger.notice("Capture analyzed id=\(window.windowID) app=\(appName, privacy: .public) accepted=\(isUsable) variance=\(analysis.luminanceVariance, format: .fixed(precision: 1)) edges=\(analysis.edgeRatio, format: .fixed(precision: 4)) coverage=\(analysis.detailCoverage, format: .fixed(precision: 3)) reason=\(rejectionReason ?? "none", privacy: .public)")
+                logger.notice("Thumbnail analyzed accepted=\(isUsable) variance=\(analysis.luminanceVariance, format: .fixed(precision: 1)) edges=\(analysis.edgeRatio, format: .fixed(precision: 4)) coverage=\(analysis.detailCoverage, format: .fixed(precision: 3))")
             return CapturedThumbnail(
                 image: NSImage(cgImage: flattened, size: NSSize(width: flattened.width, height: flattened.height)),
                 isUsable: isUsable,
@@ -49,7 +49,8 @@ final class ThumbnailService {
                 rejectionReason: rejectionReason
             )
         } catch {
-            logger.error("Capture failed id=\(window.windowID) title=\(title, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+            logger.error("Thumbnail capture failed")
+            SafeDiagnosticLog.shared.record("thumbnail: capture failed")
             return nil
         }
     }
