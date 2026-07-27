@@ -1,0 +1,60 @@
+name: Kehai
+options:
+  bundleIdPrefix: com.justin
+  deploymentTarget:
+    macOS: "27.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "27.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "Developer ID Application: Justin Henry Garcia (XDWKSAH7W3)"
+    DEVELOPMENT_TEAM: XDWKSAH7W3
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+targets:
+  Kehai:
+    type: application
+    platform: macOS
+    sources:
+      - path: Kehai
+        excludes:
+          - Resources/Info.plist
+          - Resources/Kehai.entitlements
+    info:
+      path: Kehai/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Kehai
+        LSUIElement: false
+        NSAppleEventsUsageDescription: Kehai reads Safari tab titles and URLs and activates the tab you choose.
+        NSScreenCaptureUsageDescription: Kehai shows current thumbnails of your open windows.
+    entitlements:
+      path: Kehai/Resources/Kehai.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.justin.Kehai
+        PRODUCT_NAME: Kehai
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Kehai/Resources/Kehai.entitlements
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  KehaiTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: KehaiTests
+    dependencies:
+      - target: Kehai
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.justin.KehaiTests
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Kehai:
+    build:
+      targets:
+        Kehai: all
+        KehaiTests: [test]
+    test:
+      targets:
+        - KehaiTests

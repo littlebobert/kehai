@@ -1,0 +1,584 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */; };
+		0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */; };
+		231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */; };
+		26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */; };
+		29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */; };
+		377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */; };
+		37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */; };
+		3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF36828CD74B41607115C48 /* GlobalHotKey.swift */; };
+		5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A2694A32A4197AFA761F2B /* ThumbnailService.swift */; };
+		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
+		7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */; };
+		74738DD10716F4ED75D0AB4D /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9828342C2F7E02777B67673 /* OverviewView.swift */; };
+		7E737B2A17D9781F37E42E52 /* SafariTabService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */; };
+		80DEA98F26311C9CB6764E62 /* WindowActivator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */; };
+		8AAE6B09DA46E11CB87F19AD /* AppIconSource.png in Resources */ = {isa = PBXBuildFile; fileRef = FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */; };
+		933C2E5ACBFC18956952BAF2 /* WindowCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */; };
+		9BA0D129A644C4FA7DB8D682 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */; };
+		9EA0833562F7A2A9BD35948D /* WindowModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E5FC5B0B6141C5383120D /* WindowModel.swift */; };
+		9F033371CC4A42572498CB77 /* OverviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */; };
+		A19A7D0DD4DA3D00CDF9BBB6 /* OverviewPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */; };
+		A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */; };
+		A5D9BFA7FA425515479C1BE9 /* ShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30976D9013BB918B61B85C4F /* ShortcutSettings.swift */; };
+		ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EEF963F2217DDBE06F29587 /* ActivityStore.swift */; };
+		B0AA11ECB97B18CDB3BD65B4 /* WrappingHStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = F151B8D770399FA7AA57BEFF /* WrappingHStack.swift */; };
+		B1BCDDF3CCE9D52EF3ACA196 /* KehaiTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E335A1351B9F8BAD68A631 /* KehaiTests.swift */; };
+		BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */; };
+		C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */; };
+		D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 621EE2F9EC9738189063682A /* KehaiApp.swift */; };
+		F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B555A1137CC688518C03637 /* AppDelegate.swift */; };
+		FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57C5BE757B41B4FD3795131 /* PermissionView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		CF0DE1D6F054BFD53F480F72 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C2676DCFF73176DD626B5629 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 48CB368719D41A574B177010;
+			remoteInfo = Kehai;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPanelController.swift; sourceTree = "<group>"; };
+		0B555A1137CC688518C03637 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupingService.swift; sourceTree = "<group>"; };
+		2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		30976D9013BB918B61B85C4F /* ShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
+		3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExcludedAppStore.swift; sourceTree = "<group>"; };
+		38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingWindowController.swift; sourceTree = "<group>"; };
+		3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
+		3DAC3BCBF37ED6DAA797DA79 /* KehaiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KehaiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		4AF36828CD74B41607115C48 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
+		5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCatalog.swift; sourceTree = "<group>"; };
+		5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupCache.swift; sourceTree = "<group>"; };
+		5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivator.swift; sourceTree = "<group>"; };
+		621EE2F9EC9738189063682A /* KehaiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiApp.swift; sourceTree = "<group>"; };
+		6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeyStore.swift; sourceTree = "<group>"; };
+		6EEF963F2217DDBE06F29587 /* ActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStore.swift; sourceTree = "<group>"; };
+		803E5FC5B0B6141C5383120D /* WindowModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowModel.swift; sourceTree = "<group>"; };
+		82A2694A32A4197AFA761F2B /* ThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailService.swift; sourceTree = "<group>"; };
+		865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveThumbnailService.swift; sourceTree = "<group>"; };
+		89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewViewModel.swift; sourceTree = "<group>"; };
+		8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenWindowStore.swift; sourceTree = "<group>"; };
+		9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		C2F443FAB9945628682B0572 /* Kehai.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kehai.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D57C5BE757B41B4FD3795131 /* PermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionView.swift; sourceTree = "<group>"; };
+		D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariTabService.swift; sourceTree = "<group>"; };
+		E2E335A1351B9F8BAD68A631 /* KehaiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiTests.swift; sourceTree = "<group>"; };
+		E64C863413D1E203C541734B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E9828342C2F7E02777B67673 /* OverviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewView.swift; sourceTree = "<group>"; };
+		F151B8D770399FA7AA57BEFF /* WrappingHStack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WrappingHStack.swift; sourceTree = "<group>"; };
+		FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = AppIconSource.png; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0AE6F65D33E8A1C0254042FF /* Safari */ = {
+			isa = PBXGroup;
+			children = (
+				D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */,
+			);
+			path = Safari;
+			sourceTree = "<group>";
+		};
+		2652FF9A402505BB97AB09C3 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */,
+				6EEF963F2217DDBE06F29587 /* ActivityStore.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		3DCF5395836948366350CB6B /* Intelligence */ = {
+			isa = PBXGroup;
+			children = (
+				6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */,
+				5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */,
+				20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */,
+			);
+			path = Intelligence;
+			sourceTree = "<group>";
+		};
+		6CE99583433845D1AA21E63C /* Overview */ = {
+			isa = PBXGroup;
+			children = (
+				0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */,
+				E9828342C2F7E02777B67673 /* OverviewView.swift */,
+				89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */,
+				F151B8D770399FA7AA57BEFF /* WrappingHStack.swift */,
+			);
+			path = Overview;
+			sourceTree = "<group>";
+		};
+		8CE0557D53871BA90DB7E976 /* KehaiTests */ = {
+			isa = PBXGroup;
+			children = (
+				E2E335A1351B9F8BAD68A631 /* KehaiTests.swift */,
+			);
+			path = KehaiTests;
+			sourceTree = "<group>";
+		};
+		A3B20864E270E3CD719CB530 /* Windowing */ = {
+			isa = PBXGroup;
+			children = (
+				3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */,
+				8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */,
+				865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */,
+				82A2694A32A4197AFA761F2B /* ThumbnailService.swift */,
+				5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */,
+				5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */,
+				803E5FC5B0B6141C5383120D /* WindowModel.swift */,
+			);
+			path = Windowing;
+			sourceTree = "<group>";
+		};
+		A81CC1004B4AE238DF65142A = {
+			isa = PBXGroup;
+			children = (
+				A9F3ACC6A433F5F3CFDFD02D /* Kehai */,
+				8CE0557D53871BA90DB7E976 /* KehaiTests */,
+				D0C6E7F65EAB823116816902 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A9F3ACC6A433F5F3CFDFD02D /* Kehai */ = {
+			isa = PBXGroup;
+			children = (
+				E15B1B6070FA5557C9211BF3 /* App */,
+				2652FF9A402505BB97AB09C3 /* History */,
+				3DCF5395836948366350CB6B /* Intelligence */,
+				6CE99583433845D1AA21E63C /* Overview */,
+				FA894E20CBB1FCCD89F3ED21 /* Resources */,
+				0AE6F65D33E8A1C0254042FF /* Safari */,
+				A3B20864E270E3CD719CB530 /* Windowing */,
+			);
+			path = Kehai;
+			sourceTree = "<group>";
+		};
+		D0C6E7F65EAB823116816902 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C2F443FAB9945628682B0572 /* Kehai.app */,
+				3DAC3BCBF37ED6DAA797DA79 /* KehaiTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E15B1B6070FA5557C9211BF3 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */,
+				0B555A1137CC688518C03637 /* AppDelegate.swift */,
+				4AF36828CD74B41607115C48 /* GlobalHotKey.swift */,
+				621EE2F9EC9738189063682A /* KehaiApp.swift */,
+				38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */,
+				A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */,
+				D57C5BE757B41B4FD3795131 /* PermissionView.swift */,
+				2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */,
+				9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */,
+				30976D9013BB918B61B85C4F /* ShortcutSettings.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		FA894E20CBB1FCCD89F3ED21 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */,
+				E64C863413D1E203C541734B /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		48CB368719D41A574B177010 /* Kehai */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4A22DFDD8B5098FB4F5C3FAD /* Build configuration list for PBXNativeTarget "Kehai" */;
+			buildPhases = (
+				695A10A147DB4CDA94FAFCF3 /* Sources */,
+				79082AF4894A8FB7BA547A00 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Kehai;
+			packageProductDependencies = (
+			);
+			productName = Kehai;
+			productReference = C2F443FAB9945628682B0572 /* Kehai.app */;
+			productType = "com.apple.product-type.application";
+		};
+		D44B9C0E94279D57BD8678C5 /* KehaiTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2C88ED30FB7A9D2F3C3137F1 /* Build configuration list for PBXNativeTarget "KehaiTests" */;
+			buildPhases = (
+				91303AD9F13E41672E156096 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				19E5287C495CF97BBA73C3D0 /* PBXTargetDependency */,
+			);
+			name = KehaiTests;
+			packageProductDependencies = (
+			);
+			productName = KehaiTests;
+			productReference = 3DAC3BCBF37ED6DAA797DA79 /* KehaiTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C2676DCFF73176DD626B5629 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					48CB368719D41A574B177010 = {
+						DevelopmentTeam = XDWKSAH7W3;
+						ProvisioningStyle = Manual;
+					};
+					D44B9C0E94279D57BD8678C5 = {
+						DevelopmentTeam = XDWKSAH7W3;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 6339113491B6CA4D2D9CBB90 /* Build configuration list for PBXProject "Kehai" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A81CC1004B4AE238DF65142A;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D0C6E7F65EAB823116816902 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				48CB368719D41A574B177010 /* Kehai */,
+				D44B9C0E94279D57BD8678C5 /* KehaiTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		79082AF4894A8FB7BA547A00 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8AAE6B09DA46E11CB87F19AD /* AppIconSource.png in Resources */,
+				6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		695A10A147DB4CDA94FAFCF3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */,
+				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
+				BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */,
+				F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */,
+				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
+				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
+				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,
+				D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */,
+				C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */,
+				A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */,
+				26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */,
+				A19A7D0DD4DA3D00CDF9BBB6 /* OverviewPanelController.swift in Sources */,
+				74738DD10716F4ED75D0AB4D /* OverviewView.swift in Sources */,
+				9F033371CC4A42572498CB77 /* OverviewViewModel.swift in Sources */,
+				231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */,
+				FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */,
+				7E737B2A17D9781F37E42E52 /* SafariTabService.swift in Sources */,
+				37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */,
+				9BA0D129A644C4FA7DB8D682 /* SettingsWindowController.swift in Sources */,
+				A5D9BFA7FA425515479C1BE9 /* ShortcutSettings.swift in Sources */,
+				7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */,
+				0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */,
+				5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */,
+				80DEA98F26311C9CB6764E62 /* WindowActivator.swift in Sources */,
+				933C2E5ACBFC18956952BAF2 /* WindowCatalog.swift in Sources */,
+				9EA0833562F7A2A9BD35948D /* WindowModel.swift in Sources */,
+				B0AA11ECB97B18CDB3BD65B4 /* WrappingHStack.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		91303AD9F13E41672E156096 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1BCDDF3CCE9D52EF3ACA196 /* KehaiTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		19E5287C495CF97BBA73C3D0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 48CB368719D41A574B177010 /* Kehai */;
+			targetProxy = CF0DE1D6F054BFD53F480F72 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		2F48D3C38E750ED7762FC8A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.justin.KehaiTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kehai.app/Contents/MacOS/Kehai";
+			};
+			name = Release;
+		};
+		3ACAA7B5D9BF88C4228BBFE6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Kehai/Resources/Kehai.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Kehai/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.justin.Kehai;
+				PRODUCT_NAME = Kehai;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		59FA574EE29973D987779D22 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.justin.KehaiTests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Kehai.app/Contents/MacOS/Kehai";
+			};
+			name = Debug;
+		};
+		92A29B69BBF27ABF79F61E87 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Developer ID Application: Justin Henry Garcia (XDWKSAH7W3)";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = XDWKSAH7W3;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		CC09C8EEECE0F2912F3DAC25 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Kehai/Resources/Kehai.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Kehai/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.justin.Kehai;
+				PRODUCT_NAME = Kehai;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		DF92159421838CE9315489A6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Developer ID Application: Justin Henry Garcia (XDWKSAH7W3)";
+				CODE_SIGN_STYLE = Manual;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = XDWKSAH7W3;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2C88ED30FB7A9D2F3C3137F1 /* Build configuration list for PBXNativeTarget "KehaiTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				59FA574EE29973D987779D22 /* Debug */,
+				2F48D3C38E750ED7762FC8A5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		4A22DFDD8B5098FB4F5C3FAD /* Build configuration list for PBXNativeTarget "Kehai" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3ACAA7B5D9BF88C4228BBFE6 /* Debug */,
+				CC09C8EEECE0F2912F3DAC25 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6339113491B6CA4D2D9CBB90 /* Build configuration list for PBXProject "Kehai" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				92A29B69BBF27ABF79F61E87 /* Debug */,
+				DF92159421838CE9315489A6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C2676DCFF73176DD626B5629 /* Project object */;
+}

@@ -1,0 +1,5 @@
+.build/
+DerivedData/
+Kehai.xcodeproj/xcuserdata/
+*.xcuserstate
+.DS_Store
