@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import SwiftUI
 
 @MainActor
@@ -136,6 +137,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            try Self.removeQuarantineAttributeRecursively(from: destinationURL)
             UserDefaults.standard.set(true, forKey: Self.suppressMovePromptKey)
             NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
             installationComplete = true
@@ -144,6 +146,31 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         } catch {
             errorMessage = L10n.format("Kehai could not be moved automatically. Move it to Applications in Finder, then open it again. %@", error.localizedDescription)
             updateContent()
+        }
+    }
+
+    private static func removeQuarantineAttributeRecursively(from rootURL: URL) throws {
+        let fileManager = FileManager.default
+        let contents = fileManager.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        var urls = [rootURL]
+        while let url = contents?.nextObject() as? URL {
+            urls.append(url)
+        }
+
+        for url in urls {
+            let result = url.withUnsafeFileSystemRepresentation { path in
+                removexattr(path, "com.apple.quarantine", 0)
+            }
+            if result != 0, errno != ENOATTR {
+                throw CocoaError(.fileWriteUnknown, userInfo: [
+                    NSFilePathErrorKey: url.path,
+                    NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                ])
+            }
         }
     }
 }
