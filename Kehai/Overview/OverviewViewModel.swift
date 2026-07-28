@@ -2,6 +2,11 @@ import AppKit
 import OSLog
 import ScreenCaptureKit
 
+enum WindowActionChooserStage {
+    case removal
+    case exclusion
+}
+
 enum BrowserViewMode: String, CaseIterable, Identifiable {
     case grouped
     case recent
@@ -40,6 +45,9 @@ final class OverviewViewModel {
     var liveThumbnailWindowID: CGWindowID?
     var liveThumbnail: NSImage?
     var searchFocusRequest = 0
+    var actionChooserWindow: WindowItem?
+    var actionChooserStage: WindowActionChooserStage?
+    var actionChooserSelection = 0
     var keyboardColumnCount = 1
     var hiddenWindowsRevision = 0
     var thumbnailCardWidth: CGFloat {
@@ -59,6 +67,7 @@ final class OverviewViewModel {
     var isGrouping = false
     var groupingStatus: String?
     var hasGeneratedGroups = false
+    var groupsGeneratedAt: Date?
     var groupsAreStale = false
     var excludeHiddenWindows: Bool {
         didSet {
@@ -105,6 +114,7 @@ final class OverviewViewModel {
         self.catalog = catalog; self.thumbnails = thumbnails; self.safari = safari; self.history = history
         self.grouping = grouping; self.openAIKeyStore = openAIKeyStore; self.excludedAppStore = excludedAppStore; self.aiExcludedAppStore = aiExcludedAppStore; self.activator = activator; self.activityMonitor = activityMonitor
         hasGeneratedGroups = taskGroupCache.hasCache
+        groupsGeneratedAt = taskGroupCache.generatedAt
     }
 
     var filteredWindows: [WindowItem] {
@@ -139,14 +149,18 @@ final class OverviewViewModel {
         }
 
         let visibleByID = Dictionary(uniqueKeysWithValues: filteredWindows.map { ($0.id, $0) })
-        var assignedIDs = Set<CGWindowID>()
-        var sections = taskGroups.compactMap { group -> BrowserWindowSection? in
+        let rankedSections = taskGroups.compactMap { group -> BrowserWindowSection? in
             let groupWindows = WindowItem.orderedByRecency(group.windowIDs.compactMap { visibleByID[$0] })
             guard !groupWindows.isEmpty else { return nil }
-            assignedIDs.formUnion(groupWindows.map(\.id))
             return BrowserWindowSection(id: group.id, title: group.name, windows: groupWindows)
+        }.sorted { sectionRecency($0) > sectionRecency($1) }
+
+        var assignedIDs = Set<CGWindowID>()
+        var sections = rankedSections.compactMap { section -> BrowserWindowSection? in
+            let uniqueWindows = section.windows.filter { assignedIDs.insert($0.id).inserted }
+            guard !uniqueWindows.isEmpty else { return nil }
+            return BrowserWindowSection(id: section.id, title: section.title, windows: uniqueWindows)
         }
-        sections.sort { sectionRecency($0) > sectionRecency($1) }
 
         let otherWindows = filteredWindows.filter { !assignedIDs.contains($0.id) }
         if !otherWindows.isEmpty {
@@ -212,6 +226,64 @@ final class OverviewViewModel {
         selectFirstFilteredWindow()
     }
 
+    func showActionChooserForSelectedWindow() {
+        guard let selectedWindow else { return }
+        actionChooserWindow = selectedWindow
+        actionChooserStage = .removal
+        actionChooserSelection = 0
+    }
+
+    func moveActionChooserSelection(_ direction: Int) {
+        guard direction != 0 else { return }
+        let count = actionChooserOptionCount
+        guard count > 0 else { return }
+        actionChooserSelection = (actionChooserSelection + direction + count) % count
+    }
+
+    func confirmActionChooserSelection() {
+        guard let window = actionChooserWindow, let actionChooserStage else { return }
+        switch actionChooserStage {
+        case .removal:
+            if actionChooserSelection == 0 {
+                if !isWindowHidden(window) { toggleHidden(window) }
+                dismissActionChooser()
+            } else {
+                self.actionChooserStage = .exclusion
+                actionChooserSelection = 0
+            }
+        case .exclusion:
+            if canExcludeAppFromAI(window), actionChooserSelection == 0 {
+                excludeAppFromAI(window)
+            } else {
+                excludeApp(for: window)
+            }
+            dismissActionChooser()
+        }
+    }
+
+    func cancelActionChooser() {
+        if actionChooserStage == .exclusion {
+            actionChooserStage = .removal
+            actionChooserSelection = 1
+        } else {
+            dismissActionChooser()
+        }
+    }
+
+    private var actionChooserOptionCount: Int {
+        guard let window = actionChooserWindow, let actionChooserStage else { return 0 }
+        switch actionChooserStage {
+        case .removal: return canExcludeApp(window) ? 2 : 1
+        case .exclusion: return canExcludeAppFromAI(window) ? 2 : 1
+        }
+    }
+
+    private func dismissActionChooser() {
+        actionChooserWindow = nil
+        actionChooserStage = nil
+        actionChooserSelection = 0
+    }
+
     func canExcludeApp(_ window: WindowItem) -> Bool {
         guard let bundleIdentifier = window.bundleIdentifier else { return false }
         return !bundleIdentifier.isEmpty && !excludedAppStore.contains(bundleIdentifier: bundleIdentifier)
@@ -236,7 +308,8 @@ final class OverviewViewModel {
     }
 
     func isWindowHidden(_ window: WindowItem) -> Bool {
-        hiddenWindowStore.isHidden(window)
+        _ = hiddenWindowsRevision
+        return hiddenWindowStore.isHidden(window)
     }
 
     func toggleHidden(_ window: WindowItem) {
@@ -361,10 +434,14 @@ final class OverviewViewModel {
         return true
     }
 
+    var selectedWindow: WindowItem? {
+        guard let selectedWindowID else { return nil }
+        return orderedFilteredWindows.first { $0.id == selectedWindowID }
+    }
+
     @discardableResult
     func activateSelectedWindow() -> Bool {
-        guard let selectedWindowID,
-              let window = orderedFilteredWindows.first(where: { $0.id == selectedWindowID }) else { return false }
+        guard let window = selectedWindow else { return false }
         activate(window)
         return true
     }
@@ -490,6 +567,7 @@ final class OverviewViewModel {
             )
             taskGroups = generated
             taskGroupCache.save(groups: generated, windows: windows)
+            groupsGeneratedAt = taskGroupCache.generatedAt
             groupsAreStale = false
             if let selectedTaskGroupID,
                !generated.contains(where: { $0.id == selectedTaskGroupID }) {

@@ -229,6 +229,16 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         viewModel.setViewMode(mode)
     }
 
+    func regenerateGroups() {
+        permissionManager.refresh()
+        guard permissionManager.hasCorePermissions else {
+            showSettings()
+            return
+        }
+        panelController.show()
+        Task { await viewModel.refreshTaskGroups() }
+    }
+
     func focusBrowserSearch() {
         permissionManager.refresh()
         guard permissionManager.hasCorePermissions else {

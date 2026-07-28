@@ -5,7 +5,6 @@ struct OverviewView: View {
     @Bindable var model: OverviewViewModel
     let usesGlassyBackground: Bool
     let close: () -> Void
-    @State private var appPendingExclusion: WindowItem?
     @State private var gridWidth: CGFloat = 0
 
     private let gridSpacing: CGFloat = 18
@@ -24,7 +23,7 @@ struct OverviewView: View {
             }
             .ignoresSafeArea()
 
-            VStack(spacing: 8) {
+            VStack(spacing: 3) {
                 controlBar
                 statusRow
 
@@ -76,6 +75,24 @@ struct OverviewView: View {
             .padding(.horizontal, 30)
             .padding(.top, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+
+            if let window = model.actionChooserWindow, let stage = model.actionChooserStage {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { model.cancelActionChooser() }
+                WindowActionChooser(
+                    window: window,
+                    stage: stage,
+                    selectedIndex: model.actionChooserSelection,
+                    canExcludeApp: model.canExcludeApp(window),
+                    canExcludeFromAI: model.canExcludeAppFromAI(window),
+                    choose: { index in
+                        model.actionChooserSelection = index
+                        model.confirmActionChooserSelection()
+                    },
+                    cancel: model.cancelActionChooser
+                )
+            }
         }
         .task { await model.refresh() }
         .onChange(of: model.thumbnailCardWidth) {
@@ -89,24 +106,6 @@ struct OverviewView: View {
             Button("OK") { model.openAIErrorMessage = nil }
         } message: {
             Text(model.openAIErrorMessage ?? "OpenAI returned an unexpected error.")
-        }
-        .alert("Exclude \(appPendingExclusion?.appName ?? "this app")?", isPresented: Binding(
-            get: { appPendingExclusion != nil },
-            set: { if !$0 { appPendingExclusion = nil } }
-        ), presenting: appPendingExclusion) { window in
-            Button("Cancel", role: .cancel) { appPendingExclusion = nil }
-            if model.canExcludeAppFromAI(window) {
-                Button("From AI Only") {
-                    model.excludeAppFromAI(window)
-                    appPendingExclusion = nil
-                }
-            }
-            Button("From Kehai Entirely", role: .destructive) {
-                model.excludeApp(for: window)
-                appPendingExclusion = nil
-            }
-        } message: { window in
-            Text("Choose whether \(window.appName) remains visible locally but is never sent to OpenAI, or is removed from Kehai and never captured.")
         }
     }
 
@@ -143,9 +142,17 @@ struct OverviewView: View {
                 ProgressView().controlSize(.small)
                 Text(thumbnailStatus)
                     .contentTransition(.numericText())
-            } else if model.groupsAreStale {
-                Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                Text("Groups may be outdated")
+            } else if model.hasGeneratedGroups, let generatedAt = model.groupsGeneratedAt {
+                if model.groupsAreStale {
+                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                    Text("Groups may be outdated")
+                    Text("·")
+                }
+                if Date().timeIntervalSince(generatedAt) < 60 {
+                    Text("Generated just now")
+                } else {
+                    Text("Generated \(generatedAt, format: .relative(presentation: .named))")
+                }
             }
             Spacer()
         }
@@ -184,7 +191,10 @@ struct OverviewView: View {
                             canExcludeApp: model.canExcludeApp(window),
                             select: { model.activate(window); close() },
                             toggleHidden: { model.toggleHidden(window) },
-                            excludeApp: { appPendingExclusion = window },
+                            excludeApp: {
+                                model.selectedWindowID = window.id
+                                model.showActionChooserForSelectedWindow()
+                            },
                             selectTab: { tab in Task { await model.activate(tab); close() } }
                         )
                         .id(window.id)
@@ -195,6 +205,65 @@ struct OverviewView: View {
             .padding(.top, 3)
             .padding(.bottom, 5)
         }
+    }
+}
+
+private struct WindowActionChooser: View {
+    let window: WindowItem
+    let stage: WindowActionChooserStage
+    let selectedIndex: Int
+    let canExcludeApp: Bool
+    let canExcludeFromAI: Bool
+    let choose: (Int) -> Void
+    let cancel: () -> Void
+
+    private var options: [(String, String)] {
+        switch stage {
+        case .removal:
+            return [("Hide Window", "Hide only this window from the browser.")]
+                + (canExcludeApp ? [("Exclude App…", "Choose whether to exclude every \(window.appName) window from AI or Kehai.")] : [])
+        case .exclusion:
+            return (canExcludeFromAI ? [("From AI Only", "Keep \(window.appName) visible locally, but never send its data to OpenAI.")] : [])
+                + [("From Kehai Entirely", "Remove \(window.appName) and never capture or send it.")]
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(stage == .removal ? "Remove \(window.title)?" : "Exclude \(window.appName)?")
+                .font(.headline)
+                .lineLimit(2)
+            VStack(spacing: 6) {
+                ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+                    Button { choose(index) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: selectedIndex == index ? "circle.inset.filled" : "circle")
+                                .foregroundStyle(selectedIndex == index ? Color.accentColor : .secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(option.0).fontWeight(.medium)
+                                Text(option.1).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(9)
+                        .background(selectedIndex == index ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Text("Use the arrow keys, then press Return. Escape cancels.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button("Cancel", action: cancel)
+            }
+        }
+        .padding(18)
+        .frame(width: 420)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(.separator.opacity(0.6)) }
+        .shadow(color: .black.opacity(0.2), radius: 18, y: 8)
     }
 }
 
@@ -251,6 +320,16 @@ private struct WindowCard: View {
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                                 .padding(8)
                                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                        }
+
+                        if let icon = window.appIcon {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 28, height: 28)
+                                .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                                .padding(8)
                         }
                     }
                     .frame(width: proxy.size.width, height: proxy.size.height)

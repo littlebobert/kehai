@@ -10,7 +10,7 @@ struct GroupingControl: View {
         .buttonStyle(.bordered)
         .controlSize(.regular)
         .disabled(model.isLoading || model.isGrouping)
-        .help("Use OpenAI with downsampled window screenshots to infer task groups")
+        .help("Use OpenAI with downsampled window screenshots to infer task groups · Command-R")
     }
 }
 
@@ -83,7 +83,7 @@ struct SearchControl: View {
             .fixedSize()
             .offset(x: 7, y: 30)
         }
-        .padding(.bottom, 16)
+        .padding(.bottom, 14)
         .frame(minWidth: 180, idealWidth: 300, maxWidth: 380)
         .onChange(of: model.searchFocusRequest) {
             isFocused = true

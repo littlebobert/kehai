@@ -125,6 +125,21 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             guard let self, event.window === self.window else { return event }
 
             let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+            if self.model.actionChooserStage != nil {
+                switch event.keyCode {
+                case 53:
+                    self.model.cancelActionChooser()
+                case 36, 76:
+                    self.model.confirmActionChooserSelection()
+                case 123, 126:
+                    self.model.moveActionChooserSelection(-1)
+                case 124, 125:
+                    self.model.moveActionChooserSelection(1)
+                default:
+                    return nil
+                }
+                return nil
+            }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "f" {
                 self.model.searchFocusRequest += 1
@@ -144,6 +159,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 withAnimation(.easeInOut(duration: 0.14)) {
                     self.model.setViewMode(.recent)
                 }
+                return nil
+            }
+            if modifiers == .command,
+               event.charactersIgnoringModifiers?.lowercased() == "r" {
+                Task { await self.model.refreshTaskGroups() }
                 return nil
             }
             if modifiers.contains(.command),
@@ -172,6 +192,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 return nil
             }
             guard !editingText else { return event }
+
+            if modifiers.isEmpty, event.keyCode == 51 {
+                self.model.showActionChooserForSelectedWindow()
+                return nil
+            }
 
             if modifiers == .option, event.keyCode == 125 {
                 if !self.model.moveSelectionToAdjacentGroup(1) {

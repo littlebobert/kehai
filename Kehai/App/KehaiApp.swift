@@ -43,6 +43,10 @@ struct KehaiApp: App {
                 }
                 .keyboardShortcut("2", modifiers: .command)
                 Divider()
+                Button("Regenerate Groups") {
+                    appDelegate.coordinator.regenerateGroups()
+                }
+                .keyboardShortcut("r", modifiers: .command)
                 Button("Search") {
                     appDelegate.coordinator.focusBrowserSearch()
                 }

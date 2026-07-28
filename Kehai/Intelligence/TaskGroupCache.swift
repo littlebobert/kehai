@@ -80,6 +80,7 @@ final class TaskGroupCache {
     }
 
     var hasCache: Bool { cache?.groups.isEmpty == false }
+    var generatedAt: Date? { cache?.generatedAt }
 
     func reconcile(with windows: [WindowItem]) -> TaskGroupCacheReconciliation {
         guard let cache, !cache.groups.isEmpty else {
