@@ -79,6 +79,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         guard !hasStartedServices else { return }
         hasStartedServices = true
         permissionManager.refresh()
+        activityMonitor.setWindowFocusedHandler { [weak self] windowID, date in
+            self?.viewModel.recordWindowFocus(windowID: windowID, at: date)
+        }
         activityMonitor.start()
         windowInventoryMonitor.start()
         registerHotKey()

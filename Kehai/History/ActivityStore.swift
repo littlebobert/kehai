@@ -20,8 +20,8 @@ actor ActivityStore {
         }
     }
 
-    func record(_ window: WindowItem) {
-        events.append(ActivityEvent(windowID: window.id, appName: window.appName, title: window.title, date: Date()))
+    func record(_ window: WindowItem, at date: Date = Date()) {
+        events.append(ActivityEvent(windowID: window.id, appName: window.appName, title: window.title, date: date))
         events = Array(events.suffix(5_000))
         persist()
     }

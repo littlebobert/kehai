@@ -38,8 +38,18 @@ final class OverviewViewModel {
     }
     var selectedWindowID: CGWindowID? {
         didSet {
+            if selectedWindowID != nil, selectedAppWindowID != nil {
+                selectedAppWindowID = nil
+            }
             guard selectedWindowID != oldValue, liveThumbnailEnabled else { return }
             scheduleSelectedLiveThumbnail()
+        }
+    }
+    var selectedAppWindowID: CGWindowID? {
+        didSet {
+            if selectedAppWindowID != nil, selectedWindowID != nil {
+                selectedWindowID = nil
+            }
         }
     }
     var liveThumbnailWindowID: CGWindowID?
@@ -51,6 +61,7 @@ final class OverviewViewModel {
     var actionChooserStage: WindowActionChooserStage?
     var actionChooserSelection = 0
     var keyboardColumnCount = 1
+    var keyboardAppColumnCount = 1
     var hiddenWindowsRevision = 0
     var thumbnailCardWidth: CGFloat {
         didSet { UserDefaults.standard.set(Double(thumbnailCardWidth), forKey: Self.thumbnailCardWidthKey) }
@@ -148,6 +159,26 @@ final class OverviewViewModel {
         return WindowItem.orderedByRecency(matchingWindows)
     }
 
+    func recordWindowFocus(windowID: CGWindowID, at date: Date) {
+        guard let index = windows.firstIndex(where: { $0.id == windowID }) else { return }
+        var updatedWindows = windows
+        updatedWindows[index].lastSeen = date
+        windows = WindowItem.orderedByRecency(updatedWindows)
+    }
+
+    var recentAppWindows: [WindowItem] {
+        _ = hiddenWindowsRevision
+        return WindowItem.orderedByRecency(windows.filter { window in
+            !excludeHiddenWindows || !hiddenWindowStore.isHidden(window)
+        }).reduce(into: [WindowItem]()) { result, window in
+            let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
+            guard !result.contains(where: {
+                ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey
+            }) else { return }
+            result.append(window)
+        }
+    }
+
     var windowSections: [BrowserWindowSection] {
         if smartSearchWindowIDs != nil {
             return [BrowserWindowSection(id: "smart-search", title: L10n.string("Smart Results"), windows: filteredWindows)]
@@ -231,6 +262,12 @@ final class OverviewViewModel {
     }
 
     private func preserveSelectionOrSelectFirst() {
+        if let selectedAppWindowID {
+            if recentAppWindows.contains(where: { $0.id == selectedAppWindowID }) {
+                return
+            }
+            self.selectedAppWindowID = nil
+        }
         if let selectedWindowID,
            orderedFilteredWindows.contains(where: { $0.id == selectedWindowID }) {
             return
@@ -417,7 +454,10 @@ final class OverviewViewModel {
 
     @discardableResult
     func moveSelectionToAdjacentGroup(_ direction: Int) -> Bool {
-        guard viewMode == .grouped, windowSections.count > 1, direction != 0 else { return false }
+        guard selectedAppWindowID == nil,
+              viewMode == .grouped,
+              windowSections.count > 1,
+              direction != 0 else { return false }
         let sections = windowSections
         let currentSectionIndex = selectedWindowID.flatMap { selectedID in
             sections.firstIndex { section in section.windows.contains { $0.id == selectedID } }
@@ -431,38 +471,75 @@ final class OverviewViewModel {
 
     func cycleSelectionByApp(_ direction: Int) {
         guard direction != 0 else { return }
-        let visible = orderedFilteredWindows
-        guard !visible.isEmpty else { return }
-
-        let representatives = WindowItem.orderedByRecency(visible).reduce(into: [WindowItem]()) { result, window in
-            let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
-            let alreadyIncluded = result.contains {
-                ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey
-            }
-            if !alreadyIncluded { result.append(window) }
-        }
+        let representatives = recentAppWindows
         guard !representatives.isEmpty else { return }
 
-        let currentAppKey = selectedWindow.map { $0.bundleIdentifier ?? "pid:\($0.processID)" }
-        let currentIndex = currentAppKey.flatMap { key in
-            representatives.firstIndex { ($0.bundleIdentifier ?? "pid:\($0.processID)") == key }
+        let currentIndex = selectedAppWindowID.flatMap { id in
+            representatives.firstIndex { $0.id == id }
         } ?? (direction > 0 ? -1 : 0)
         let targetIndex = (currentIndex + direction + representatives.count) % representatives.count
-        selectedWindowID = representatives[targetIndex].id
+        selectedWindowID = nil
+        selectedAppWindowID = representatives[targetIndex].id
     }
 
     func moveSelection(horizontal: Int = 0, vertical: Int = 0, columnCount: Int) {
+        if selectedAppWindowID != nil {
+            moveAppSelection(horizontal: horizontal, vertical: vertical)
+            return
+        }
+
         let visible = orderedFilteredWindows
         guard !visible.isEmpty else {
             selectedWindowID = nil
             return
         }
+        if vertical < 0,
+           let selectedWindowID,
+           let selectedIndex = visible.firstIndex(where: { $0.id == selectedWindowID }),
+           selectedIndex < max(columnCount, 1),
+           !recentAppWindows.isEmpty {
+            let targetIndex = min(selectedIndex, recentAppWindows.count - 1)
+            self.selectedWindowID = nil
+            selectedAppWindowID = recentAppWindows[targetIndex].id
+            return
+        }
+        selectedAppWindowID = nil
         if vertical != 0, moveSelectionVertically(vertical, columnCount: columnCount) {
             return
         }
         let currentIndex = selectedWindowID.flatMap { id in visible.firstIndex(where: { $0.id == id }) } ?? 0
         let targetIndex = min(max(currentIndex + horizontal, 0), visible.count - 1)
         selectedWindowID = visible[targetIndex].id
+    }
+
+    private func moveAppSelection(horizontal: Int, vertical: Int) {
+        let apps = recentAppWindows
+        guard !apps.isEmpty else {
+            selectedAppWindowID = nil
+            return
+        }
+        let columns = max(keyboardAppColumnCount, 1)
+        let currentIndex = selectedAppWindowID.flatMap { id in apps.firstIndex { $0.id == id } } ?? 0
+        if vertical > 0 {
+            let targetIndex = currentIndex + columns
+            if apps.indices.contains(targetIndex) {
+                selectedAppWindowID = apps[targetIndex].id
+            } else {
+                let windows = orderedFilteredWindows
+                guard !windows.isEmpty else { return }
+                let windowIndex = min(currentIndex % columns, windows.count - 1)
+                selectedAppWindowID = nil
+                selectedWindowID = windows[windowIndex].id
+            }
+            return
+        }
+        if vertical < 0 {
+            let targetIndex = currentIndex - columns
+            if apps.indices.contains(targetIndex) { selectedAppWindowID = apps[targetIndex].id }
+            return
+        }
+        let targetIndex = min(max(currentIndex + horizontal, 0), apps.count - 1)
+        selectedAppWindowID = apps[targetIndex].id
     }
 
     private func moveSelectionVertically(_ direction: Int, columnCount: Int) -> Bool {
@@ -509,6 +586,16 @@ final class OverviewViewModel {
         return true
     }
 
+    @discardableResult
+    func activateCurrentSelection() -> Bool {
+        if let selectedAppWindowID,
+           let window = recentAppWindows.first(where: { $0.id == selectedAppWindowID }) {
+            activate(window)
+            return true
+        }
+        return activateSelectedWindow()
+    }
+
     func beginSwitcherMode() {
         isSwitcherMode = true
         hoveredSwitcherWindowID = nil
@@ -517,7 +604,21 @@ final class OverviewViewModel {
     func hoverWindowInSwitcherMode(_ windowID: CGWindowID?) {
         guard isSwitcherMode else { return }
         hoveredSwitcherWindowID = windowID
-        if let windowID { selectedWindowID = windowID }
+        if let windowID {
+            selectedAppWindowID = nil
+            selectedWindowID = windowID
+        }
+    }
+
+    func hoverAppInSwitcherMode(_ windowID: CGWindowID?) {
+        guard isSwitcherMode else { return }
+        hoveredSwitcherWindowID = windowID
+        if let windowID {
+            selectedWindowID = nil
+            selectedAppWindowID = windowID
+        } else {
+            selectedAppWindowID = nil
+        }
     }
 
     @discardableResult

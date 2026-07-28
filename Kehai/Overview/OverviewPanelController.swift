@@ -261,7 +261,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             if event.keyCode == 36 || event.keyCode == 76 {
                 guard !editingText else { return event }
-                if self.model.activateSelectedWindow() { self.close() }
+                if self.model.activateCurrentSelection() { self.close() }
                 return nil
             }
             guard !editingText else { return event }

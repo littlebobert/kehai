@@ -36,6 +36,8 @@ struct OverviewView: View {
                 controlBar
                     .padding(.horizontal, 30)
 
+                recentAppsStrip
+
                 if let error = model.errorMessage {
                     Text(error)
                         .foregroundStyle(.red)
@@ -131,6 +133,29 @@ struct OverviewView: View {
         }
     }
 
+    private var recentAppsStrip: some View {
+        WrappingHStack(horizontalSpacing: 12, verticalSpacing: 8) {
+            ForEach(model.recentAppWindows) { window in
+                RecentAppButton(
+                    window: window,
+                    isSelected: model.selectedAppWindowID == window.id,
+                    activate: {
+                        model.selectedWindowID = nil
+                        model.selectedAppWindowID = window.id
+                        model.activate(window)
+                        close()
+                    },
+                    hoverChanged: { isHovering in
+                        model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
+                    }
+                )
+            }
+        }
+        .padding(.horizontal, 30)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var controlBar: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
@@ -154,6 +179,7 @@ struct OverviewView: View {
     private func updateGridWidth(_ width: CGFloat) {
         gridWidth = width
         model.keyboardColumnCount = gridColumnCount
+        model.keyboardAppColumnCount = max(1, Int((max(0, width - 60) + 12) / 92))
     }
 
     private func openSelectedWindow() {
@@ -292,6 +318,54 @@ private struct TaskFlowSegment: Identifiable {
     let sectionIndex: Int
     let windows: [WindowItem]
     let showsTitle: Bool
+}
+
+private struct RecentAppButton: View {
+    let window: WindowItem
+    let isSelected: Bool
+    let activate: () -> Void
+    let hoverChanged: (Bool) -> Void
+
+    var body: some View {
+        Button(action: activate) {
+            VStack(spacing: 3) {
+                Group {
+                    if let icon = window.appIcon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        Image(systemName: "app")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(8)
+                    }
+                }
+                .frame(width: 46, height: 46)
+
+                Text(window.appName)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(width: 72)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 3)
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .help(window.appName)
+        .contentShape(Rectangle())
+        .onHover(perform: hoverChanged)
+    }
 }
 
 private struct WindowActionChooser: View {

@@ -4,11 +4,16 @@ import ApplicationServices
 @MainActor
 final class ActivityMonitor {
     private let store: ActivityStore
+    private var windowFocused: (@MainActor (CGWindowID, Date) -> Void)?
     private var observer: NSObjectProtocol?
     private var latestWindows: [WindowItem] = []
     private var activationDatesByProcessID: [pid_t: Date] = [:]
 
     init(store: ActivityStore) { self.store = store }
+
+    func setWindowFocusedHandler(_ handler: @escaping @MainActor (CGWindowID, Date) -> Void) {
+        windowFocused = handler
+    }
 
     func start() {
         observer = NSWorkspace.shared.notificationCenter.addObserver(
@@ -44,12 +49,14 @@ final class ActivityMonitor {
             candidates.max { signature.score(for: $0) < signature.score(for: $1) }
         } ?? candidates.first
         guard let item else { return }
-        await store.record(item)
+        let focusedAt = Date()
+        await store.record(item, at: focusedAt)
         latestWindows = latestWindows.map { window in
             var window = window
-            if window.id == item.id { window.lastSeen = Date() }
+            if window.id == item.id { window.lastSeen = focusedAt }
             return window
         }
+        windowFocused?(item.id, focusedAt)
     }
 
     private func windowSignature(for element: AXUIElement) -> WindowMatchCandidate? {
