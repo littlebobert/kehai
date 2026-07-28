@@ -10,6 +10,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         didSet { updateContent() }
     }
     private var errorMessage: String?
+    private var installationComplete = false
 
     init(continueLaunch: @escaping () -> Void) {
         self.continueLaunch = continueLaunch
@@ -43,6 +44,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         guard let window else { return }
         selectedIndex = 0
         errorMessage = nil
+        installationComplete = false
         updateContent()
         window.center()
         showWindow(nil)
@@ -60,10 +62,12 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         window?.contentView = NSHostingView(rootView: InstallationLocationView(
             selectedIndex: selectedIndex,
             errorMessage: errorMessage,
+            installationComplete: installationComplete,
             choose: { [weak self] index in
                 self?.selectedIndex = index
                 self?.confirmSelection()
-            }
+            },
+            quit: { NSApp.terminate(nil) }
         ))
     }
 
@@ -71,6 +75,13 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.window === self.window else { return event }
+            if self.installationComplete {
+                if event.keyCode == 36 || event.keyCode == 76 {
+                    NSApp.terminate(nil)
+                    return nil
+                }
+                return event
+            }
             switch event.keyCode {
             case 53:
                 self.finishWithoutMoving()
@@ -121,25 +132,10 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = true
-            configuration.createsNewApplicationInstance = true
-            NSWorkspace.shared.openApplication(at: destinationURL, configuration: configuration) { application, error in
-                Task { @MainActor in
-                    if let error {
-                        self.errorMessage = L10n.format("Kehai was copied, but could not be reopened: %@", error.localizedDescription)
-                        self.updateContent()
-                    } else if let application,
-                              let launchedURL = application.bundleURL?.standardizedFileURL,
-                              launchedURL == destinationURL {
-                        application.activate(options: [.activateAllWindows])
-                        NSApp.terminate(nil)
-                    } else {
-                        self.errorMessage = L10n.string("Kehai was copied, but macOS reopened the original copy. Open Kehai from Applications.")
-                        self.updateContent()
-                    }
-                }
-            }
+            NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
+            installationComplete = true
+            errorMessage = nil
+            updateContent()
         } catch {
             errorMessage = L10n.format("Kehai could not be moved automatically. Move it to Applications in Finder, then open it again. %@", error.localizedDescription)
             updateContent()
@@ -150,7 +146,9 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
 private struct InstallationLocationView: View {
     let selectedIndex: Int
     let errorMessage: String?
+    let installationComplete: Bool
     let choose: (Int) -> Void
+    let quit: () -> Void
 
     private var choices: [(String, String)] {
         [
@@ -162,42 +160,59 @@ private struct InstallationLocationView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Label("Move Kehai to Applications?", systemImage: "folder.badge.plus")
-                .font(.title2.weight(.semibold))
-            Text("Running Kehai from Applications keeps permissions, updates, Dock shortcuts, and launches tied to one stable copy.")
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 6) {
-                ForEach(Array(choices.enumerated()), id: \.offset) { index, choice in
-                    Button { choose(index) } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: selectedIndex == index ? "circle.inset.filled" : "circle")
-                                .foregroundStyle(selectedIndex == index ? Color.accentColor : .secondary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(choice.0).fontWeight(.medium)
-                                Text(choice.1)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer()
-                        }
-                        .padding(9)
-                        .background(selectedIndex == index ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("Use the arrow keys, then press Return. Escape chooses Not Now.")
-                    .font(.caption)
+            if installationComplete {
+                Spacer()
+                Label("Kehai is in Applications", systemImage: "checkmark.circle.fill")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.green)
+                Text("Next, quit this copy and open Kehai from Applications. Finder has selected it for you.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Spacer()
+                    Button("Quit Kehai", action: quit)
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                }
+                Spacer()
+            } else {
+                Label("Move Kehai to Applications?", systemImage: "folder.badge.plus")
+                    .font(.title2.weight(.semibold))
+                Text("Running Kehai from Applications keeps permissions, updates, Dock shortcuts, and launches tied to one stable copy.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 6) {
+                    ForEach(Array(choices.enumerated()), id: \.offset) { index, choice in
+                        Button { choose(index) } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: selectedIndex == index ? "circle.inset.filled" : "circle")
+                                    .foregroundStyle(selectedIndex == index ? Color.accentColor : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(choice.0).fontWeight(.medium)
+                                    Text(choice.1)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                            }
+                            .padding(9)
+                            .background(selectedIndex == index ? Color.accentColor.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Use the arrow keys, then press Return. Escape chooses Not Now.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(20)
