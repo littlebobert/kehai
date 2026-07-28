@@ -14,6 +14,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let idleGroupingSettings = IdleGroupingSettings()
     private lazy var activityMonitor = ActivityMonitor(store: history)
     private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, aiExcludedAppStore: aiExcludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
+    private lazy var windowInventoryMonitor = WindowInventoryMonitor { [weak self] in
+        self?.viewModel.scheduleBackgroundInventoryReconciliation()
+    }
     private lazy var panelController = OverviewPanelController(model: viewModel, appearance: appearanceSettings)
     let shortcutSettings = ShortcutSettings()
     private lazy var onboardingController = OnboardingWindowController(
@@ -72,6 +75,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         hasStartedServices = true
         permissionManager.refresh()
         activityMonitor.start()
+        windowInventoryMonitor.start()
         registerHotKey()
         updateIdleGroupingMonitoring()
         activationObserver = NotificationCenter.default.addObserver(
@@ -91,6 +95,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         idleTimer?.invalidate()
         idleTimer = nil
         activityMonitor.stop()
+        windowInventoryMonitor.stop()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
     }
 

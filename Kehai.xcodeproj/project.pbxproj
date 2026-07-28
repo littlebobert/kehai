@@ -24,6 +24,7 @@
 		5D6CB92656365F9393F3501D /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052F2C3738D3029828695D5 /* Localization.swift */; };
 		5DA9D8116AC2635EC23782E6 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 05B4814C0CDF87EB11EBCC22 /* InfoPlist.strings */; };
 		5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A2694A32A4197AFA761F2B /* ThumbnailService.swift */; };
+		639984D12068C4B3DD3C111A /* WindowInventoryMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */; };
 		6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */; };
 		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
 		7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */; };
@@ -86,6 +87,7 @@
 		6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeyStore.swift; sourceTree = "<group>"; };
 		6EEF963F2217DDBE06F29587 /* ActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStore.swift; sourceTree = "<group>"; };
 		70EFEF0B56A45347356BE54D /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
+		7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInventoryMonitor.swift; sourceTree = "<group>"; };
 		803E5FC5B0B6141C5383120D /* WindowModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowModel.swift; sourceTree = "<group>"; };
 		82A2694A32A4197AFA761F2B /* ThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailService.swift; sourceTree = "<group>"; };
 		865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveThumbnailService.swift; sourceTree = "<group>"; };
@@ -178,6 +180,7 @@
 				82A2694A32A4197AFA761F2B /* ThumbnailService.swift */,
 				5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */,
 				5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */,
+				7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */,
 				803E5FC5B0B6141C5383120D /* WindowModel.swift */,
 			);
 			path = Windowing;
@@ -389,6 +392,7 @@
 				5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */,
 				80DEA98F26311C9CB6764E62 /* WindowActivator.swift in Sources */,
 				933C2E5ACBFC18956952BAF2 /* WindowCatalog.swift in Sources */,
+				639984D12068C4B3DD3C111A /* WindowInventoryMonitor.swift in Sources */,
 				9EA0833562F7A2A9BD35948D /* WindowModel.swift in Sources */,
 				B0AA11ECB97B18CDB3BD65B4 /* WrappingHStack.swift in Sources */,
 			);

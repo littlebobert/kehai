@@ -126,6 +126,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func windowDidBecomeKey(_ notification: Notification) {
         model.setLiveThumbnailEnabled(true)
+        Task { await model.refreshForForeground() }
     }
 
     func windowDidResignKey(_ notification: Notification) {

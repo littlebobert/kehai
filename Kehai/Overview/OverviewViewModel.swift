@@ -78,11 +78,14 @@ final class OverviewViewModel {
         }
     }
     var thumbnailStatus: String?
+    var refreshingThumbnailWindowIDs: Set<CGWindowID> = []
     var errorMessage: String?
     var openAIErrorMessage: String?
 
     private var hasPerformedInitialRefresh = false
     private var isPerformingInitialRefresh = false
+    private var inventoryReconciliationTask: Task<Void, Never>?
+    private var isReconcilingInventory = false
     private let catalog: WindowCatalog
     private let thumbnails: ThumbnailService
     private let safari: SafariTabService
@@ -548,84 +551,161 @@ final class OverviewViewModel {
         hasPerformedInitialRefresh = !windows.isEmpty || errorMessage != nil
     }
 
-    func refresh(generateInitialGroups: Bool = true) async {
+    func refreshForForeground() async {
+        guard hasPerformedInitialRefresh else {
+            await performInitialRefreshIfNeeded()
+            return
+        }
+        await refresh(generateInitialGroups: false, showsGlobalLoading: false)
+    }
+
+    func scheduleBackgroundInventoryReconciliation() {
+        inventoryReconciliationTask?.cancel()
+        inventoryReconciliationTask = Task { [weak self] in
+            guard let self else { return }
+            await self.reconcileInventory(includeSafariTabs: false, showsGlobalLoading: self.windows.isEmpty)
+        }
+    }
+
+    func refresh(generateInitialGroups: Bool = true, showsGlobalLoading: Bool = true) async {
         logger.notice("Thumbnail refresh started")
         SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh started")
-        isLoading = true; errorMessage = nil
+        if showsGlobalLoading { isLoading = true }
+        errorMessage = nil
+        guard let pairs = await reconcileInventory(includeSafariTabs: true, showsGlobalLoading: showsGlobalLoading) else {
+            isLoading = false
+            return
+        }
+
+        isLoading = false
+        await refreshThumbnails(for: pairs)
+        if generateInitialGroups {
+            await generateInitialGroupsIfNeeded()
+        }
+    }
+
+    @discardableResult
+    private func reconcileInventory(
+        includeSafariTabs: Bool,
+        showsGlobalLoading: Bool
+    ) async -> [(WindowItem, SCWindow)]? {
+        guard !isReconcilingInventory else { return nil }
+        isReconcilingInventory = true
+        defer { isReconcilingInventory = false }
         do {
             let seen = await history.lastSeen()
             let pairs = try await catalog.windows(lastSeen: seen)
             logger.notice("Window catalog returned \(pairs.count) capture candidates")
-            let tabs: [SafariTab]
-            do {
-                tabs = try await safari.listTabs()
-            } catch {
-                tabs = []
-                errorMessage = L10n.format("Safari tabs are unavailable: %@", error.localizedDescription)
-                SafeDiagnosticLog.shared.record("safari-tabs: enumeration failed")
-            }
-            var items = pairs.map { $0.0 }
-            let safariWindows = items.indices.filter { items[$0].bundleIdentifier == "com.apple.Safari" }
-            var unassignedTabs = tabs
-            for index in safariWindows {
-                if let current = unassignedTabs.first(where: { $0.isCurrent && $0.title == items[index].title }) {
-                    let matching = unassignedTabs.filter { $0.windowIndex == current.windowIndex }
-                    items[index].safariTabs = matching
-                    let ids = Set(matching.map(\.id))
-                    unassignedTabs.removeAll { ids.contains($0.id) }
+            var items = pairs.map(\.0)
+
+            if includeSafariTabs {
+                do {
+                    let tabs = try await safari.listTabs()
+                    assignSafariTabs(tabs, to: &items)
+                } catch {
+                    errorMessage = L10n.format("Safari tabs are unavailable: %@", error.localizedDescription)
+                    SafeDiagnosticLog.shared.record("safari-tabs: enumeration failed")
                 }
             }
-            for index in safariWindows where items[index].safariTabs.isEmpty {
-                guard let windowIndex = unassignedTabs.first?.windowIndex else { break }
-                let matching = unassignedTabs.filter { $0.windowIndex == windowIndex }
+
+            let previousByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+            for index in items.indices {
+                if let previous = previousByID[items[index].id] {
+                    items[index].lastSeen = previous.lastSeen ?? items[index].lastSeen
+                    items[index].thumbnail = previous.thumbnail
+                    items[index].thumbnailIsUsable = previous.thumbnailIsUsable
+                    items[index].thumbnailRevision = previous.thumbnailRevision
+                    if !includeSafariTabs { items[index].safariTabs = previous.safariTabs }
+                } else if let activationDate = activityMonitor.recentActivationDate(for: items[index].processID) {
+                    items[index].lastSeen = activationDate
+                }
+            }
+            items = WindowItem.orderedByRecency(items)
+
+            let previousIDs = Set(windows.map(\.id))
+            let currentIDs = Set(items.map(\.id))
+            if previousIDs != currentIDs {
+                SafeDiagnosticLog.shared.record("window-inventory: reconciled added=\(currentIDs.subtracting(previousIDs).count) removed=\(previousIDs.subtracting(currentIDs).count)")
+            }
+
+            windows = items
+            hiddenWindowStore.reconcile(with: items)
+            reconcileCachedGroups()
+            preserveSelectionOrSelectFirst()
+            activityMonitor.update(windows: items)
+            if showsGlobalLoading { isLoading = false }
+            return pairs
+        } catch {
+            logger.error("Window inventory reconciliation failed")
+            SafeDiagnosticLog.shared.record("window-inventory: reconciliation failed")
+            errorMessage = error.localizedDescription
+            if showsGlobalLoading { isLoading = false }
+            return nil
+        }
+    }
+
+    private func assignSafariTabs(_ tabs: [SafariTab], to items: inout [WindowItem]) {
+        let safariWindows = items.indices.filter { items[$0].bundleIdentifier == "com.apple.Safari" }
+        var unassignedTabs = tabs
+        for index in safariWindows {
+            if let current = unassignedTabs.first(where: { $0.isCurrent && $0.title == items[index].title }) {
+                let matching = unassignedTabs.filter { $0.windowIndex == current.windowIndex }
                 items[index].safariTabs = matching
                 let ids = Set(matching.map(\.id))
                 unassignedTabs.removeAll { ids.contains($0.id) }
             }
-            windows = items
-            hiddenWindowStore.reconcile(with: items)
-            reconcileCachedGroups()
-            selectFirstFilteredWindow()
-            isLoading = false
-            thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", 0, Int64(pairs.count))
-            activityMonitor.update(windows: items)
-            for (offset, pair) in pairs.enumerated() {
-                let (item, window) = pair
-                thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", Int64(offset + 1), Int64(pairs.count))
-                var capture = await thumbnails.image(for: window)
-                if capture == nil {
-                    try? await Task.sleep(for: .milliseconds(250))
-                    capture = await thumbnails.image(for: window)
-                }
-                if let capture, let index = windows.firstIndex(where: { $0.id == item.id }) {
-                    logger.notice("Thumbnail result accepted=\(capture.isUsable) variance=\(capture.luminanceVariance, format: .fixed(precision: 1)) edges=\(capture.edgeRatio, format: .fixed(precision: 4)) coverage=\(capture.detailCoverage, format: .fixed(precision: 3))")
-                    var updatedWindows = windows
-                    updatedWindows[index].thumbnail = capture.image
-                    updatedWindows[index].thumbnailIsUsable = capture.isUsable
-                    updatedWindows[index].thumbnailRevision += 1
-                    windows = updatedWindows
-                } else if capture == nil {
-                    logger.error("No thumbnail captured")
-                    SafeDiagnosticLog.shared.record("thumbnail-pipeline: no capture returned")
-                } else {
-                    logger.error("Captured thumbnail no longer has a matching window")
-                }
-            }
-            let acceptedCount = windows.filter(\.thumbnailIsUsable).count
-            logger.notice("Thumbnail refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
-            SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
-            thumbnailStatus = nil
-            isLoading = false
-            if generateInitialGroups {
-                await generateInitialGroupsIfNeeded()
-            }
-        } catch {
-            logger.error("Thumbnail refresh failed")
-            SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh failed")
-            thumbnailStatus = nil
-            errorMessage = error.localizedDescription
         }
-        isLoading = false
+        for index in safariWindows where items[index].safariTabs.isEmpty {
+            guard let windowIndex = unassignedTabs.first?.windowIndex else { break }
+            let matching = unassignedTabs.filter { $0.windowIndex == windowIndex }
+            items[index].safariTabs = matching
+            let ids = Set(matching.map(\.id))
+            unassignedTabs.removeAll { ids.contains($0.id) }
+        }
+    }
+
+    private func refreshThumbnails(for pairs: [(WindowItem, SCWindow)]) async {
+        let prioritizedPairs = pairs.sorted { left, right in
+            if left.0.id == selectedWindowID { return true }
+            if right.0.id == selectedWindowID { return false }
+            return left.0.lastSeen ?? .distantPast > right.0.lastSeen ?? .distantPast
+        }
+        let ids = Set(prioritizedPairs.map { $0.0.id })
+        refreshingThumbnailWindowIDs.formUnion(ids)
+        thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", 0, Int64(prioritizedPairs.count))
+
+        for (offset, pair) in prioritizedPairs.enumerated() {
+            guard !Task.isCancelled else { break }
+            let (item, window) = pair
+            guard windows.contains(where: { $0.id == item.id }) else {
+                refreshingThumbnailWindowIDs.remove(item.id)
+                continue
+            }
+            thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", Int64(offset + 1), Int64(prioritizedPairs.count))
+            var capture = await thumbnails.image(for: window)
+            if capture == nil {
+                try? await Task.sleep(for: .milliseconds(250))
+                capture = await thumbnails.image(for: window)
+            }
+            refreshingThumbnailWindowIDs.remove(item.id)
+            if let capture, let index = windows.firstIndex(where: { $0.id == item.id }) {
+                logger.notice("Thumbnail result accepted=\(capture.isUsable) variance=\(capture.luminanceVariance, format: .fixed(precision: 1)) edges=\(capture.edgeRatio, format: .fixed(precision: 4)) coverage=\(capture.detailCoverage, format: .fixed(precision: 3))")
+                var updatedWindows = windows
+                updatedWindows[index].thumbnail = capture.image
+                updatedWindows[index].thumbnailIsUsable = capture.isUsable
+                updatedWindows[index].thumbnailRevision += 1
+                windows = updatedWindows
+            } else if capture == nil {
+                logger.error("No thumbnail captured")
+                SafeDiagnosticLog.shared.record("thumbnail-pipeline: no capture returned")
+            }
+        }
+
+        refreshingThumbnailWindowIDs.subtract(ids)
+        let acceptedCount = windows.filter(\.thumbnailIsUsable).count
+        logger.notice("Thumbnail refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
+        SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
+        thumbnailStatus = nil
     }
 
     func refreshAndRegenerateGroupsIfNeeded() async {

@@ -241,6 +241,7 @@ struct OverviewView: View {
             tint: tint,
             isSelected: model.selectedWindowID == window.id,
             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
+            isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.id),
             thumbnailCellHeight: thumbnailCellHeight,
             isHidden: model.isWindowHidden(window),
             canExcludeApp: model.canExcludeApp(window),
@@ -362,6 +363,7 @@ private struct WindowCard: View {
     let tint: Color?
     let isSelected: Bool
     let liveThumbnail: NSImage?
+    let isRefreshingThumbnail: Bool
     let thumbnailCellHeight: CGFloat
     let isHidden: Bool
     let canExcludeApp: Bool
@@ -436,9 +438,16 @@ private struct WindowCard: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
             HStack(alignment: .bottom) {
-                VStack(alignment: .leading) { Text(window.title).font(.headline).lineLimit(1); Text(window.appName).foregroundStyle(.secondary) }
-                Spacer()
-                if !window.safariTabs.isEmpty { Text(L10n.format("%lld tabs", Int64(window.safariTabs.count))).font(.caption).foregroundStyle(.secondary) }
+                VStack(alignment: .leading) { Text(window.title).font(.headline).lineLimit(1); Text(window.appName).foregroundStyle(.secondary).lineLimit(1) }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
+                if !window.safariTabs.isEmpty { Text(L10n.format("%lld tabs", Int64(window.safariTabs.count))).font(.caption).foregroundStyle(.secondary).fixedSize() }
+                if isRefreshingThumbnail, liveThumbnail == nil {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 18, height: 18)
+                        .transition(.opacity)
+                }
                 Button(action: toggleHidden) {
                     Image(systemName: isHidden ? "eye" : "eye.slash")
                         .foregroundStyle(.secondary)
