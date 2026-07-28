@@ -273,7 +273,8 @@ private struct WindowCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: select) {
                 ZStack {
-                    Color.clear
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.secondary.opacity(0.08))
 
                     Group {
                         if let icon = window.appIcon {
@@ -322,7 +323,6 @@ private struct WindowCard: View {
                 .clipped()
                 .animation(.easeInOut(duration: 0.18), value: window.thumbnailRevision)
                 .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
