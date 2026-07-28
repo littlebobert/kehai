@@ -607,6 +607,11 @@ final class OverviewViewModel {
         await refreshTaskGroups()
     }
 
+    func refreshWindows() async {
+        guard !isGrouping, !isLoading else { return }
+        await refresh(generateInitialGroups: false)
+    }
+
     func refreshAndRegenerateGroups() async {
         guard !isGrouping, !isLoading else { return }
         groupingStatus = L10n.string("Refreshing windows and Safari tabs…")

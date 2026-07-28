@@ -169,6 +169,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 }
                 return nil
             }
+            if modifiers == [.command, .shift],
+               event.charactersIgnoringModifiers?.lowercased() == "r" {
+                Task { await self.model.refreshWindows() }
+                return nil
+            }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "r" {
                 Task { await self.model.refreshAndRegenerateGroups() }

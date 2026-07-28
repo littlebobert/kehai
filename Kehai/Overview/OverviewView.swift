@@ -8,7 +8,9 @@ struct OverviewView: View {
     @State private var gridWidth: CGFloat = 0
 
     private let gridSpacing: CGFloat = 18
-    private var columns: [GridItem] { [GridItem(.adaptive(minimum: model.thumbnailCardWidth, maximum: model.thumbnailCardWidth + 80), spacing: gridSpacing)] }
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: model.thumbnailCardWidth, maximum: model.thumbnailCardWidth), spacing: gridSpacing)]
+    }
     private var gridColumnCount: Int { max(1, Int((gridWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing))) }
     private var thumbnailCellHeight: CGFloat { model.thumbnailCardWidth * 0.64 }
 
@@ -164,7 +166,7 @@ struct OverviewView: View {
                         .font(.title2.bold())
                         .foregroundStyle(dusty ? .secondary : .primary)
                 }
-                LazyVGrid(columns: columns, spacing: 18) {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
                     ForEach(windows) { window in
                         WindowCard(
                             window: window,

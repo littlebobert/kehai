@@ -53,6 +53,10 @@ struct KehaiApp: App {
                 }
                 .keyboardShortcut(.tab, modifiers: .shift)
                 Divider()
+                Button("Refresh Windows") {
+                    appDelegate.coordinator.refreshWindows()
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Regenerate Groups") {
                     appDelegate.coordinator.regenerateGroups()
                 }
