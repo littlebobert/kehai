@@ -7,12 +7,11 @@ struct AboutView: View {
 
     private var version: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
-        return "Version \(version) (\(build))"
+        return "Version \(version)"
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 7) {
             if let icon = NSApp.applicationIconImage {
                 Image(nsImage: icon)
                     .resizable()
@@ -21,31 +20,34 @@ struct AboutView: View {
             }
             Text("Kehai")
                 .font(.system(size: 22, weight: .semibold))
-                .padding(.bottom, -5)
+                .padding(.bottom, -3)
+            Text(version)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 1)
             Text("Browse windows intelligently grouped by task.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Text(version)
-                .font(.caption)
-                .foregroundStyle(.secondary)
             Link("Made in Japan", destination: URL(string: "https://littlebobert.github.io/kehai.html")!)
                 .font(.callout)
-                .foregroundStyle(.link)
-            Link("Open source under the MIT License", destination: URL(string: "https://github.com/littlebobert/kehai/blob/main/LICENSE")!)
-                .font(.caption)
                 .foregroundStyle(.link)
             Button("Report a Bug…") {
                 reportError = nil
                 reportBug()
             }
             .buttonStyle(.bordered)
+            Link("Open source under the MIT License", destination: URL(string: "https://github.com/littlebobert/kehai/blob/main/LICENSE")!)
+                .font(.callout)
+                .foregroundStyle(.link)
+                .padding(.top, 5)
             if let reportError {
                 Text(reportError)
                     .font(.caption)
                     .foregroundStyle(.red)
             }
         }
-        .frame(width: 320, height: 300)
+        .padding(.top, 24)
+        .frame(width: 320, height: 300, alignment: .top)
     }
 }
 
