@@ -44,6 +44,8 @@ final class OverviewViewModel {
     }
     var liveThumbnailWindowID: CGWindowID?
     var liveThumbnail: NSImage?
+    var isSwitcherMode = false
+    private var hoveredSwitcherWindowID: CGWindowID?
     var searchFocusRequest = 0
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
@@ -79,6 +81,8 @@ final class OverviewViewModel {
     var errorMessage: String?
     var openAIErrorMessage: String?
 
+    private var hasPerformedInitialRefresh = false
+    private var isPerformingInitialRefresh = false
     private let catalog: WindowCatalog
     private let thumbnails: ThumbnailService
     private let safari: SafariTabService
@@ -100,8 +104,6 @@ final class OverviewViewModel {
     private static let thumbnailCardWidthKey = "overview.thumbnailCardWidth"
     private static let viewModeKey = "overview.viewMode"
     private static let automaticGroupingAttemptedKey = "grouping.automaticFirstRunAttempted"
-    private static let taskColorAssignmentsKey = "overview.taskColorAssignments.v1"
-    private static let taskColorCount = 5
     private static let defaultThumbnailCardWidth: CGFloat = 280
     private static let minimumThumbnailCardWidth: CGFloat = 200
     private static let maximumThumbnailCardWidth: CGFloat = 440
@@ -174,25 +176,6 @@ final class OverviewViewModel {
 
     var usesTaskSectionLayout: Bool {
         viewMode == .grouped && smartSearchWindowIDs == nil && !taskGroups.isEmpty
-    }
-
-    var visibleTaskColorAssignments: [String: Int] {
-        let taskIDs = windowSections.map(\.id).filter { $0 != "other" }
-        let activeTaskIDs = Set(taskGroups.map(\.id))
-        var assignments = UserDefaults.standard.dictionary(forKey: Self.taskColorAssignmentsKey)?
-            .compactMapValues { ($0 as? NSNumber)?.intValue } ?? [:]
-        assignments = assignments.filter { activeTaskIDs.contains($0.key) }
-
-        for (index, taskID) in taskIDs.enumerated() where assignments[taskID] == nil {
-            let previousColor = index > 0 ? assignments[taskIDs[index - 1]] : nil
-            let nextColor = index + 1 < taskIDs.count ? assignments[taskIDs[index + 1]] : nil
-            let unavailable = Set([previousColor, nextColor].compactMap { $0 })
-            assignments[taskID] = (0..<Self.taskColorCount).first { !unavailable.contains($0) }
-                ?? index % Self.taskColorCount
-        }
-
-        UserDefaults.standard.set(assignments, forKey: Self.taskColorAssignmentsKey)
-        return assignments
     }
 
     var orderedFilteredWindows: [WindowItem] {
@@ -523,13 +506,46 @@ final class OverviewViewModel {
         return true
     }
 
+    func beginSwitcherMode() {
+        isSwitcherMode = true
+        hoveredSwitcherWindowID = nil
+    }
+
+    func hoverWindowInSwitcherMode(_ windowID: CGWindowID) {
+        guard isSwitcherMode else { return }
+        hoveredSwitcherWindowID = windowID
+        selectedWindowID = windowID
+    }
+
+    @discardableResult
+    func finishSwitcherMode() -> Bool {
+        defer {
+            isSwitcherMode = false
+            hoveredSwitcherWindowID = nil
+        }
+        guard let hoveredSwitcherWindowID,
+              let window = orderedFilteredWindows.first(where: { $0.id == hoveredSwitcherWindowID }) else {
+            return false
+        }
+        activate(window)
+        return true
+    }
+
     func prepareForPresentation(selectedGroupID: String? = nil) {
         stopLiveThumbnail()
         selectedTaskGroupID = selectedGroupID
         selectedWindowID = nil
         isGrouping = false
-        isLoading = true
+        isLoading = windows.isEmpty
         errorMessage = nil
+    }
+
+    func performInitialRefreshIfNeeded() async {
+        guard !hasPerformedInitialRefresh, !isPerformingInitialRefresh else { return }
+        isPerformingInitialRefresh = true
+        await refresh()
+        isPerformingInitialRefresh = false
+        hasPerformedInitialRefresh = !windows.isEmpty || errorMessage != nil
     }
 
     func refresh(generateInitialGroups: Bool = true) async {

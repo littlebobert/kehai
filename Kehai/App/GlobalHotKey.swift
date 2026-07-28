@@ -4,20 +4,32 @@ import Carbon
 final class GlobalHotKey {
     private var hotKey: EventHotKeyRef?
     private var handler: EventHandlerRef?
-    private let action: () -> Void
+    private let pressed: () -> Void
+    private let released: () -> Void
 
-    init(action: @escaping () -> Void) { self.action = action }
+    init(pressed: @escaping () -> Void, released: @escaping () -> Void) {
+        self.pressed = pressed
+        self.released = released
+    }
 
     @discardableResult
     func register(keyCode: UInt32 = UInt32(kVK_Space), modifiers: UInt32 = UInt32(cmdKey | shiftKey)) -> OSStatus {
         unregister()
-        var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        var types = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
         let pointer = Unmanaged.passUnretained(self).toOpaque()
-        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, _, context in
-            guard let context else { return noErr }
-            Unmanaged<GlobalHotKey>.fromOpaque(context).takeUnretainedValue().action()
+        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
+            guard let event, let context else { return noErr }
+            let hotKey = Unmanaged<GlobalHotKey>.fromOpaque(context).takeUnretainedValue()
+            if GetEventKind(event) == UInt32(kEventHotKeyPressed) {
+                hotKey.pressed()
+            } else {
+                hotKey.released()
+            }
             return noErr
-        }, 1, &type, pointer, &handler)
+        }, types.count, &types, pointer, &handler)
         guard handlerStatus == noErr else { return handlerStatus }
 
         let id = EventHotKeyID(signature: OSType(0x4B484149), id: 1)

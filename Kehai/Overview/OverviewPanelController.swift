@@ -3,11 +3,13 @@ import SwiftUI
 
 @MainActor
 final class OverviewPanelController: NSObject, NSWindowDelegate {
+    private static let frameAutosaveName = "KehaiBrowserWindow"
     private var window: NSWindow?
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
+    private var appliedGlassyBackground: Bool?
 
     init(model: OverviewViewModel, appearance: AppearanceSettings) {
         self.model = model
@@ -40,6 +42,18 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         }
     }
 
+    func beginSwitcherMode() {
+        model.beginSwitcherMode()
+        show()
+    }
+
+    func finishSwitcherMode() {
+        guard model.isSwitcherMode else { return }
+        if model.finishSwitcherMode() {
+            close()
+        }
+    }
+
     func show(selectedGroupID: String? = nil) {
         if let window {
             if let selectedGroupID {
@@ -64,14 +78,18 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
         window.title = "Kehai"
         window.titleVisibility = .visible
+        window.tabbingMode = .disallowed
 
         window.isReleasedWhenClosed = false
         applyMinimumSize(to: window)
         window.collectionBehavior = [.managed, .participatesInCycle]
         window.setFrame(screen.visibleFrame, display: false)
+        window.setFrameAutosaveName(Self.frameAutosaveName)
+        window.setFrameUsingName(Self.frameAutosaveName, force: false)
         window.contentView = NSHostingView(
             rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
         )
+        appliedGlassyBackground = appearance.usesGlassyWindow
         window.delegate = self
         self.window = window
         updateAppearance()
@@ -81,6 +99,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(window.contentView)
+        Task { await model.performInitialRefreshIfNeeded() }
     }
 
     func close() {
@@ -91,6 +110,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         guard let window else { return }
         window.isOpaque = true
         window.backgroundColor = .windowBackgroundColor
+        guard appliedGlassyBackground != appearance.usesGlassyWindow else { return }
+        appliedGlassyBackground = appearance.usesGlassyWindow
         window.contentView = NSHostingView(
             rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
         )
@@ -115,7 +136,6 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         model.setLiveThumbnailEnabled(false)
         removeKeyMonitor()
         removeMouseMonitor()
-        window = nil
     }
 
     private func installMouseMonitor() {

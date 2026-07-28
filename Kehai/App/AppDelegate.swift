@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let coordinator = AppCoordinator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSWindow.allowsAutomaticWindowTabbing = false
         NSApp.setActivationPolicy(.regular)
         let environment = ProcessInfo.processInfo.environment
         let isRunningTests = environment["XCTestConfigurationFilePath"] != nil

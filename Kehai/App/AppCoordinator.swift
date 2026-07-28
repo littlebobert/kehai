@@ -22,7 +22,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         openAIKeyStore: openAIKeyStore,
         proceed: { [weak self] in self?.panelController.show() }
     )
-    private lazy var hotKey = GlobalHotKey { [weak self] in self?.show() }
+    private lazy var hotKey = GlobalHotKey(
+        pressed: { [weak self] in self?.beginSwitcherMode() },
+        released: { [weak self] in
+            guard let self, self.shortcutModifierFlags.isEmpty else { return }
+            self.finishSwitcherMode()
+        }
+    )
     private let diagnosticReports = DiagnosticReportService()
     private lazy var aboutController = AboutWindowController(
         reportBug: { [weak self] in self?.reportBug() }
@@ -47,6 +53,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var idleTimer: Timer?
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
+    private var modifierMonitors: [Any] = []
     private var hasStartedServices = false
     private lazy var installationLocationController = InstallationLocationWindowController { [weak self] in
         self?.startServices()
@@ -80,13 +87,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     func stop() {
         guard hasStartedServices else { return }
         hotKey.unregister()
+        removeModifierMonitor()
         idleTimer?.invalidate()
         idleTimer = nil
         activityMonitor.stop()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
     }
 
-    @objc private func show() {
+    private func beginSwitcherMode() {
         permissionManager.refresh()
         guard permissionManager.hasCorePermissions else {
             showSettings()
@@ -95,7 +103,51 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         if !NSApp.isActive, !panelController.isVisible {
             suppressNextActivationPresentation = true
         }
-        panelController.toggle()
+        installModifierMonitor()
+        panelController.beginSwitcherMode()
+    }
+
+    private func finishSwitcherMode() {
+        removeModifierMonitor()
+        panelController.finishSwitcherMode()
+    }
+
+    private var shortcutModifierFlags: NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        let modifiers = shortcutSettings.modifiers
+        if modifiers & UInt32(cmdKey) != 0 { flags.insert(.command) }
+        if modifiers & UInt32(shiftKey) != 0 { flags.insert(.shift) }
+        if modifiers & UInt32(optionKey) != 0 { flags.insert(.option) }
+        if modifiers & UInt32(controlKey) != 0 { flags.insert(.control) }
+        return flags
+    }
+
+    private func installModifierMonitor() {
+        removeModifierMonitor()
+        let requiredFlags = shortcutModifierFlags
+        guard !requiredFlags.isEmpty else { return }
+        let handleFlags: (NSEvent) -> Void = { [weak self] event in
+            let heldFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
+            if !heldFlags.isSuperset(of: requiredFlags) {
+                Task { @MainActor [weak self] in self?.finishSwitcherMode() }
+            }
+        }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: handleFlags) {
+            modifierMonitors.append(monitor)
+        }
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { event in
+            handleFlags(event)
+            return event
+        }) {
+            modifierMonitors.append(monitor)
+        }
+    }
+
+    private func removeModifierMonitor() {
+        for monitor in modifierMonitors {
+            NSEvent.removeMonitor(monitor)
+        }
+        modifierMonitors.removeAll()
     }
 
     func dockMenu() -> NSMenu? {

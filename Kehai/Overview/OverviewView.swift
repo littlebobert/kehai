@@ -35,8 +35,6 @@ struct OverviewView: View {
             VStack(spacing: 3) {
                 controlBar
                     .padding(.horizontal, 30)
-                statusRow
-                    .padding(.horizontal, 30)
 
                 if let error = model.errorMessage {
                     Text(error)
@@ -58,9 +56,13 @@ struct OverviewView: View {
                         ScrollView {
                             Group {
                                 if model.usesTaskSectionLayout {
-                                    WrappingHStack(horizontalSpacing: gridSpacing, verticalSpacing: 20) {
-                                        ForEach(model.windowSections) { section in
-                                            taskSection(section, tint: taskTint(for: section))
+                                    LazyVStack(alignment: .leading, spacing: 20) {
+                                        ForEach(taskFlowRows) { row in
+                                            HStack(alignment: .top, spacing: gridSpacing) {
+                                                ForEach(row.segments) { segment in
+                                                    taskSegment(segment)
+                                                }
+                                            }
                                         }
                                     }
                                 } else {
@@ -71,7 +73,7 @@ struct OverviewView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, 44)
+                            .padding(.horizontal, 30)
                             .padding(.top, 10)
                             .padding(.bottom, 30)
                             .animation(.easeInOut(duration: 0.14), value: model.viewMode)
@@ -86,7 +88,7 @@ struct OverviewView: View {
                             }
                         }
                         .onChange(of: model.selectedWindowID) { _, selectedWindowID in
-                            guard let selectedWindowID else { return }
+                            guard !model.isSwitcherMode, let selectedWindowID else { return }
                             withAnimation(.easeOut(duration: 0.16)) {
                                 scrollProxy.scrollTo(selectedWindowID, anchor: .center)
                             }
@@ -115,7 +117,6 @@ struct OverviewView: View {
                 )
             }
         }
-        .task { await model.refresh() }
         .onChange(of: model.thumbnailCardWidth) {
             model.keyboardColumnCount = gridColumnCount
         }
@@ -150,21 +151,6 @@ struct OverviewView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    @ViewBuilder
-    private var statusRow: some View {
-        HStack(spacing: 4) {
-            if !model.isGrouping, let thumbnailStatus = model.thumbnailStatus {
-                ProgressView().controlSize(.small)
-                Text(thumbnailStatus)
-                    .contentTransition(.numericText())
-            }
-            Spacer()
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(minHeight: 16)
-    }
-
     private func updateGridWidth(_ width: CGFloat) {
         gridWidth = width
         model.keyboardColumnCount = gridColumnCount
@@ -174,47 +160,75 @@ struct OverviewView: View {
         if model.activateSelectedWindow() { close() }
     }
 
-    private var availableTaskWidth: CGFloat {
-        max(model.thumbnailCardWidth, gridWidth - 72)
+    private var taskFlowColumnCount: Int {
+        max(1, Int((max(model.thumbnailCardWidth, gridWidth - 60) + gridSpacing) / (model.thumbnailCardWidth + gridSpacing)))
     }
 
-    private func taskColumnCount(for section: BrowserWindowSection) -> Int {
-        let availableColumns = max(1, Int((availableTaskWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing)))
-        return min(section.windows.count, availableColumns)
+    private var taskFlowRows: [TaskFlowRow] {
+        var rows: [TaskFlowRow] = []
+        var segments: [TaskFlowSegment] = []
+        var remainingSlots = taskFlowColumnCount
+
+        func finishRow() {
+            guard !segments.isEmpty else { return }
+            rows.append(TaskFlowRow(index: rows.count, segments: segments))
+            segments = []
+            remainingSlots = taskFlowColumnCount
+        }
+
+        for (sectionIndex, section) in model.windowSections.enumerated() {
+            var remainingWindows = section.windows
+            var segmentIndex = 0
+            while !remainingWindows.isEmpty {
+                if remainingWindows.count <= taskFlowColumnCount,
+                   remainingWindows.count > remainingSlots,
+                   remainingSlots < taskFlowColumnCount {
+                    finishRow()
+                }
+
+                let count = min(remainingWindows.count, remainingSlots)
+                let windows = Array(remainingWindows.prefix(count))
+                remainingWindows.removeFirst(count)
+                segments.append(TaskFlowSegment(
+                    id: "\(section.id)-\(segmentIndex)",
+                    section: section,
+                    sectionIndex: sectionIndex,
+                    windows: windows,
+                    showsTitle: segmentIndex == 0
+                ))
+                segmentIndex += 1
+                remainingSlots -= count
+                if remainingSlots == 0 { finishRow() }
+            }
+        }
+        finishRow()
+        return rows
     }
 
-    private func taskWidth(for section: BrowserWindowSection) -> CGFloat {
-        let count = taskColumnCount(for: section)
-        return CGFloat(count) * model.thumbnailCardWidth + CGFloat(max(0, count - 1)) * gridSpacing
-    }
-
-    private func taskTint(for section: BrowserWindowSection) -> Color? {
-        guard section.id != "other",
-              let index = model.visibleTaskColorAssignments[section.id] else { return nil }
+    private func taskTint(for section: BrowserWindowSection, at index: Int) -> Color? {
+        guard section.id != "other" else { return nil }
         return taskTintPalette[index % taskTintPalette.count]
     }
 
     @ViewBuilder
-    private func taskSection(_ section: BrowserWindowSection, tint: Color?) -> some View {
-        let columnCount = taskColumnCount(for: section)
-        let width = taskWidth(for: section)
+    private func taskSegment(_ segment: TaskFlowSegment) -> some View {
+        let width = CGFloat(segment.windows.count) * model.thumbnailCardWidth
+            + CGFloat(max(0, segment.windows.count - 1)) * gridSpacing
         VStack(alignment: .leading, spacing: 8) {
-            if let title = section.title {
-                Text(title)
-                    .font(.title2.bold())
-                    .lineLimit(1)
-            }
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(model.thumbnailCardWidth), spacing: gridSpacing), count: columnCount),
-                alignment: .leading,
-                spacing: gridSpacing
-            ) {
-                ForEach(section.windows) { window in
-                    windowCard(window, tint: tint)
+            Group {
+                if segment.showsTitle, let title = segment.section.title {
+                    Text(title)
+                } else {
+                    Text(" ").hidden()
                 }
             }
-            .frame(width: width, alignment: .leading)
-            .fixedSize(horizontal: true, vertical: false)
+            .font(.title2.bold())
+            .lineLimit(1)
+            HStack(spacing: gridSpacing) {
+                ForEach(segment.windows) { window in
+                    windowCard(window, tint: taskTint(for: segment.section, at: segment.sectionIndex))
+                }
+            }
         }
         .frame(width: width, alignment: .leading)
         .fixedSize(horizontal: true, vertical: true)
@@ -231,6 +245,7 @@ struct OverviewView: View {
             isHidden: model.isWindowHidden(window),
             canExcludeApp: model.canExcludeApp(window),
             select: { model.activate(window); close() },
+            hover: { model.hoverWindowInSwitcherMode(window.id) },
             toggleHidden: { model.toggleHidden(window) },
             excludeApp: {
                 model.selectedWindowID = window.id
@@ -262,6 +277,20 @@ struct OverviewView: View {
             .padding(.bottom, 5)
         }
     }
+}
+
+private struct TaskFlowRow: Identifiable {
+    let index: Int
+    let segments: [TaskFlowSegment]
+    var id: Int { index }
+}
+
+private struct TaskFlowSegment: Identifiable {
+    let id: String
+    let section: BrowserWindowSection
+    let sectionIndex: Int
+    let windows: [WindowItem]
+    let showsTitle: Bool
 }
 
 private struct WindowActionChooser: View {
@@ -337,6 +366,7 @@ private struct WindowCard: View {
     let isHidden: Bool
     let canExcludeApp: Bool
     let select: () -> Void
+    let hover: () -> Void
     let toggleHidden: () -> Void
     let excludeApp: () -> Void
     let selectTab: (SafariTab) -> Void
@@ -385,7 +415,8 @@ private struct WindowCard: View {
                             .transition(.opacity.combined(with: .scale(scale: 0.9)))
                     }
 
-                    if let icon = window.appIcon {
+                    if let icon = window.appIcon,
+                       liveThumbnail != nil || (window.thumbnailIsUsable && window.thumbnail != nil) {
                         Image(nsImage: icon)
                             .resizable()
                             .scaledToFit()
@@ -447,6 +478,9 @@ private struct WindowCard: View {
                 .padding(1)
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
+        .onHover { isHovering in
+            if isHovering { hover() }
+        }
         .opacity(dusty ? 0.62 : 1)
     }
 }

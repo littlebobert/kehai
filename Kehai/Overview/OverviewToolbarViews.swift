@@ -13,30 +13,28 @@ struct GroupingControl: View {
             .disabled(model.isLoading || model.isGrouping)
             .help("Use OpenAI with downsampled window screenshots to infer task groups · Command-R")
 
-            Group {
-                if model.isGrouping {
-                    HStack(spacing: 4) {
-                        ProgressView().controlSize(.small)
-                        if let groupingStatus = model.groupingStatus {
-                            Text(groupingStatus)
-                                .contentTransition(.numericText())
-                        }
-                    }
-                } else if model.thumbnailStatus == nil,
-                          model.hasGeneratedGroups,
+            HStack(spacing: 4) {
+                if let thumbnailStatus = model.thumbnailStatus {
+                    ProgressView().controlSize(.mini)
+                    Text(thumbnailStatus)
+                        .contentTransition(.numericText())
+                } else if let groupingStatus = model.groupingStatus {
+                    ProgressView().controlSize(.mini)
+                    Text(groupingStatus)
+                        .contentTransition(.numericText())
+                } else if model.hasGeneratedGroups,
                           let generatedAt = model.groupsGeneratedAt {
                     if Date().timeIntervalSince(generatedAt) < 60 {
                         Text("Generated just now")
                     } else {
                         Text("Generated \(generatedAt, format: .relative(presentation: .named))")
                     }
-                } else {
-                    Color.clear.frame(height: 12)
                 }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .frame(height: 16, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
         }
     }
