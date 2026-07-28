@@ -4,13 +4,36 @@ struct GroupingControl: View {
     @Bindable var model: OverviewViewModel
 
     var body: some View {
-        Button(model.taskGroups.isEmpty ? "Generate Groups" : "Regenerate Groups") {
+        Button(L10n.string(model.taskGroups.isEmpty ? "Generate Groups" : "Regenerate Groups")) {
             Task { await model.refreshTaskGroups() }
         }
         .buttonStyle(.bordered)
         .controlSize(.regular)
         .disabled(model.isLoading || model.isGrouping)
         .help("Use OpenAI with downsampled window screenshots to infer task groups · Command-R")
+        .overlay(alignment: .topLeading) {
+            if !model.isGrouping,
+               model.thumbnailStatus == nil,
+               model.hasGeneratedGroups,
+               let generatedAt = model.groupsGeneratedAt {
+                HStack(spacing: 4) {
+                    if model.groupsAreStale {
+                        Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                        Text("Groups may be outdated")
+                        Text("·")
+                    }
+                    if Date().timeIntervalSince(generatedAt) < 60 {
+                        Text("Generated just now")
+                    } else {
+                        Text("Generated \(generatedAt, format: .relative(presentation: .named))")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+                .offset(y: 30)
+            }
+        }
     }
 }
 
@@ -76,7 +99,7 @@ struct SearchControl: View {
         .overlay(alignment: .topLeading) {
             HStack(spacing: 5) {
                 if model.isSmartSearching { ProgressView().controlSize(.mini) }
-                Text(model.smartSearchStatus ?? "Command-Return for Smart Search")
+                Text(model.smartSearchStatus ?? L10n.string("Command-Return for Smart Search"))
             }
             .font(.caption2)
             .foregroundStyle(.secondary)

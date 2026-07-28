@@ -10,7 +10,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Kehai Settings"
+        window.title = L10n.string("Kehai Settings")
         window.titlebarSeparatorStyle = .none
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: SettingsView(shortcut: shortcut, appearance: appearance, idleGrouping: idleGrouping, excludedApps: excludedApps, aiExcludedApps: aiExcludedApps, permissionManager: permissionManager, openAIKeyStore: openAIKeyStore, safariService: safariService, shortcutChanged: shortcutChanged, appearanceChanged: appearanceChanged, idleGroupingChanged: idleGroupingChanged, exclusionsChanged: exclusionsChanged))

@@ -1,0 +1,2 @@
+"NSAppleEventsUsageDescription" = "KehaiはSafariのタブのタイトルとURLを読み取り、選択したタブを開くためにSafariを操作します。";
+"NSScreenCaptureUsageDescription" = "Kehaiは開いているウインドウの現在のサムネイルを表示します。";

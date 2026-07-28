@@ -50,7 +50,7 @@ struct PermissionView: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { openAIKeyStore.save() }
                 HStack {
-                    Text(openAIKeyStore.hasUnsavedChanges ? "Save this key to your login Keychain." : openAIKeyStore.hasKey ? "Saved in your login Keychain. Window metadata and downsampled screenshots are sent when you refresh groups." : "Required for AI task grouping. Stored in your login Keychain.")
+                    Text(L10n.string(openAIKeyStore.hasUnsavedChanges ? "Save this key to your login Keychain." : openAIKeyStore.hasKey ? "Saved in your login Keychain. Window metadata and downsampled screenshots are sent when you refresh groups." : "Required for AI task grouping. Stored in your login Keychain."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -123,8 +123,8 @@ struct PermissionView: View {
                 .frame(width: 30)
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(detail)
+                Text(L10n.string(title)).font(.headline)
+                Text(L10n.string(detail))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)

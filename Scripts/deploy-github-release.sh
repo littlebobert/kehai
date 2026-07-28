@@ -16,6 +16,8 @@ LANDING_PAGE="${LANDING_PAGE:-$WEBSITE_DIR/kehai.html}"
 APPCAST_PATH="${APPCAST_PATH:-$WEBSITE_DIR/kehai-appcast.xml}"
 APPCAST_PRODUCT_LINK="${APPCAST_PRODUCT_LINK:-https://littlebobert.github.io/kehai.html}"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-kehai}"
+OPENAI_MODEL="${OPENAI_MODEL:-gpt-5.6}"
+OPENAI_REASONING_EFFORT="${OPENAI_REASONING_EFFORT:-high}"
 PUBLIC_LANDING_URL="${PUBLIC_LANDING_URL:-https://littlebobert.github.io/kehai.html}"
 PUBLIC_APPCAST_URL="${PUBLIC_APPCAST_URL:-https://littlebobert.github.io/kehai-appcast.xml}"
 CURRENT_VERSION="$(ruby -e 'puts File.read(ARGV[0])[/MARKETING_VERSION: "([^"]+)"/, 1]' "$ROOT_DIR/project.yml")"
@@ -37,8 +39,8 @@ With an explicit version, uses that version and still increments the build.
 
 The script validates the repositories, updates versions and release notes,
 compiles tests and creates a notarized build, commits/pushes Kehai, creates the GitHub release,
-generates and deploys the Sparkle appcast and landing-page changelog, then
-redownloads and verifies the public artifact.
+translates the notes to Japanese with OpenAI, generates and deploys the
+    Sparkle appcast and bilingual landing-page changelog, then redownloads and verifies the public artifact.
 EOF
 }
 
@@ -92,6 +94,8 @@ TAG="${RELEASE_TAG:-$VERSION}"
 RELEASE_DIR="$ROOT_DIR/.build/releases"
 RELEASE_ZIP="$RELEASE_DIR/Kehai-$VERSION-mac.zip"
 NOTES_FILE="$RELEASE_DIR/release-notes-$VERSION.md"
+NOTES_TRANSLATIONS_FILE="$RELEASE_DIR/release-notes-$VERSION-translations.json"
+OPENAI_RESPONSE_FILE="$RELEASE_DIR/release-notes-$VERSION-openai.json"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$TAG/Kehai-$VERSION-mac.zip"
 KEHAI_BRANCH="$(git -C "$ROOT_DIR" branch --show-current)"
 WEBSITE_BRANCH="$(git -C "$WEBSITE_DIR" branch --show-current)"
@@ -125,33 +129,91 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "GitHub release: $REPO tag $TAG"
   echo "Landing page: $LANDING_PAGE"
   echo "Appcast: $APPCAST_PATH"
+  echo "Release notes will be translated to Japanese with $OPENAI_MODEL."
   exit 0
 fi
 
-"$ROOT_DIR/Scripts/bump-version.sh" "$VERSION" "$BUILD"
+[[ -n "${OPENAI_API_KEY:-}" ]] || { echo "error: OPENAI_API_KEY is required to translate release notes" >&2; exit 1; }
 
-python3 - "$LANDING_PAGE" "$VERSION" "$DOWNLOAD_URL" "$NOTES_FILE" <<'PY'
-from pathlib import Path
-import html, re, sys
-page_path = Path(sys.argv[1])
-version = sys.argv[2]
-download_url = sys.argv[3]
-notes_path = Path(sys.argv[4])
-page = page_path.read_text()
+echo "Translating release notes to Japanese with $OPENAI_MODEL ($OPENAI_REASONING_EFFORT reasoning)..."
+python3 - "$OPENAI_MODEL" "$OPENAI_REASONING_EFFORT" "$VERSION" "$NOTES_FILE" <<'PY' \
+  | curl -fsS https://api.openai.com/v1/responses \
+      -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+      -H "Content-Type: application/json" \
+      -d @- > "$OPENAI_RESPONSE_FILE"
+import json, sys
+model, effort, version, notes_path = sys.argv[1:5]
 notes = []
-for line in notes_path.read_text().splitlines():
+for line in open(notes_path):
     line = line.strip()
     if line.startswith("- "):
         notes.append(line[2:].strip())
+    elif line:
+        notes.append(line)
 if not notes:
-    raise SystemExit("error: release notes contain no bullet items")
+    raise SystemExit("error: release notes contain no items")
+prompt = f"""
+Translate these English release notes for Kehai {version} into natural Japanese.
+Return JSON only with this exact shape:
+{{"en":["same English items, unchanged"],"ja":["Japanese translations"]}}
+Keep the same number and order of items. Copy every English item exactly into en.
+Write complete, concise Japanese sentences without Markdown bullet markers.
+English release notes:
+{json.dumps(notes, ensure_ascii=False)}
+""".strip()
+print(json.dumps({
+    "model": model,
+    "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+    "reasoning": {"effort": effort},
+}))
+PY
+
+python3 - "$OPENAI_RESPONSE_FILE" "$NOTES_TRANSLATIONS_FILE" <<'PY'
+import json, sys
+response_path, output_path = sys.argv[1:3]
+data = json.load(open(response_path))
+text = (data.get("output_text") or "").strip()
+if not text:
+    text = "\n".join(
+        part.get("text", "")
+        for item in data.get("output", [])
+        for part in item.get("content", [])
+        if part.get("text")
+    ).strip()
+if text.startswith("```"):
+    lines = text.splitlines()
+    text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+notes = json.loads(text)
+en, ja = notes.get("en") or [], notes.get("ja") or []
+if not en or len(en) != len(ja):
+    raise SystemExit(f"error: OpenAI returned {len(ja)} Japanese notes for {len(en)} English notes")
+json.dump({"en": en, "ja": ja}, open(output_path, "w"), ensure_ascii=False)
+PY
+
+"$ROOT_DIR/Scripts/bump-version.sh" "$VERSION" "$BUILD"
+
+python3 - "$LANDING_PAGE" "$VERSION" "$DOWNLOAD_URL" "$NOTES_TRANSLATIONS_FILE" <<'PY'
+from pathlib import Path
+import html, json, re, sys
+page_path = Path(sys.argv[1])
+version = sys.argv[2]
+download_url = sys.argv[3]
+translations = json.loads(Path(sys.argv[4]).read_text())
+en_notes, ja_notes = translations["en"], translations["ja"]
+if not en_notes or len(en_notes) != len(ja_notes):
+    raise SystemExit("error: bilingual release-note counts do not match")
+page = page_path.read_text()
 page, download_count = re.subn(r'href="https://github\.com/littlebobert/kehai/releases/download/[^/]+/Kehai-[^"]+-mac\.zip"', f'href="{download_url}"', page, count=1)
-page, version_count = re.subn(r'<span class="kehai-version">\(version [^)]+\)</span>', f'<span class="kehai-version">(version {version})</span>', page, count=1)
+version_pattern = re.compile(r'<span class="kehai-version" data-label-en="\(version [^"]+\)" data-label-ja="（バージョン [^"]+）">\(version [^<]+\)</span>')
+page, version_count = version_pattern.subn(f'<span class="kehai-version" data-label-en="(version {version})" data-label-ja="（バージョン {version}）">(version {version})</span>', page, count=1)
 if download_count != 1 or version_count != 1:
     raise SystemExit("error: landing-page download/version markers were not found exactly once")
-items = "\n".join(f"          <li>{html.escape(note)}</li>" for note in notes)
+items = "\n".join(
+    f'          <li data-label-en="{html.escape(en, quote=True)}" data-label-ja="{html.escape(ja, quote=True)}">{html.escape(en)}</li>'
+    for en, ja in zip(en_notes, ja_notes)
+)
 entry = f'''        <h2>{html.escape(version)}</h2>\n        <ul>\n{items}\n        </ul>\n'''
-marker = '        <summary>Changelog</summary>\n'
+marker = '        <summary data-label-en="Changelog" data-label-ja="変更履歴">Changelog</summary>\n'
 if marker not in page:
     raise SystemExit("error: changelog marker not found")
 page = page.replace(marker, marker + entry, 1)
@@ -209,7 +271,7 @@ cp "$NOTES_FILE" "$APPCAST_WORK/Kehai-$VERSION-mac.md"
   "$APPCAST_WORK"
 cp "$APPCAST_WORK/appcast.xml" "$APPCAST_PATH"
 
-rm -f "$NOTES_FILE"
+rm -f "$NOTES_FILE" "$NOTES_TRANSLATIONS_FILE" "$OPENAI_RESPONSE_FILE"
 git -C "$ROOT_DIR" add -A
 git -C "$ROOT_DIR" commit -m "Release Kehai $VERSION"
 git -C "$ROOT_DIR" push origin "$KEHAI_BRANCH"

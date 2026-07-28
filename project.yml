@@ -1,6 +1,7 @@
 name: Kehai
 options:
   bundleIdPrefix: com.justin
+  developmentLanguage: en
   deploymentTarget:
     macOS: "14.0"
 packages:

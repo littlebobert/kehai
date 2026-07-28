@@ -9,10 +9,10 @@ struct SmartSearchService {
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey: "Add an OpenAI API key in Setup & Permissions first."
-            case .emptyQuery: "Type what you’re looking for before using Smart Search."
-            case .invalidResponse: "OpenAI returned an unexpected search response."
-            case .requestFailed(let status, let message): "OpenAI search failed (\(status)): \(message)"
+            case .missingAPIKey: L10n.string("Add an OpenAI API key in Setup & Permissions first.")
+            case .emptyQuery: L10n.string("Type what you’re looking for before using Smart Search.")
+            case .invalidResponse: L10n.string("OpenAI returned an unexpected search response.")
+            case .requestFailed(let status, let message): L10n.format("OpenAI search failed (%lld): %@", Int64(status), message)
             }
         }
     }
@@ -72,7 +72,7 @@ struct SmartSearchService {
         guard (200..<300).contains(http.statusCode) else {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let error = object?["error"] as? [String: Any]
-            throw SearchError.requestFailed(http.statusCode, error?["message"] as? String ?? "Unknown error")
+            throw SearchError.requestFailed(http.statusCode, error?["message"] as? String ?? L10n.string("Unknown error"))
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let output = object["output"] as? [[String: Any]],

@@ -9,9 +9,9 @@ actor SafariTabService {
 
         var errorDescription: String? {
             switch self {
-            case .notRunning: "Open Safari, then try again."
-            case .automationDenied(let status): "Safari Automation was not enabled (error \(status))."
-            case .invalidReply: "Safari returned an unexpected response."
+            case .notRunning: L10n.string("Open Safari, then try again.")
+            case .automationDenied(let status): L10n.format("Safari Automation was not enabled (error %lld).", Int64(status))
+            case .invalidReply: L10n.string("Safari returned an unexpected response.")
             }
         }
     }

@@ -7,7 +7,7 @@ struct AboutView: View {
 
     private var version: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
-        return "Version \(version)"
+        return L10n.format("Version %@", version)
     }
 
     var body: some View {
@@ -60,13 +60,13 @@ final class AboutWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "About Kehai"
+        window.title = L10n.string("About Kehai")
         window.titleVisibility = .hidden
         window.titlebarSeparatorStyle = .none
 
         if let closeButton = window.standardWindowButton(.closeButton),
            let titlebarView = closeButton.superview {
-            let titleLabel = NSTextField(labelWithString: "About Kehai")
+            let titleLabel = NSTextField(labelWithString: L10n.string("About Kehai"))
             titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
             titleLabel.alignment = .center
             titleLabel.translatesAutoresizingMaskIntoConstraints = false

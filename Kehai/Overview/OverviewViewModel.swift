@@ -12,7 +12,7 @@ enum BrowserViewMode: String, CaseIterable, Identifiable {
     case recent
 
     var id: Self { self }
-    var title: String { self == .grouped ? "Grouped" : "Recent" }
+    var title: String { L10n.string(self == .grouped ? "Grouped" : "Recent") }
 }
 
 struct BrowserWindowSection: Identifiable {
@@ -142,7 +142,7 @@ final class OverviewViewModel {
 
     var windowSections: [BrowserWindowSection] {
         if smartSearchWindowIDs != nil {
-            return [BrowserWindowSection(id: "smart-search", title: "Smart Results", windows: filteredWindows)]
+            return [BrowserWindowSection(id: "smart-search", title: L10n.string("Smart Results"), windows: filteredWindows)]
         }
         guard viewMode == .grouped, !taskGroups.isEmpty else {
             return [BrowserWindowSection(id: "recent", title: nil, windows: filteredWindows)]
@@ -164,7 +164,7 @@ final class OverviewViewModel {
 
         let otherWindows = filteredWindows.filter { !assignedIDs.contains($0.id) }
         if !otherWindows.isEmpty {
-            sections.append(BrowserWindowSection(id: "other", title: "Other Windows", windows: otherWindows))
+            sections.append(BrowserWindowSection(id: "other", title: L10n.string("Other Windows"), windows: otherWindows))
         }
         return sections
     }
@@ -180,7 +180,7 @@ final class OverviewViewModel {
     func performSmartSearch() async {
         guard !isSmartSearching else { return }
         isSmartSearching = true
-        smartSearchStatus = "Searching by meaning…"
+        smartSearchStatus = L10n.string("Searching by meaning…")
         errorMessage = nil
         do {
             let resultIDs = try await smartSearch.search(
@@ -193,7 +193,7 @@ final class OverviewViewModel {
                 apiKey: openAIKeyStore.apiKey
             )
             smartSearchWindowIDs = resultIDs
-            smartSearchStatus = resultIDs.isEmpty ? "No smart results" : "Smart Results"
+            smartSearchStatus = L10n.string(resultIDs.isEmpty ? "No smart results" : "Smart Results")
             selectFirstFilteredWindow()
             SafeDiagnosticLog.shared.record("smart-search: completed results=\(resultIDs.count)")
         } catch {
@@ -295,7 +295,7 @@ final class OverviewViewModel {
             self.preserveSelectionOrSelectFirst()
         }
         if !started {
-            errorMessage = "Kehai could not close this window."
+            errorMessage = L10n.string("Kehai could not close this window.")
         }
     }
 
@@ -524,11 +524,11 @@ final class OverviewViewModel {
             reconcileCachedGroups()
             selectFirstFilteredWindow()
             isLoading = false
-            thumbnailStatus = "Analyzing 0 of \(pairs.count) thumbnails…"
+            thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", 0, Int64(pairs.count))
             activityMonitor.update(windows: items)
             for (offset, pair) in pairs.enumerated() {
                 let (item, window) = pair
-                thumbnailStatus = "Analyzing \(offset + 1) of \(pairs.count) thumbnails…"
+                thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", Int64(offset + 1), Int64(pairs.count))
                 var capture = await thumbnails.image(for: window)
                 if capture == nil {
                     try? await Task.sleep(for: .milliseconds(250))
@@ -587,7 +587,7 @@ final class OverviewViewModel {
     func refreshTaskGroups() async {
         guard !isGrouping else { return }
         isGrouping = true
-        groupingStatus = "Preparing screenshots…"
+        groupingStatus = L10n.string("Preparing screenshots…")
         errorMessage = nil
         do {
             let generated = try await grouping.groups(

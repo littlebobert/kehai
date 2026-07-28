@@ -18,7 +18,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
             backing: .buffered,
             defer: false
         )
-        window.title = "Install Kehai"
+        window.title = L10n.string("Install Kehai")
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
@@ -116,7 +116,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
             NSWorkspace.shared.openApplication(at: destinationURL, configuration: configuration) { _, error in
                 Task { @MainActor in
                     if let error {
-                        self.errorMessage = "Kehai was copied, but could not be reopened: \(error.localizedDescription)"
+                        self.errorMessage = L10n.format("Kehai was copied, but could not be reopened: %@", error.localizedDescription)
                         self.updateContent()
                     } else {
                         NSApp.terminate(nil)
@@ -124,7 +124,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
                 }
             }
         } catch {
-            errorMessage = "Kehai could not be moved automatically. Move it to Applications in Finder, then open it again. \(error.localizedDescription)"
+            errorMessage = L10n.format("Kehai could not be moved automatically. Move it to Applications in Finder, then open it again. %@", error.localizedDescription)
             updateContent()
         }
     }
@@ -135,10 +135,12 @@ private struct InstallationLocationView: View {
     let errorMessage: String?
     let choose: (Int) -> Void
 
-    private let choices = [
-        ("Move to Applications", "Copy Kehai to /Applications and reopen it from there."),
-        ("Not Now", "Continue running Kehai from its current location.")
-    ]
+    private var choices: [(String, String)] {
+        [
+            (L10n.string("Move to Applications"), L10n.string("Copy Kehai to /Applications and reopen it from there.")),
+            (L10n.string("Not Now"), L10n.string("Continue running Kehai from its current location."))
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {

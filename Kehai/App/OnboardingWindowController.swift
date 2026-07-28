@@ -13,7 +13,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "Kehai Setup"
+        window.title = L10n.string("Kehai Setup")
         window.isReleasedWhenClosed = false
         window.contentMinSize = size
         window.contentMaxSize = size

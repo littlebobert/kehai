@@ -20,6 +20,9 @@
 		3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */; };
 		4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD56318C0B786481A7DDEFB /* AppearanceSettings.swift */; };
 		5237186877B286D004B95E8F /* SafeDiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */; };
+		5C5D13DABD3074C2A0993400 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 70EFEF0B56A45347356BE54D /* Localizable.strings */; };
+		5D6CB92656365F9393F3501D /* Localization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A052F2C3738D3029828695D5 /* Localization.swift */; };
+		5DA9D8116AC2635EC23782E6 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 05B4814C0CDF87EB11EBCC22 /* InfoPlist.strings */; };
 		5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A2694A32A4197AFA761F2B /* ThumbnailService.swift */; };
 		6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */; };
 		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
@@ -60,6 +63,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		05B4814C0CDF87EB11EBCC22 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewPanelController.swift; sourceTree = "<group>"; };
 		0B555A1137CC688518C03637 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewToolbarViews.swift; sourceTree = "<group>"; };
@@ -81,12 +85,14 @@
 		621EE2F9EC9738189063682A /* KehaiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiApp.swift; sourceTree = "<group>"; };
 		6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeyStore.swift; sourceTree = "<group>"; };
 		6EEF963F2217DDBE06F29587 /* ActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStore.swift; sourceTree = "<group>"; };
+		70EFEF0B56A45347356BE54D /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		803E5FC5B0B6141C5383120D /* WindowModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowModel.swift; sourceTree = "<group>"; };
 		82A2694A32A4197AFA761F2B /* ThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThumbnailService.swift; sourceTree = "<group>"; };
 		865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveThumbnailService.swift; sourceTree = "<group>"; };
 		89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewViewModel.swift; sourceTree = "<group>"; };
 		8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenWindowStore.swift; sourceTree = "<group>"; };
 		9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		A052F2C3738D3029828695D5 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
 		A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
 		C2F443FAB9945628682B0572 /* Kehai.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kehai.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D57C5BE757B41B4FD3795131 /* PermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionView.swift; sourceTree = "<group>"; };
@@ -222,6 +228,7 @@
 				F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */,
 				2B7F5A3BAD974CDB4BAC9ED1 /* InstallationLocationWindowController.swift */,
 				621EE2F9EC9738189063682A /* KehaiApp.swift */,
+				A052F2C3738D3029828695D5 /* Localization.swift */,
 				38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */,
 				A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */,
 				D57C5BE757B41B4FD3795131 /* PermissionView.swift */,
@@ -238,6 +245,8 @@
 			children = (
 				FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */,
 				E64C863413D1E203C541734B /* Assets.xcassets */,
+				05B4814C0CDF87EB11EBCC22 /* InfoPlist.strings */,
+				70EFEF0B56A45347356BE54D /* Localizable.strings */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -308,6 +317,7 @@
 			knownRegions = (
 				Base,
 				en,
+				ja,
 			);
 			mainGroup = A81CC1004B4AE238DF65142A;
 			minimizedProjectReferenceProxies = 1;
@@ -332,6 +342,8 @@
 			files = (
 				8AAE6B09DA46E11CB87F19AD /* AppIconSource.png in Resources */,
 				6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */,
+				5DA9D8116AC2635EC23782E6 /* InfoPlist.strings in Resources */,
+				5C5D13DABD3074C2A0993400 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -357,6 +369,7 @@
 				A03895791FFD55AB82A99957 /* InstallationLocationWindowController.swift in Sources */,
 				D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */,
 				C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */,
+				5D6CB92656365F9393F3501D /* Localization.swift in Sources */,
 				A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */,
 				26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */,
 				A19A7D0DD4DA3D00CDF9BBB6 /* OverviewPanelController.swift in Sources */,

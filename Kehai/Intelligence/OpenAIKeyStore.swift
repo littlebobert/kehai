@@ -47,7 +47,7 @@ final class OpenAIKeyStore {
             savedAPIKey = value
             saveError = nil
         } else {
-            saveError = "Could not save the API key (error \(status))."
+            saveError = L10n.format("Could not save the API key (error %lld).", Int64(status))
         }
     }
 

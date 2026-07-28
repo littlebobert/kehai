@@ -18,19 +18,17 @@ final class DiagnosticReportService {
     private let recipient = "justin.garcia@gmail.com"
 
     func draftBugReport(snapshot: DiagnosticSnapshot) throws {
-        let reportURL = try writeReport(snapshot: snapshot)
         guard let service = NSSharingService(named: .composeEmail) else {
             throw DiagnosticReportError.emailUnavailable
         }
         service.recipients = [recipient]
         service.subject = "Kehai Bug Report"
         service.perform(withItems: [
-            "Please describe what happened and what you expected.\n\nA privacy-safe Kehai diagnostics report is attached.",
-            reportURL
+            "Please describe what happened and what you expected.\n\n\(reportText(snapshot: snapshot))"
         ])
     }
 
-    private func writeReport(snapshot: DiagnosticSnapshot) throws -> URL {
+    private func reportText(snapshot: DiagnosticSnapshot) -> String {
         let bundle = Bundle.main
         let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
@@ -65,11 +63,7 @@ final class DiagnosticReportService {
         window titles, URLs, file paths, screenshots, API keys, window IDs, task-group names,
         search queries, activity history, and unified system log messages.
         """
-        let directory = FileManager.default.temporaryDirectory.appending(path: "Kehai-Diagnostics", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appending(path: "Kehai-Diagnostics.txt")
-        try report.write(to: url, atomically: true, encoding: .utf8)
-        return url
+        return report
     }
 
     private var architecture: String {
@@ -94,6 +88,6 @@ enum DiagnosticReportError: LocalizedError {
     case emailUnavailable
 
     var errorDescription: String? {
-        "No email compose service is available."
+        L10n.string("No email compose service is available.")
     }
 }

@@ -131,7 +131,7 @@ struct SettingsView: View {
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { openAIKeyStore.save() }
                 HStack {
-                    Text(openAIKeyStore.hasUnsavedChanges ? "Save your changes to the login Keychain." : openAIKeyStore.hasSavedKey ? "Saved in your login Keychain." : "Required to generate task groups and use Smart Search.")
+                    Text(L10n.string(openAIKeyStore.hasUnsavedChanges ? "Save your changes to the login Keychain." : openAIKeyStore.hasSavedKey ? "Saved in your login Keychain." : "Required to generate task groups and use Smart Search."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -202,7 +202,7 @@ struct SettingsView: View {
         openSettings: @escaping () -> Void
     ) -> some View {
         HStack {
-            Text(title)
+            Text(L10n.string(title))
             Spacer()
             if granted {
                 Label("Allowed", systemImage: "checkmark.circle.fill")
@@ -267,7 +267,7 @@ struct SettingsView: View {
                 Text(app.bundleIdentifier).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button(buttonTitle, action: action)
+            Button(L10n.string(buttonTitle), action: action)
         }
         .padding(.vertical, 2)
     }
@@ -316,7 +316,7 @@ private final class ShortcutRecorderView: NSButton {
 
     @objc private func beginRecording() {
         recording = true
-        title = "Type Shortcut"
+        title = L10n.string("Type Shortcut")
         window?.makeFirstResponder(self)
     }
 
@@ -363,15 +363,15 @@ private final class ShortcutRecorderView: NSButton {
 
     private func keyName(for keyCode: UInt32) -> String {
         let names: [UInt32: String] = [
-            UInt32(kVK_Space): "Space", UInt32(kVK_Return): "Return",
-            UInt32(kVK_Tab): "Tab", UInt32(kVK_Delete): "Delete",
+            UInt32(kVK_Space): L10n.string("Space"), UInt32(kVK_Return): L10n.string("Return"),
+            UInt32(kVK_Tab): L10n.string("Tab"), UInt32(kVK_Delete): L10n.string("Delete"),
             UInt32(kVK_UpArrow): "↑", UInt32(kVK_DownArrow): "↓",
             UInt32(kVK_LeftArrow): "←", UInt32(kVK_RightArrow): "→"
         ]
         if let name = names[keyCode] { return name }
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
               let data = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData) else {
-            return "Key \(keyCode)"
+            return L10n.format("Key %lld", Int64(keyCode))
         }
         let layoutData = unsafeBitCast(data, to: CFData.self) as Data
         return layoutData.withUnsafeBytes { bytes in

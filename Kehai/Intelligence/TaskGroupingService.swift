@@ -16,9 +16,9 @@ final class TaskGroupingService {
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey: "Add an OpenAI API key in Setup & Permissions first."
-            case .invalidResponse: "OpenAI returned an unexpected response."
-            case .requestFailed(let status, let message): "OpenAI request failed (\(status)): \(message)"
+            case .missingAPIKey: L10n.string("Add an OpenAI API key in Setup & Permissions first.")
+            case .invalidResponse: L10n.string("OpenAI returned an unexpected response.")
+            case .requestFailed(let status, let message): L10n.format("OpenAI request failed (%lld): %@", Int64(status), message)
             }
         }
     }
@@ -37,7 +37,7 @@ final class TaskGroupingService {
         apiKey: String,
         progress: (String) -> Void
     ) async throws -> [TaskGroup] {
-        progress("Preparing screenshots…")
+        progress(L10n.string("Preparing screenshots…"))
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw GroupingError.missingAPIKey }
         guard windows.count >= 2 else { return [] }
@@ -46,8 +46,13 @@ final class TaskGroupingService {
             "ID \($0.id): app=\($0.appName); title=\($0.title); Safari domains=\($0.safariTabs.map(\.domain).joined(separator: ", ")); Safari tab titles=\($0.safariTabs.prefix(8).map(\.title).joined(separator: " | "))"
         }.joined(separator: "\n")
         let recentTrail = events.suffix(60).map { "\($0.appName): \($0.title)" }.joined(separator: " → ")
+        let labelLanguageInstruction = L10n.prefersJapanese
+            ? "Write every group name in natural Japanese. Preserve app names, window titles, URLs, and identifiers in their original language."
+            : "Write every group name in concise English. Preserve app names, window titles, URLs, and identifiers in their original language."
         let prompt = """
         Infer a small number of task or project contexts from these windows and their screenshots. Group by shared project, repository, client, document topic, or workflow—not by application. Put related browser, terminal, Finder, editor, and communication windows together when visual content, titles, or focus sequence support it. A window may appear in more than one group. Use only IDs shown. Omit uncertain groups. Never use app names or generic labels such as Browsing, Safari, Terminal, Communication, or Development as group names. Keep each label to four words or fewer.
+
+        \(labelLanguageInstruction)
 
         Windows:
         \(inventory)
@@ -99,14 +104,14 @@ final class TaskGroupingService {
         request.timeoutInterval = 90
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        progress("Uploading and analyzing…")
+        progress(L10n.string("Uploading and analyzing…"))
         let (data, response) = try await URLSession.shared.data(for: request)
-        progress("Applying groups…")
+        progress(L10n.string("Applying groups…"))
         guard let http = response as? HTTPURLResponse else { throw GroupingError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let error = object?["error"] as? [String: Any]
-            throw GroupingError.requestFailed(http.statusCode, error?["message"] as? String ?? "Unknown error")
+            throw GroupingError.requestFailed(http.statusCode, error?["message"] as? String ?? L10n.string("Unknown error"))
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let output = object["output"] as? [[String: Any]],

@@ -25,10 +25,14 @@ struct OverviewView: View {
 
             VStack(spacing: 3) {
                 controlBar
+                    .padding(.horizontal, 30)
                 statusRow
+                    .padding(.horizontal, 30)
 
                 if let error = model.errorMessage {
-                    Text(error).foregroundStyle(.red)
+                    Text(error)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 30)
                 }
 
                 if model.isLoading {
@@ -48,13 +52,12 @@ struct OverviewView: View {
                                     windowSection(section.title, windows: section.windows)
                                 }
                             }
-                            .padding(.horizontal, 6)
+                            .padding(.horizontal, 36)
                             .padding(.top, 2)
                             .padding(.bottom, 30)
                             .animation(.easeInOut(duration: 0.14), value: model.viewMode)
                         }
-                        .contentMargins(.trailing, 14, for: .scrollContent)
-                        .scrollIndicators(.hidden)
+                        .scrollIndicators(.automatic)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background {
                             GeometryReader { proxy in
@@ -72,7 +75,6 @@ struct OverviewView: View {
                     }
                 }
             }
-            .padding(.horizontal, 30)
             .padding(.top, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
@@ -142,17 +144,6 @@ struct OverviewView: View {
                 ProgressView().controlSize(.small)
                 Text(thumbnailStatus)
                     .contentTransition(.numericText())
-            } else if model.hasGeneratedGroups, let generatedAt = model.groupsGeneratedAt {
-                if model.groupsAreStale {
-                    Image(systemName: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                    Text("Groups may be outdated")
-                    Text("·")
-                }
-                if Date().timeIntervalSince(generatedAt) < 60 {
-                    Text("Generated just now")
-                } else {
-                    Text("Generated \(generatedAt, format: .relative(presentation: .named))")
-                }
             }
             Spacer()
         }
@@ -217,22 +208,22 @@ private struct WindowActionChooser: View {
     let choose: (Int) -> Void
     let cancel: () -> Void
 
-    private var options: [(String, String)] {
+    private var options: [(title: String, detail: String, isDestructive: Bool)] {
         switch stage {
         case .removal:
             return [
-                ("Close Window", "Use \(window.appName)’s normal close action. Unsaved-work prompts appear in the app."),
-                ("Hide Window in Kehai", "Hide only this window from the browser.")
-            ] + (canExcludeApp ? [("Exclude App…", "Choose whether to exclude every \(window.appName) window from AI or Kehai.")] : [])
+                (L10n.string("Close Window"), L10n.format("Use %@’s normal close action. Unsaved-work prompts appear in the app.", window.appName), false),
+                (L10n.string("Hide Window in Kehai"), L10n.string("Hide only this window from the browser."), false)
+            ] + (canExcludeApp ? [(L10n.string("Exclude App…"), L10n.format("Choose whether to exclude every %@ window from AI or Kehai.", window.appName), false)] : [])
         case .exclusion:
-            return (canExcludeFromAI ? [("From AI Only", "Keep \(window.appName) visible locally, but never send its data to OpenAI.")] : [])
-                + [("From Kehai Entirely", "Remove \(window.appName) and never capture or send it.")]
+            return (canExcludeFromAI ? [(L10n.string("From AI Only"), L10n.format("Keep %@ visible locally, but never send its data to OpenAI.", window.appName), false)] : [])
+                + [(L10n.string("From Kehai Entirely"), L10n.format("Remove %@ and never capture or send it.", window.appName), true)]
         }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(stage == .removal ? "Remove \(window.title)?" : "Exclude \(window.appName)?")
+            Text(stage == .removal ? L10n.format("Remove %@?", window.title) : L10n.format("Exclude %@?", window.appName))
                 .font(.headline)
                 .lineLimit(2)
             VStack(spacing: 6) {
@@ -242,10 +233,10 @@ private struct WindowActionChooser: View {
                             Image(systemName: selectedIndex == index ? "circle.inset.filled" : "circle")
                                 .foregroundStyle(selectedIndex == index ? Color.accentColor : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(option.0)
+                                Text(option.title)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(option.0 == "From Kehai Entirely" ? Color.red : Color.primary)
-                                Text(option.1).font(.caption).foregroundStyle(.secondary)
+                                    .foregroundStyle(option.isDestructive ? Color.red : Color.primary)
+                                Text(option.detail).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                         }
@@ -350,7 +341,7 @@ private struct WindowCard: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading) { Text(window.title).font(.headline).lineLimit(1); Text(window.appName).foregroundStyle(.secondary) }
                 Spacer()
-                if !window.safariTabs.isEmpty { Text("\(window.safariTabs.count) tabs").font(.caption).foregroundStyle(.secondary) }
+                if !window.safariTabs.isEmpty { Text(L10n.format("%lld tabs", Int64(window.safariTabs.count))).font(.caption).foregroundStyle(.secondary) }
                 Button(action: toggleHidden) {
                     Image(systemName: isHidden ? "eye" : "eye.slash")
                         .foregroundStyle(.secondary)

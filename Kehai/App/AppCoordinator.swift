@@ -100,7 +100,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     func dockMenu() -> NSMenu? {
         guard permissionManager.hasCorePermissions, !viewModel.taskGroups.isEmpty else { return nil }
-        let menu = NSMenu(title: "Task Groups")
+        let menu = NSMenu(title: L10n.string("Task Groups"))
         for group in viewModel.taskGroups {
             let item = NSMenuItem(title: group.name, action: #selector(showDockGroup(_:)), keyEquivalent: "")
             item.target = self
@@ -175,7 +175,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             SafeDiagnosticLog.shared.record("bug-report: email draft requested")
         } catch {
             let alert = NSAlert()
-            alert.messageText = "Could Not Draft Bug Report"
+            alert.messageText = L10n.string("Could Not Draft Bug Report")
             alert.informativeText = error.localizedDescription
             alert.runModal()
         }
@@ -196,7 +196,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             shortcutSettings.registrationError = nil
             SafeDiagnosticLog.shared.record("global-hotkey: registered")
         } else {
-            shortcutSettings.registrationError = "This shortcut is unavailable. It may already be used by macOS or another app."
+            shortcutSettings.registrationError = L10n.string("This shortcut is unavailable. It may already be used by macOS or another app.")
             SafeDiagnosticLog.shared.record("global-hotkey: registration failed status=\(status)")
         }
     }
