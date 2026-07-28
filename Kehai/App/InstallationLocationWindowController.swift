@@ -33,10 +33,14 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         #if DEBUG
         return false
         #else
-        let appURL = Bundle.main.bundleURL.standardizedFileURL
-        let applicationsURL = URL(fileURLWithPath: "/Applications", isDirectory: true).standardizedFileURL
-        return !UserDefaults.standard.bool(forKey: suppressMovePromptKey)
-            && appURL.deletingLastPathComponent() != applicationsURL
+        guard !UserDefaults.standard.bool(forKey: suppressMovePromptKey) else { return false }
+        let appURL = Bundle.main.bundleURL.standardizedFileURL.resolvingSymlinksInPath()
+        let applicationsURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let parentURL = appURL.deletingLastPathComponent()
+        return parentURL != applicationsURL
+            && !parentURL.path.hasSuffix("/Applications")
         #endif
     }
 
@@ -132,6 +136,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+            UserDefaults.standard.set(true, forKey: Self.suppressMovePromptKey)
             NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
             installationComplete = true
             errorMessage = nil
