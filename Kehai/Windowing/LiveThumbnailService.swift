@@ -32,7 +32,7 @@ final class LiveThumbnailService {
             configuration.minimumFrameInterval = CMTime(value: 1, timescale: 12)
             configuration.queueDepth = 3
             configuration.showsCursor = false
-            configuration.ignoreShadowsSingleWindow = false
+            configuration.ignoreShadowsSingleWindow = true
 
             let output = LiveStreamOutput { image in
                 Task { @MainActor in

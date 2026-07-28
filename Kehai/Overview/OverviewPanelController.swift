@@ -87,8 +87,16 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
     }
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        model.setLiveThumbnailEnabled(true)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        model.setLiveThumbnailEnabled(false)
+    }
+
     func windowWillClose(_ notification: Notification) {
-        model.stopLiveThumbnail()
+        model.setLiveThumbnailEnabled(false)
         removeKeyMonitor()
         removeMouseMonitor()
         window = nil
@@ -163,7 +171,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "r" {
-                Task { await self.model.refreshTaskGroups() }
+                Task { await self.model.refreshAndRegenerateGroups() }
                 return nil
             }
             if modifiers.contains(.command),

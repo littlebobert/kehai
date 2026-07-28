@@ -16,13 +16,12 @@ final class ThumbnailService {
     private let logger = Logger(subsystem: "com.justin.Kehai", category: "Thumbnails")
 
     func image(for window: SCWindow, maximumSize: CGSize = CGSize(width: 640, height: 400)) async -> CapturedThumbnail? {
-        let title = window.title ?? "Untitled"
         let scale = min(maximumSize.width / max(window.frame.width, 1), maximumSize.height / max(window.frame.height, 1), 1)
         let configuration = SCStreamConfiguration()
         configuration.width = max(1, Int(window.frame.width * scale))
         configuration.height = max(1, Int(window.frame.height * scale))
         configuration.showsCursor = false
-        configuration.ignoreShadowsSingleWindow = false
+        configuration.ignoreShadowsSingleWindow = true
         let filter = SCContentFilter(desktopIndependentWindow: window)
             logger.notice("Thumbnail capture started size=\(configuration.width)x\(configuration.height)")
         do {

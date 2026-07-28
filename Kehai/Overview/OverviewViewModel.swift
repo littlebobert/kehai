@@ -38,8 +38,8 @@ final class OverviewViewModel {
     }
     var selectedWindowID: CGWindowID? {
         didSet {
-            guard selectedWindowID != oldValue else { return }
-            scheduleLiveThumbnail()
+            guard selectedWindowID != oldValue, liveThumbnailEnabled else { return }
+            scheduleSelectedLiveThumbnail()
         }
     }
     var liveThumbnailWindowID: CGWindowID?
@@ -92,6 +92,7 @@ final class OverviewViewModel {
     private let activityMonitor: ActivityMonitor
     private let liveThumbnails = LiveThumbnailService()
     private var liveThumbnailTask: Task<Void, Never>?
+    private var liveThumbnailEnabled = false
     private var smartSearchWindowIDs: [CGWindowID]?
     private let taskGroupCache = TaskGroupCache()
     private let hiddenWindowStore = HiddenWindowStore()
@@ -342,6 +343,16 @@ final class OverviewViewModel {
         thumbnailCardWidth = min(max(proposedWidth, Self.minimumThumbnailCardWidth), Self.maximumThumbnailCardWidth)
     }
 
+    func setLiveThumbnailEnabled(_ enabled: Bool) {
+        guard liveThumbnailEnabled != enabled else { return }
+        liveThumbnailEnabled = enabled
+        if enabled {
+            scheduleSelectedLiveThumbnail()
+        } else {
+            stopLiveThumbnail()
+        }
+    }
+
     func stopLiveThumbnail() {
         liveThumbnailTask?.cancel()
         liveThumbnailTask = nil
@@ -350,15 +361,12 @@ final class OverviewViewModel {
         Task { await liveThumbnails.stop() }
     }
 
-    private func scheduleLiveThumbnail() {
-        liveThumbnailTask?.cancel()
-        liveThumbnailTask = nil
-        liveThumbnailWindowID = nil
-        liveThumbnail = nil
-        Task { await liveThumbnails.stop() }
-
-        guard let selectedWindowID,
-              windows.contains(where: { $0.id == selectedWindowID }) else { return }
+    private func scheduleSelectedLiveThumbnail() {
+        stopLiveThumbnail()
+        guard liveThumbnailEnabled,
+              NSApp.isActive,
+              let windowID = selectedWindowID,
+              windows.contains(where: { $0.id == windowID }) else { return }
 
         liveThumbnailTask = Task { [weak self] in
             do {
@@ -366,13 +374,20 @@ final class OverviewViewModel {
             } catch {
                 return
             }
-            guard let self, !Task.isCancelled, self.selectedWindowID == selectedWindowID else { return }
+            guard let self,
+                  !Task.isCancelled,
+                  self.liveThumbnailEnabled,
+                  NSApp.isActive,
+                  self.selectedWindowID == windowID else { return }
             await self.liveThumbnails.start(
-                windowID: selectedWindowID,
+                windowID: windowID,
                 maximumSize: CGSize(width: 880, height: 550)
             ) { [weak self] image in
-                guard let self, self.selectedWindowID == selectedWindowID else { return }
-                self.liveThumbnailWindowID = selectedWindowID
+                guard let self,
+                      self.liveThumbnailEnabled,
+                      NSApp.isActive,
+                      self.selectedWindowID == windowID else { return }
+                self.liveThumbnailWindowID = windowID
                 self.liveThumbnail = image
             }
         }
@@ -492,7 +507,7 @@ final class OverviewViewModel {
         errorMessage = nil
     }
 
-    func refresh() async {
+    func refresh(generateInitialGroups: Bool = true) async {
         logger.notice("Thumbnail refresh started")
         SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh started")
         isLoading = true; errorMessage = nil
@@ -500,7 +515,14 @@ final class OverviewViewModel {
             let seen = await history.lastSeen()
             let pairs = try await catalog.windows(lastSeen: seen)
             logger.notice("Window catalog returned \(pairs.count) capture candidates")
-            let tabs = (try? await safari.listTabs()) ?? []
+            let tabs: [SafariTab]
+            do {
+                tabs = try await safari.listTabs()
+            } catch {
+                tabs = []
+                errorMessage = L10n.format("Safari tabs are unavailable: %@", error.localizedDescription)
+                SafeDiagnosticLog.shared.record("safari-tabs: enumeration failed")
+            }
             var items = pairs.map { $0.0 }
             let safariWindows = items.indices.filter { items[$0].bundleIdentifier == "com.apple.Safari" }
             var unassignedTabs = tabs
@@ -541,7 +563,6 @@ final class OverviewViewModel {
                     updatedWindows[index].thumbnailIsUsable = capture.isUsable
                     updatedWindows[index].thumbnailRevision += 1
                     windows = updatedWindows
-                    if selectedWindowID == item.id { scheduleLiveThumbnail() }
                 } else if capture == nil {
                     logger.error("No thumbnail captured")
                     SafeDiagnosticLog.shared.record("thumbnail-pipeline: no capture returned")
@@ -554,7 +575,9 @@ final class OverviewViewModel {
             SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh finished accepted=\(acceptedCount) total=\(pairs.count)")
             thumbnailStatus = nil
             isLoading = false
-            await generateInitialGroupsIfNeeded()
+            if generateInitialGroups {
+                await generateInitialGroupsIfNeeded()
+            }
         } catch {
             logger.error("Thumbnail refresh failed")
             SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh failed")
@@ -565,7 +588,7 @@ final class OverviewViewModel {
     }
 
     func refreshAndRegenerateGroupsIfNeeded() async {
-        await refresh()
+        await refresh(generateInitialGroups: false)
         guard taskGroups.isEmpty || groupsAreStale else {
             SafeDiagnosticLog.shared.record("grouping: idle regeneration skipped workspace unchanged")
             return
@@ -581,6 +604,13 @@ final class OverviewViewModel {
               windows.count >= 2 else { return }
         defaults.set(true, forKey: Self.automaticGroupingAttemptedKey)
         SafeDiagnosticLog.shared.record("grouping: automatic first-run generation started")
+        await refreshTaskGroups()
+    }
+
+    func refreshAndRegenerateGroups() async {
+        guard !isGrouping, !isLoading else { return }
+        groupingStatus = L10n.string("Refreshing windows and Safari tabs…")
+        await refresh(generateInitialGroups: false)
         await refreshTaskGroups()
     }
 

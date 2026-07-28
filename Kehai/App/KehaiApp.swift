@@ -33,7 +33,8 @@ struct KehaiApp: App {
                 }
                 .disabled(!appDelegate.coordinator.autoUpdates.canCheckForUpdates)
             }
-            CommandMenu("View") {
+            CommandGroup(after: .toolbar) {
+                Divider()
                 Button("Group by task") {
                     appDelegate.coordinator.setBrowserViewMode(.grouped)
                 }

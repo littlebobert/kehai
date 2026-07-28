@@ -48,6 +48,8 @@ targets:
         SUVerifyUpdateBeforeExtraction: true
     entitlements:
       path: Kehai/Resources/Kehai.entitlements
+      properties:
+        com.apple.security.automation.apple-events: true
     dependencies:
       - package: Sparkle
         product: Sparkle

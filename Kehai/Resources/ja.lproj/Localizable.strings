@@ -4,6 +4,7 @@
 "Open Safari, then try again." = "Safariを開いてから、もう一度お試しください。";
 "Safari Automation was not enabled (error %lld)." = "Safariのオートメーションが有効になっていません（エラー %lld）。";
 "Safari returned an unexpected response." = "Safariから予期しない応答が返されました。";
+"Safari tabs are unavailable: %@" = "Safariのタブを取得できません：%@";
 "Check for Updates…" = "アップデートを確認…";
 "View" = "表示";
 "Group by task" = "タスク別にグループ化";
@@ -129,6 +130,7 @@
 "No smart results" = "スマート検索の結果はありません";
 "Kehai could not close this window." = "Kehaiでこのウインドウを閉じられませんでした。";
 "Analyzing %lld of %lld thumbnails…" = "%lld/%lld個のサムネイルを解析中…";
+"Refreshing windows and Safari tabs…" = "ウインドウとSafariのタブを更新中…";
 "Preparing screenshots…" = "スクリーンショットを準備中…";
 "Uploading and analyzing…" = "アップロードして解析中…";
 "Applying groups…" = "グループを適用中…";

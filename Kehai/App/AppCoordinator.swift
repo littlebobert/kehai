@@ -261,7 +261,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             return
         }
         panelController.show()
-        Task { await viewModel.refreshTaskGroups() }
+        Task { await viewModel.refreshAndRegenerateGroups() }
     }
 
     func focusBrowserSearch() {

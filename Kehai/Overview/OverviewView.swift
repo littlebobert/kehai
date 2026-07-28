@@ -10,7 +10,7 @@ struct OverviewView: View {
     private let gridSpacing: CGFloat = 18
     private var columns: [GridItem] { [GridItem(.adaptive(minimum: model.thumbnailCardWidth, maximum: model.thumbnailCardWidth + 80), spacing: gridSpacing)] }
     private var gridColumnCount: Int { max(1, Int((gridWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing))) }
-    private var thumbnailHeight: CGFloat { model.thumbnailCardWidth * 0.64 }
+    private var thumbnailCellHeight: CGFloat { model.thumbnailCardWidth * 0.64 }
 
     var body: some View {
         ZStack {
@@ -134,13 +134,7 @@ struct OverviewView: View {
     @ViewBuilder
     private var statusRow: some View {
         HStack(spacing: 4) {
-            if model.isGrouping {
-                ProgressView().controlSize(.small)
-                if let groupingStatus = model.groupingStatus {
-                    Text(groupingStatus)
-                        .contentTransition(.numericText())
-                }
-            } else if let thumbnailStatus = model.thumbnailStatus {
+            if !model.isGrouping, let thumbnailStatus = model.thumbnailStatus {
                 ProgressView().controlSize(.small)
                 Text(thumbnailStatus)
                     .contentTransition(.numericText())
@@ -177,7 +171,7 @@ struct OverviewView: View {
                             dusty: dusty,
                             isSelected: model.selectedWindowID == window.id,
                             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
-                            thumbnailHeight: thumbnailHeight,
+                            thumbnailCellHeight: thumbnailCellHeight,
                             isHidden: model.isWindowHidden(window),
                             canExcludeApp: model.canExcludeApp(window),
                             select: { model.activate(window); close() },
@@ -267,7 +261,7 @@ private struct WindowCard: View {
     let dusty: Bool
     let isSelected: Bool
     let liveThumbnail: NSImage?
-    let thumbnailHeight: CGFloat
+    let thumbnailCellHeight: CGFloat
     let isHidden: Bool
     let canExcludeApp: Bool
     let select: () -> Void
@@ -278,62 +272,56 @@ private struct WindowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: select) {
-                GeometryReader { proxy in
-                    ZStack {
-                        ZStack {
-                            Rectangle().fill(.quaternary)
-                            if let icon = window.appIcon {
-                                Image(nsImage: icon).resizable().scaledToFit().frame(width: 72, height: 72)
-                            } else {
-                                Image(systemName: "macwindow").font(.largeTitle)
-                            }
-                        }
-                        .opacity(window.thumbnailIsUsable && window.thumbnail != nil ? 0 : 1)
+                ZStack {
+                    Color.clear
 
-                        if let image = window.thumbnail {
-                            Image(nsImage: image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: proxy.size.width, height: proxy.size.height)
-                                .clipped()
-                                .opacity(window.thumbnailIsUsable ? 1 : 0)
-                        }
-                        if let liveThumbnail {
-                            Image(nsImage: liveThumbnail)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: proxy.size.width, height: proxy.size.height)
-                                .clipped()
-                                .transition(.opacity)
-
-                            Text("Live")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(.black.opacity(0.62), in: Capsule())
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                                .padding(8)
-                                .transition(.opacity.combined(with: .scale(scale: 0.9)))
-                        }
-
+                    Group {
                         if let icon = window.appIcon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 28, height: 28)
-                                .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
-                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                .padding(8)
+                            Image(nsImage: icon).resizable().scaledToFit().frame(width: 72, height: 72)
+                        } else {
+                            Image(systemName: "macwindow").font(.largeTitle)
                         }
                     }
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
+                    .opacity(window.thumbnailIsUsable && window.thumbnail != nil ? 0 : 1)
+
+                    if let image = window.thumbnail {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .opacity(window.thumbnailIsUsable ? 1 : 0)
+                    }
+                    if let liveThumbnail {
+                        Image(nsImage: liveThumbnail)
+                            .resizable()
+                            .scaledToFit()
+                            .transition(.opacity)
+
+                        Text("Live")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(.black.opacity(0.62), in: Capsule())
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                            .padding(8)
+                            .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                    }
+
+                    if let icon = window.appIcon {
+                        Image(nsImage: icon)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                            .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .padding(8)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .frame(height: thumbnailCellHeight)
+                .clipped()
                 .animation(.easeInOut(duration: 0.18), value: window.thumbnailRevision)
                 .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
-                .frame(maxWidth: .infinity)
-                .frame(height: thumbnailHeight)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.plain)
