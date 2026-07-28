@@ -123,13 +123,20 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
-            NSWorkspace.shared.openApplication(at: destinationURL, configuration: configuration) { _, error in
+            configuration.createsNewApplicationInstance = true
+            NSWorkspace.shared.openApplication(at: destinationURL, configuration: configuration) { application, error in
                 Task { @MainActor in
                     if let error {
                         self.errorMessage = L10n.format("Kehai was copied, but could not be reopened: %@", error.localizedDescription)
                         self.updateContent()
-                    } else {
+                    } else if let application,
+                              let launchedURL = application.bundleURL?.standardizedFileURL,
+                              launchedURL == destinationURL {
+                        application.activate(options: [.activateAllWindows])
                         NSApp.terminate(nil)
+                    } else {
+                        self.errorMessage = L10n.string("Kehai was copied, but macOS reopened the original copy. Open Kehai from Applications.")
+                        self.updateContent()
                     }
                 }
             }

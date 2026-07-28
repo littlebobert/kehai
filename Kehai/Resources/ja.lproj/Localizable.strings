@@ -85,6 +85,7 @@
 "Open source under the MIT License" = "MITライセンスのオープンソース";
 "Install Kehai" = "Kehaiをインストール";
 "Kehai was copied, but could not be reopened: %@" = "Kehaiはコピーされましたが、再度開けませんでした：%@";
+"Kehai was copied, but macOS reopened the original copy. Open Kehai from Applications." = "Kehaiはコピーされましたが、macOSが元のコピーを再度開きました。アプリケーションフォルダからKehaiを開いてください。";
 "Kehai could not be moved automatically. Move it to Applications in Finder, then open it again. %@" = "Kehaiを自動で移動できませんでした。Finderで「アプリケーション」に移動してから、もう一度開いてください。%@";
 "Move to Applications" = "アプリケーションに移動";
 "Copy Kehai to /Applications and reopen it from there." = "Kehaiを/Applicationsにコピーし、そこから開き直します。";
