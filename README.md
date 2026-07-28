@@ -2,6 +2,10 @@
 
 Mac utility for returning to interrupted work. See every current window, grouped intelligently by task instead of by app.
 
+## Download
+
+[Download Kehai 0.1.18 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.1.18/Kehai-0.1.18-mac.zip)
+
 ## Build and run
 
 ```bash

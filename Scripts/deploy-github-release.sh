@@ -192,6 +192,21 @@ PY
 
 "$ROOT_DIR/Scripts/bump-version.sh" "$VERSION" "$BUILD"
 
+python3 - "$ROOT_DIR/README.md" "$VERSION" "$DOWNLOAD_URL" <<'PY'
+from pathlib import Path
+import re, sys
+readme_path = Path(sys.argv[1])
+version = sys.argv[2]
+download_url = sys.argv[3]
+readme = readme_path.read_text()
+pattern = re.compile(r'\[Download Kehai [^]]+ for Apple Silicon\]\(https://github\.com/[^)]+/releases/download/[^/]+/Kehai-[^)]+-mac\.zip\)')
+replacement = f'[Download Kehai {version} for Apple Silicon]({download_url})'
+readme, count = pattern.subn(replacement, readme, count=1)
+if count != 1:
+    raise SystemExit("error: README download marker was not found exactly once")
+readme_path.write_text(readme)
+PY
+
 python3 - "$LANDING_PAGE" "$VERSION" "$DOWNLOAD_URL" "$NOTES_TRANSLATIONS_FILE" <<'PY'
 from pathlib import Path
 import html, json, re, sys
