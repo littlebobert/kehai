@@ -246,7 +246,7 @@ struct OverviewView: View {
             isHidden: model.isWindowHidden(window),
             canExcludeApp: model.canExcludeApp(window),
             select: { model.activate(window); close() },
-            hover: { model.hoverWindowInSwitcherMode(window.id) },
+            hoverChanged: { isHovering in model.hoverWindowInSwitcherMode(isHovering ? window.id : nil) },
             toggleHidden: { model.toggleHidden(window) },
             excludeApp: {
                 model.selectedWindowID = window.id
@@ -368,7 +368,7 @@ private struct WindowCard: View {
     let isHidden: Bool
     let canExcludeApp: Bool
     let select: () -> Void
-    let hover: () -> Void
+    let hoverChanged: (Bool) -> Void
     let toggleHidden: () -> Void
     let excludeApp: () -> Void
     let selectTab: (SafariTab) -> Void
@@ -487,9 +487,7 @@ private struct WindowCard: View {
                 .padding(1)
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
-        .onHover { isHovering in
-            if isHovering { hover() }
-        }
+        .onHover(perform: hoverChanged)
         .opacity(dusty ? 0.62 : 1)
     }
 }

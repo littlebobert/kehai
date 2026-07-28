@@ -14,9 +14,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let idleGroupingSettings = IdleGroupingSettings()
     private lazy var activityMonitor = ActivityMonitor(store: history)
     private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, aiExcludedAppStore: aiExcludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
-    private lazy var windowInventoryMonitor = WindowInventoryMonitor { [weak self] in
-        self?.viewModel.scheduleBackgroundInventoryReconciliation()
-    }
+    private lazy var windowInventoryMonitor = WindowInventoryMonitor(
+        changed: { [weak self] in
+            self?.viewModel.scheduleBackgroundInventoryReconciliation()
+        },
+        focusedWindowChanged: { [weak self] processID in
+            Task { await self?.activityMonitor.recordFocusedWindow(processID: processID) }
+        }
+    )
     private lazy var panelController = OverviewPanelController(model: viewModel, appearance: appearanceSettings)
     let shortcutSettings = ShortcutSettings()
     private lazy var onboardingController = OnboardingWindowController(

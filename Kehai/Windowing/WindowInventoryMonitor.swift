@@ -10,14 +10,19 @@ final class WindowInventoryMonitor {
     }
 
     private let changed: @MainActor () -> Void
+    private let focusedWindowChanged: @MainActor (pid_t) -> Void
     private var workspaceObservers: [NSObjectProtocol] = []
     private var applicationObservations: [pid_t: ApplicationObservation] = [:]
     private var reconciliationTimer: Timer?
     private var changeTask: Task<Void, Never>?
     private var isRunning = false
 
-    init(changed: @escaping @MainActor () -> Void) {
+    init(
+        changed: @escaping @MainActor () -> Void,
+        focusedWindowChanged: @escaping @MainActor (pid_t) -> Void
+    ) {
         self.changed = changed
+        self.focusedWindowChanged = focusedWindowChanged
     }
 
     func start() {
@@ -132,9 +137,10 @@ final class WindowInventoryMonitor {
         CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observation.observer), .commonModes)
     }
 
-    private func handleAXChange(processID: pid_t) {
+    private func handleAXChange(processID: pid_t, focusedWindowDidChange: Bool) {
         if processID != 0 {
             refreshWindowObservations(for: processID)
+            if focusedWindowDidChange { focusedWindowChanged(processID) }
         }
         scheduleChange()
     }
@@ -152,13 +158,14 @@ final class WindowInventoryMonitor {
         }
     }
 
-    private nonisolated static let axCallback: AXObserverCallback = { _, element, _, refcon in
+    private nonisolated static let axCallback: AXObserverCallback = { _, element, notification, refcon in
         guard let refcon else { return }
         var processID: pid_t = 0
         AXUIElementGetPid(element, &processID)
+        let focusedWindowDidChange = notification as String == kAXFocusedWindowChangedNotification as String
         let monitor = Unmanaged<WindowInventoryMonitor>.fromOpaque(refcon).takeUnretainedValue()
         Task { @MainActor in
-            monitor.handleAXChange(processID: processID)
+            monitor.handleAXChange(processID: processID, focusedWindowDidChange: focusedWindowDidChange)
         }
     }
 }

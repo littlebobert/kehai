@@ -514,10 +514,10 @@ final class OverviewViewModel {
         hoveredSwitcherWindowID = nil
     }
 
-    func hoverWindowInSwitcherMode(_ windowID: CGWindowID) {
+    func hoverWindowInSwitcherMode(_ windowID: CGWindowID?) {
         guard isSwitcherMode else { return }
         hoveredSwitcherWindowID = windowID
-        selectedWindowID = windowID
+        if let windowID { selectedWindowID = windowID }
     }
 
     @discardableResult
@@ -611,7 +611,7 @@ final class OverviewViewModel {
             let previousByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
             for index in items.indices {
                 if let previous = previousByID[items[index].id] {
-                    items[index].lastSeen = previous.lastSeen ?? items[index].lastSeen
+                    items[index].lastSeen = [previous.lastSeen, items[index].lastSeen].compactMap { $0 }.max()
                     items[index].thumbnail = previous.thumbnail
                     items[index].thumbnailIsUsable = previous.thumbnailIsUsable
                     items[index].thumbnailRevision = previous.thumbnailRevision

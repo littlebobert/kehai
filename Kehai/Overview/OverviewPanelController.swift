@@ -136,9 +136,35 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     private func installMouseMonitor() {
         guard mouseMonitor == nil else { return }
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            guard let self,
-                  event.window === self.window,
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .scrollWheel]) { [weak self] event in
+            guard let self, event.window === self.window else { return event }
+
+            if event.type == .scrollWheel,
+               self.model.isSwitcherMode,
+               !event.hasPreciseScrollingDeltas,
+               let window = self.window,
+               let contentView = window.contentView {
+                let location = contentView.convert(event.locationInWindow, from: nil)
+                var view = contentView.hitTest(location)
+                while let current = view, !(current is NSScrollView) {
+                    view = current.superview
+                }
+                if let scrollView = view as? NSScrollView,
+                   let documentView = scrollView.documentView {
+                    let clipView = scrollView.contentView
+                    let maximumY = max(0, documentView.bounds.height - clipView.bounds.height)
+                    let wheelDelta = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
+                        ? event.scrollingDeltaY
+                        : event.scrollingDeltaX
+                    let distance = wheelDelta * 18
+                    let targetY = min(max(clipView.bounds.origin.y - distance, 0), maximumY)
+                    clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: targetY))
+                    scrollView.reflectScrolledClipView(clipView)
+                    return nil
+                }
+            }
+
+            guard event.type == .leftMouseDown,
                   let window = self.window,
                   let editor = window.firstResponder as? NSTextView,
                   editor.isFieldEditor,
