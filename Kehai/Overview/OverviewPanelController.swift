@@ -9,7 +9,6 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var mouseMonitor: Any?
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
-    private var appliedGlassyBackground: Bool?
 
     init(model: OverviewViewModel, appearance: AppearanceSettings) {
         self.model = model
@@ -87,9 +86,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         window.setFrameAutosaveName(Self.frameAutosaveName)
         window.setFrameUsingName(Self.frameAutosaveName, force: false)
         window.contentView = NSHostingView(
-            rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
+            rootView: OverviewView(model: model, appearance: appearance) { [weak self] in self?.close() }
         )
-        appliedGlassyBackground = appearance.usesGlassyWindow
         window.delegate = self
         self.window = window
         updateAppearance()
@@ -108,13 +106,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func updateAppearance() {
         guard let window else { return }
+        window.titlebarAppearsTransparent = false
+        window.titlebarSeparatorStyle = .automatic
         window.isOpaque = true
         window.backgroundColor = .windowBackgroundColor
-        guard appliedGlassyBackground != appearance.usesGlassyWindow else { return }
-        appliedGlassyBackground = appearance.usesGlassyWindow
-        window.contentView = NSHostingView(
-            rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
-        )
     }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {

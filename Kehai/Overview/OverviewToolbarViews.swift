@@ -12,6 +12,7 @@ struct GroupingControl: View {
             .controlSize(.regular)
             .disabled(model.isLoading || model.isGrouping)
             .help("Use OpenAI with downsampled window screenshots to infer task groups · Command-R")
+            .frame(height: 24, alignment: .topLeading)
 
             HStack(spacing: 4) {
                 if let thumbnailStatus = model.thumbnailStatus {
@@ -31,9 +32,10 @@ struct GroupingControl: View {
                     }
                 }
             }
-            .font(.caption)
+            .font(.caption2)
             .foregroundStyle(.secondary)
             .lineLimit(1)
+            .padding(.leading, 7)
             .frame(height: 16, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -100,6 +102,7 @@ struct SearchControl: View {
                     .strokeBorder(isFocused ? Color.accentColor.opacity(0.75) : .clear, lineWidth: 1.5)
                     .allowsHitTesting(false)
             }
+            .frame(height: 24, alignment: .topLeading)
 
             HStack(spacing: 5) {
                 if model.isSmartSearching { ProgressView().controlSize(.mini) }
@@ -109,6 +112,7 @@ struct SearchControl: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .padding(.leading, 7)
+            .frame(height: 16, alignment: .leading)
         }
         .frame(minWidth: 180, idealWidth: 300, maxWidth: 380)
         .onChange(of: model.searchFocusRequest) {

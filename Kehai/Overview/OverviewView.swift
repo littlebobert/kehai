@@ -3,7 +3,7 @@ import SwiftUI
 
 struct OverviewView: View {
     @Bindable var model: OverviewViewModel
-    let usesGlassyBackground: Bool
+    @Bindable var appearance: AppearanceSettings
     let close: () -> Void
     @State private var gridWidth: CGFloat = 0
 
@@ -24,7 +24,7 @@ struct OverviewView: View {
     var body: some View {
         ZStack {
             Group {
-                if usesGlassyBackground {
+                if appearance.usesGlassyWindow {
                     Rectangle().fill(.ultraThinMaterial)
                 } else {
                     Color(nsColor: .windowBackgroundColor)
