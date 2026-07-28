@@ -8,6 +8,13 @@ struct OverviewView: View {
     @State private var gridWidth: CGFloat = 0
 
     private let gridSpacing: CGFloat = 18
+    private let taskTintPalette: [Color] = [
+        Color(red: 0.30, green: 0.58, blue: 0.96),
+        Color(red: 0.62, green: 0.46, blue: 0.88),
+        Color(red: 0.24, green: 0.70, blue: 0.60),
+        Color(red: 0.94, green: 0.59, blue: 0.28),
+        Color(red: 0.90, green: 0.43, blue: 0.61)
+    ]
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: model.thumbnailCardWidth, maximum: model.thumbnailCardWidth), spacing: gridSpacing)]
     }
@@ -49,13 +56,23 @@ struct OverviewView: View {
                 } else {
                     ScrollViewReader { scrollProxy in
                         ScrollView {
-                            LazyVStack(alignment: .leading, spacing: 8) {
-                                ForEach(model.windowSections) { section in
-                                    windowSection(section.title, windows: section.windows)
+                            Group {
+                                if model.usesTaskSectionLayout {
+                                    WrappingHStack(horizontalSpacing: gridSpacing, verticalSpacing: 20) {
+                                        ForEach(model.windowSections) { section in
+                                            taskSection(section, tint: taskTint(for: section))
+                                        }
+                                    }
+                                } else {
+                                    LazyVStack(alignment: .leading, spacing: 8) {
+                                        ForEach(model.windowSections) { section in
+                                            windowSection(section.title, windows: section.windows)
+                                        }
+                                    }
                                 }
                             }
-                            .padding(.horizontal, 36)
-                            .padding(.top, 2)
+                            .padding(.horizontal, 44)
+                            .padding(.top, 10)
                             .padding(.bottom, 30)
                             .animation(.easeInOut(duration: 0.14), value: model.viewMode)
                         }
@@ -157,6 +174,75 @@ struct OverviewView: View {
         if model.activateSelectedWindow() { close() }
     }
 
+    private var availableTaskWidth: CGFloat {
+        max(model.thumbnailCardWidth, gridWidth - 72)
+    }
+
+    private func taskColumnCount(for section: BrowserWindowSection) -> Int {
+        let availableColumns = max(1, Int((availableTaskWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing)))
+        return min(section.windows.count, availableColumns)
+    }
+
+    private func taskWidth(for section: BrowserWindowSection) -> CGFloat {
+        let count = taskColumnCount(for: section)
+        return CGFloat(count) * model.thumbnailCardWidth + CGFloat(max(0, count - 1)) * gridSpacing
+    }
+
+    private func taskTint(for section: BrowserWindowSection) -> Color? {
+        guard section.id != "other",
+              let index = model.visibleTaskColorAssignments[section.id] else { return nil }
+        return taskTintPalette[index % taskTintPalette.count]
+    }
+
+    @ViewBuilder
+    private func taskSection(_ section: BrowserWindowSection, tint: Color?) -> some View {
+        let columnCount = taskColumnCount(for: section)
+        let width = taskWidth(for: section)
+        VStack(alignment: .leading, spacing: 8) {
+            if let title = section.title {
+                Text(title)
+                    .font(.title2.bold())
+                    .lineLimit(1)
+            }
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(model.thumbnailCardWidth), spacing: gridSpacing), count: columnCount),
+                alignment: .leading,
+                spacing: gridSpacing
+            ) {
+                ForEach(section.windows) { window in
+                    windowCard(window, tint: tint)
+                }
+            }
+            .frame(width: width, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .frame(width: width, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private func windowCard(_ window: WindowItem, dusty: Bool = false, tint: Color? = nil) -> some View {
+        WindowCard(
+            window: window,
+            dusty: dusty,
+            tint: tint,
+            isSelected: model.selectedWindowID == window.id,
+            liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
+            thumbnailCellHeight: thumbnailCellHeight,
+            isHidden: model.isWindowHidden(window),
+            canExcludeApp: model.canExcludeApp(window),
+            select: { model.activate(window); close() },
+            toggleHidden: { model.toggleHidden(window) },
+            excludeApp: {
+                model.selectedWindowID = window.id
+                model.showActionChooserForSelectedWindow()
+            },
+            selectTab: { tab in Task { await model.activate(tab); close() } }
+        )
+        .frame(width: model.thumbnailCardWidth)
+        .id(window.id)
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
+
     @ViewBuilder
     private func windowSection(_ title: String?, windows: [WindowItem], dusty: Bool = false) -> some View {
         if !windows.isEmpty {
@@ -168,24 +254,7 @@ struct OverviewView: View {
                 }
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
                     ForEach(windows) { window in
-                        WindowCard(
-                            window: window,
-                            dusty: dusty,
-                            isSelected: model.selectedWindowID == window.id,
-                            liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
-                            thumbnailCellHeight: thumbnailCellHeight,
-                            isHidden: model.isWindowHidden(window),
-                            canExcludeApp: model.canExcludeApp(window),
-                            select: { model.activate(window); close() },
-                            toggleHidden: { model.toggleHidden(window) },
-                            excludeApp: {
-                                model.selectedWindowID = window.id
-                                model.showActionChooserForSelectedWindow()
-                            },
-                            selectTab: { tab in Task { await model.activate(tab); close() } }
-                        )
-                        .id(window.id)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        windowCard(window, dusty: dusty)
                     }
                 }
             }
@@ -261,6 +330,7 @@ private struct WindowActionChooser: View {
 private struct WindowCard: View {
     let window: WindowItem
     let dusty: Bool
+    let tint: Color?
     let isSelected: Bool
     let liveThumbnail: NSImage?
     let thumbnailCellHeight: CGFloat
@@ -362,7 +432,15 @@ private struct WindowCard: View {
             }
         }
         .padding(12)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .background {
+            if let tint {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(tint.opacity(0.14))
+            } else {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.regularMaterial)
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 15)
                 .strokeBorder(isSelected ? Color.accentColor.opacity(0.85) : .clear, lineWidth: 2)

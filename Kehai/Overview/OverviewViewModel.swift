@@ -100,6 +100,8 @@ final class OverviewViewModel {
     private static let thumbnailCardWidthKey = "overview.thumbnailCardWidth"
     private static let viewModeKey = "overview.viewMode"
     private static let automaticGroupingAttemptedKey = "grouping.automaticFirstRunAttempted"
+    private static let taskColorAssignmentsKey = "overview.taskColorAssignments.v1"
+    private static let taskColorCount = 5
     private static let defaultThumbnailCardWidth: CGFloat = 280
     private static let minimumThumbnailCardWidth: CGFloat = 200
     private static let maximumThumbnailCardWidth: CGFloat = 440
@@ -168,6 +170,29 @@ final class OverviewViewModel {
             sections.append(BrowserWindowSection(id: "other", title: L10n.string("Other Windows"), windows: otherWindows))
         }
         return sections
+    }
+
+    var usesTaskSectionLayout: Bool {
+        viewMode == .grouped && smartSearchWindowIDs == nil && !taskGroups.isEmpty
+    }
+
+    var visibleTaskColorAssignments: [String: Int] {
+        let taskIDs = windowSections.map(\.id).filter { $0 != "other" }
+        let activeTaskIDs = Set(taskGroups.map(\.id))
+        var assignments = UserDefaults.standard.dictionary(forKey: Self.taskColorAssignmentsKey)?
+            .compactMapValues { ($0 as? NSNumber)?.intValue } ?? [:]
+        assignments = assignments.filter { activeTaskIDs.contains($0.key) }
+
+        for (index, taskID) in taskIDs.enumerated() where assignments[taskID] == nil {
+            let previousColor = index > 0 ? assignments[taskIDs[index - 1]] : nil
+            let nextColor = index + 1 < taskIDs.count ? assignments[taskIDs[index + 1]] : nil
+            let unavailable = Set([previousColor, nextColor].compactMap { $0 })
+            assignments[taskID] = (0..<Self.taskColorCount).first { !unavailable.contains($0) }
+                ?? index % Self.taskColorCount
+        }
+
+        UserDefaults.standard.set(assignments, forKey: Self.taskColorAssignmentsKey)
+        return assignments
     }
 
     var orderedFilteredWindows: [WindowItem] {

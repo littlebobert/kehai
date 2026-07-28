@@ -16,6 +16,15 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { window?.isVisible == true }
 
+    private var minimumContentSize: NSSize {
+        NSSize(width: model.thumbnailCardWidth + 88, height: 490)
+    }
+
+    private func applyMinimumSize(to window: NSWindow) {
+        window.contentMinSize = minimumContentSize
+        window.minSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: minimumContentSize)).size
+    }
+
     func toggle() {
         if NSApp.isActive, window?.isVisible == true {
             close()
@@ -57,7 +66,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         window.titleVisibility = .visible
 
         window.isReleasedWhenClosed = false
-        window.minSize = NSSize(width: 360, height: 520)
+        applyMinimumSize(to: window)
         window.collectionBehavior = [.managed, .participatesInCycle]
         window.setFrame(screen.visibleFrame, display: false)
         window.contentView = NSHostingView(
@@ -84,6 +93,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         window.backgroundColor = .windowBackgroundColor
         window.contentView = NSHostingView(
             rootView: OverviewView(model: model, usesGlassyBackground: appearance.usesGlassyWindow) { [weak self] in self?.close() }
+        )
+    }
+
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        NSSize(
+            width: max(frameSize.width, sender.minSize.width),
+            height: max(frameSize.height, sender.minSize.height)
         )
     }
 
@@ -185,12 +201,14 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 withAnimation(.easeInOut(duration: 0.16)) {
                     self.model.resizeThumbnails(by: 1)
                 }
+                if let window = self.window { self.applyMinimumSize(to: window) }
                 return nil
             }
             if modifiers.contains(.command), event.charactersIgnoringModifiers == "-" {
                 withAnimation(.easeInOut(duration: 0.16)) {
                     self.model.resizeThumbnails(by: -1)
                 }
+                if let window = self.window { self.applyMinimumSize(to: window) }
                 return nil
             }
 
