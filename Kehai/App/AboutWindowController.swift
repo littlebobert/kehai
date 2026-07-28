@@ -31,6 +31,9 @@ struct AboutView: View {
             Link("Made in Japan", destination: URL(string: "https://littlebobert.github.io/kehai.html")!)
                 .font(.callout)
                 .foregroundStyle(.link)
+            Link("Open source under the MIT License", destination: URL(string: "https://github.com/littlebobert/kehai/blob/main/LICENSE")!)
+                .font(.caption)
+                .foregroundStyle(.link)
             Button("Report a Bug…") {
                 reportError = nil
                 reportBug()
@@ -42,7 +45,7 @@ struct AboutView: View {
                     .foregroundStyle(.red)
             }
         }
-        .frame(width: 320, height: 280)
+        .frame(width: 320, height: 300)
     }
 }
 
@@ -50,7 +53,7 @@ struct AboutView: View {
 final class AboutWindowController: NSWindowController, NSWindowDelegate {
     init(reportBug: @escaping () -> Void) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 300),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

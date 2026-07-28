@@ -32,6 +32,7 @@
 		9BA0D129A644C4FA7DB8D682 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */; };
 		9EA0833562F7A2A9BD35948D /* WindowModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E5FC5B0B6141C5383120D /* WindowModel.swift */; };
 		9F033371CC4A42572498CB77 /* OverviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */; };
+		A03895791FFD55AB82A99957 /* InstallationLocationWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B7F5A3BAD974CDB4BAC9ED1 /* InstallationLocationWindowController.swift */; };
 		A19A7D0DD4DA3D00CDF9BBB6 /* OverviewPanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */; };
 		A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */; };
 		A5D9BFA7FA425515479C1BE9 /* ShortcutSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30976D9013BB918B61B85C4F /* ShortcutSettings.swift */; };
@@ -64,6 +65,7 @@
 		0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewToolbarViews.swift; sourceTree = "<group>"; };
 		1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafeDiagnosticLog.swift; sourceTree = "<group>"; };
 		20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupingService.swift; sourceTree = "<group>"; };
+		2B7F5A3BAD974CDB4BAC9ED1 /* InstallationLocationWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InstallationLocationWindowController.swift; sourceTree = "<group>"; };
 		2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		30976D9013BB918B61B85C4F /* ShortcutSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutSettings.swift; sourceTree = "<group>"; };
 		373E32001D74645B747D9FE4 /* AutoUpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoUpdateService.swift; sourceTree = "<group>"; };
@@ -218,6 +220,7 @@
 				E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */,
 				4AF36828CD74B41607115C48 /* GlobalHotKey.swift */,
 				F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */,
+				2B7F5A3BAD974CDB4BAC9ED1 /* InstallationLocationWindowController.swift */,
 				621EE2F9EC9738189063682A /* KehaiApp.swift */,
 				38393B8C46910754A7D8E42E /* OnboardingWindowController.swift */,
 				A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */,
@@ -351,6 +354,7 @@
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
 				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,
 				6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */,
+				A03895791FFD55AB82A99957 /* InstallationLocationWindowController.swift in Sources */,
 				D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */,
 				C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */,
 				A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */,

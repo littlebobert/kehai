@@ -43,6 +43,15 @@ struct KehaiApp: App {
                 }
                 .keyboardShortcut("2", modifiers: .command)
                 Divider()
+                Button("Next App") {
+                    appDelegate.coordinator.cycleBrowserSelectionByApp(1)
+                }
+                .keyboardShortcut(.tab, modifiers: [])
+                Button("Previous App") {
+                    appDelegate.coordinator.cycleBrowserSelectionByApp(-1)
+                }
+                .keyboardShortcut(.tab, modifiers: .shift)
+                Divider()
                 Button("Regenerate Groups") {
                     appDelegate.coordinator.regenerateGroups()
                 }

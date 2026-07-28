@@ -222,6 +222,7 @@ private struct WindowActionChooser: View {
         case .removal:
             return [("Hide Window", "Hide only this window from the browser.")]
                 + (canExcludeApp ? [("Exclude App…", "Choose whether to exclude every \(window.appName) window from AI or Kehai.")] : [])
+                + [("Close Window", "Use \(window.appName)’s normal close action. Unsaved-work prompts appear in the app.")]
         case .exclusion:
             return (canExcludeFromAI ? [("From AI Only", "Keep \(window.appName) visible locally, but never send its data to OpenAI.")] : [])
                 + [("From Kehai Entirely", "Remove \(window.appName) and never capture or send it.")]
@@ -240,7 +241,9 @@ private struct WindowActionChooser: View {
                             Image(systemName: selectedIndex == index ? "circle.inset.filled" : "circle")
                                 .foregroundStyle(selectedIndex == index ? Color.accentColor : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(option.0).fontWeight(.medium)
+                                Text(option.0)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(option.0 == "Close Window" || option.0 == "From Kehai Entirely" ? Color.red : Color.primary)
                                 Text(option.1).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()

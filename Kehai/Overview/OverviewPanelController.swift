@@ -193,6 +193,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             guard !editingText else { return event }
 
+            if event.keyCode == 48, modifiers.isEmpty || modifiers == .shift {
+                self.model.cycleSelectionByApp(modifiers == .shift ? -1 : 1)
+                return nil
+            }
+
             if modifiers.isEmpty, event.keyCode == 51 {
                 self.model.showActionChooserForSelectedWindow()
                 return nil

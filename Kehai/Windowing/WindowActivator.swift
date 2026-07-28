@@ -20,12 +20,29 @@ final class WindowActivator {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
         app.activate(options: [.activateAllWindows])
         let application = AXUIElementCreateApplication(item.processID)
-        guard let windows: [AXUIElement] = value(application, attribute: kAXWindowsAttribute) else { return }
-        let best = windows.max { score($0, item) < score($1, item) }
-        guard let best else { return }
+        guard let best = matchingWindow(item, in: application) else { return }
         AXUIElementSetAttributeValue(best, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
         AXUIElementPerformAction(best, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, best)
+    }
+
+    @discardableResult
+    func close(_ item: WindowItem) -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: item.processID) else { return false }
+        let application = AXUIElementCreateApplication(item.processID)
+        guard let window = matchingWindow(item, in: application),
+              let closeButton: AXUIElement = value(window, attribute: kAXCloseButtonAttribute) else { return false }
+
+        app.activate(options: [.activateAllWindows])
+        AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, window)
+        return AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success
+    }
+
+    private func matchingWindow(_ item: WindowItem, in application: AXUIElement) -> AXUIElement? {
+        guard let windows: [AXUIElement] = value(application, attribute: kAXWindowsAttribute) else { return nil }
+        return windows.max { score($0, item) < score($1, item) }
     }
 
     private func score(_ element: AXUIElement, _ item: WindowItem) -> Double {

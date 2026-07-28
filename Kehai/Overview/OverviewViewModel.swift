@@ -247,9 +247,12 @@ final class OverviewViewModel {
             if actionChooserSelection == 0 {
                 if !isWindowHidden(window) { toggleHidden(window) }
                 dismissActionChooser()
-            } else {
+            } else if canExcludeApp(window), actionChooserSelection == 1 {
                 self.actionChooserStage = .exclusion
                 actionChooserSelection = 0
+            } else {
+                closeWindow(window)
+                dismissActionChooser()
             }
         case .exclusion:
             if canExcludeAppFromAI(window), actionChooserSelection == 0 {
@@ -273,7 +276,7 @@ final class OverviewViewModel {
     private var actionChooserOptionCount: Int {
         guard let window = actionChooserWindow, let actionChooserStage else { return 0 }
         switch actionChooserStage {
-        case .removal: return canExcludeApp(window) ? 2 : 1
+        case .removal: return canExcludeApp(window) ? 3 : 2
         case .exclusion: return canExcludeAppFromAI(window) ? 2 : 1
         }
     }
@@ -282,6 +285,12 @@ final class OverviewViewModel {
         actionChooserWindow = nil
         actionChooserStage = nil
         actionChooserSelection = 0
+    }
+
+    private func closeWindow(_ window: WindowItem) {
+        if !activator.close(window) {
+            errorMessage = "Kehai could not close this window."
+        }
     }
 
     func canExcludeApp(_ window: WindowItem) -> Bool {
@@ -386,6 +395,28 @@ final class OverviewViewModel {
               let targetWindow = sections[targetIndex].windows.first else { return false }
         selectedWindowID = targetWindow.id
         return true
+    }
+
+    func cycleSelectionByApp(_ direction: Int) {
+        guard direction != 0 else { return }
+        let visible = orderedFilteredWindows
+        guard !visible.isEmpty else { return }
+
+        let representatives = WindowItem.orderedByRecency(visible).reduce(into: [WindowItem]()) { result, window in
+            let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
+            let alreadyIncluded = result.contains {
+                ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey
+            }
+            if !alreadyIncluded { result.append(window) }
+        }
+        guard !representatives.isEmpty else { return }
+
+        let currentAppKey = selectedWindow.map { $0.bundleIdentifier ?? "pid:\($0.processID)" }
+        let currentIndex = currentAppKey.flatMap { key in
+            representatives.firstIndex { ($0.bundleIdentifier ?? "pid:\($0.processID)") == key }
+        } ?? (direction > 0 ? -1 : 0)
+        let targetIndex = (currentIndex + direction + representatives.count) % representatives.count
+        selectedWindowID = representatives[targetIndex].id
     }
 
     func moveSelection(horizontal: Int = 0, vertical: Int = 0, columnCount: Int) {

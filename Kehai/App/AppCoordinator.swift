@@ -47,8 +47,22 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var idleTimer: Timer?
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
+    private var hasStartedServices = false
+    private lazy var installationLocationController = InstallationLocationWindowController { [weak self] in
+        self?.startServices()
+    }
 
     func start() {
+        if InstallationLocationWindowController.shouldOfferMove {
+            installationLocationController.present()
+        } else {
+            startServices()
+        }
+    }
+
+    private func startServices() {
+        guard !hasStartedServices else { return }
+        hasStartedServices = true
         permissionManager.refresh()
         activityMonitor.start()
         registerHotKey()
@@ -64,6 +78,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     func stop() {
+        guard hasStartedServices else { return }
         hotKey.unregister()
         idleTimer?.invalidate()
         idleTimer = nil
@@ -227,6 +242,16 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     func setBrowserViewMode(_ mode: BrowserViewMode) {
         viewModel.setViewMode(mode)
+    }
+
+    func cycleBrowserSelectionByApp(_ direction: Int) {
+        permissionManager.refresh()
+        guard permissionManager.hasCorePermissions else {
+            showSettings()
+            return
+        }
+        panelController.show()
+        viewModel.cycleSelectionByApp(direction)
     }
 
     func regenerateGroups() {
