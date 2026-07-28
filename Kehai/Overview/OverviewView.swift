@@ -269,12 +269,15 @@ private struct WindowCard: View {
     let excludeApp: () -> Void
     let selectTab: (SafariTab) -> Void
 
+    private var capturedWindowCornerRadius: CGFloat {
+        min(8, max(4, thumbnailCellHeight * 0.025))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button(action: select) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.secondary.opacity(0.08))
+                    Color.clear
 
                     Group {
                         if let icon = window.appIcon {
@@ -289,12 +292,14 @@ private struct WindowCard: View {
                         Image(nsImage: image)
                             .resizable()
                             .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: capturedWindowCornerRadius))
                             .opacity(window.thumbnailIsUsable ? 1 : 0)
                     }
                     if let liveThumbnail {
                         Image(nsImage: liveThumbnail)
                             .resizable()
                             .scaledToFit()
+                            .clipShape(RoundedRectangle(cornerRadius: capturedWindowCornerRadius))
                             .transition(.opacity)
 
                         Text("Live")
@@ -321,6 +326,7 @@ private struct WindowCard: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: thumbnailCellHeight)
                 .clipped()
+                .contentShape(RoundedRectangle(cornerRadius: 10))
                 .animation(.easeInOut(duration: 0.18), value: window.thumbnailRevision)
                 .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
             }
