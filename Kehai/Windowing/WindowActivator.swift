@@ -27,17 +27,28 @@ final class WindowActivator {
     }
 
     @discardableResult
-    func close(_ item: WindowItem) -> Bool {
-        guard let app = NSRunningApplication(processIdentifier: item.processID) else { return false }
+    func close(_ item: WindowItem, completion: @escaping (Bool) -> Void) -> Bool {
         let application = AXUIElementCreateApplication(item.processID)
         guard let window = matchingWindow(item, in: application),
-              let closeButton: AXUIElement = value(window, attribute: kAXCloseButtonAttribute) else { return false }
+              let closeButton: AXUIElement = value(window, attribute: kAXCloseButtonAttribute),
+              AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success else { return false }
 
-        app.activate(options: [.activateAllWindows])
-        AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
-        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-        AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, window)
-        return AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self else { return }
+            let application = AXUIElementCreateApplication(item.processID)
+            if let remainingWindow = self.matchingWindow(item, in: application),
+               self.score(remainingWindow, item) >= 55,
+               let app = NSRunningApplication(processIdentifier: item.processID) {
+                completion(false)
+                app.activate(options: [.activateAllWindows])
+                AXUIElementPerformAction(remainingWindow, kAXRaiseAction as CFString)
+                AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, remainingWindow)
+            } else {
+                completion(true)
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+        return true
     }
 
     private func matchingWindow(_ item: WindowItem, in application: AXUIElement) -> AXUIElement? {

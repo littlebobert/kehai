@@ -245,14 +245,14 @@ final class OverviewViewModel {
         switch actionChooserStage {
         case .removal:
             if actionChooserSelection == 0 {
-                if !isWindowHidden(window) { toggleHidden(window) }
-                dismissActionChooser()
-            } else if canExcludeApp(window), actionChooserSelection == 1 {
-                self.actionChooserStage = .exclusion
-                actionChooserSelection = 0
-            } else {
                 closeWindow(window)
                 dismissActionChooser()
+            } else if actionChooserSelection == 1 {
+                if !isWindowHidden(window) { toggleHidden(window) }
+                dismissActionChooser()
+            } else {
+                self.actionChooserStage = .exclusion
+                actionChooserSelection = 0
             }
         case .exclusion:
             if canExcludeAppFromAI(window), actionChooserSelection == 0 {
@@ -267,7 +267,7 @@ final class OverviewViewModel {
     func cancelActionChooser() {
         if actionChooserStage == .exclusion {
             actionChooserStage = .removal
-            actionChooserSelection = 1
+            actionChooserSelection = 2
         } else {
             dismissActionChooser()
         }
@@ -288,7 +288,13 @@ final class OverviewViewModel {
     }
 
     private func closeWindow(_ window: WindowItem) {
-        if !activator.close(window) {
+        let started = activator.close(window) { [weak self] didClose in
+            guard let self, didClose else { return }
+            self.windows.removeAll { $0.id == window.id }
+            self.reconcileCachedGroups()
+            self.preserveSelectionOrSelectFirst()
+        }
+        if !started {
             errorMessage = "Kehai could not close this window."
         }
     }
