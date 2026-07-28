@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class InstallationLocationWindowController: NSWindowController, NSWindowDelegate {
-    private static let suppressMovePromptKey = "installation.suppressMovePrompt"
+    private static let suppressMovePromptKey = "installation.explicitlySuppressMovePrompt"
     private let continueLaunch: () -> Void
     private var keyMonitor: Any?
     private var selectedIndex = 0 {
@@ -138,7 +138,6 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
             }
             try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
             try Self.removeQuarantineAttributeRecursively(from: destinationURL)
-            UserDefaults.standard.set(true, forKey: Self.suppressMovePromptKey)
             NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
             installationComplete = true
             errorMessage = nil
