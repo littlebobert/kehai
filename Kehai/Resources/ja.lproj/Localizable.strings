@@ -90,6 +90,8 @@
 "Copy Kehai to /Applications and reopen it from there." = "Kehaiを/Applicationsにコピーし、そこから開き直します。";
 "Not Now" = "今はしない";
 "Continue running Kehai from its current location." = "現在の場所からKehaiを引き続き実行します。";
+"Don’t Ask Again" = "今後表示しない";
+"Continue from this location and stop showing this prompt." = "現在の場所から実行し、今後この確認を表示しません。";
 "Move Kehai to Applications?" = "Kehaiをアプリケーションに移動しますか？";
 "Running Kehai from Applications keeps permissions, updates, Dock shortcuts, and launches tied to one stable copy." = "Kehaiをアプリケーションフォルダから実行すると、権限、アップデート、Dockショートカット、起動先が1つの安定したコピーにまとまります。";
 "Use the arrow keys, then press Return. Escape chooses Not Now." = "矢印キーで選び、Returnを押してください。Escapeを押すと「今はしない」を選択します。";

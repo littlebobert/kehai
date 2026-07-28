@@ -3,6 +3,7 @@ import SwiftUI
 
 @MainActor
 final class InstallationLocationWindowController: NSWindowController, NSWindowDelegate {
+    private static let suppressMovePromptKey = "installation.suppressMovePrompt"
     private let continueLaunch: () -> Void
     private var keyMonitor: Any?
     private var selectedIndex = 0 {
@@ -13,7 +14,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
     init(continueLaunch: @escaping () -> Void) {
         self.continueLaunch = continueLaunch
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 250),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 330),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -33,7 +34,8 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
         #else
         let appURL = Bundle.main.bundleURL.standardizedFileURL
         let applicationsURL = URL(fileURLWithPath: "/Applications", isDirectory: true).standardizedFileURL
-        return appURL.deletingLastPathComponent() != applicationsURL
+        return !UserDefaults.standard.bool(forKey: suppressMovePromptKey)
+            && appURL.deletingLastPathComponent() != applicationsURL
         #endif
     }
 
@@ -77,7 +79,7 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
             case 123, 126:
                 self.selectedIndex = max(0, self.selectedIndex - 1)
             case 124, 125:
-                self.selectedIndex = min(1, self.selectedIndex + 1)
+                self.selectedIndex = min(2, self.selectedIndex + 1)
             default:
                 return event
             }
@@ -93,7 +95,15 @@ final class InstallationLocationWindowController: NSWindowController, NSWindowDe
     }
 
     private func confirmSelection() {
-        selectedIndex == 0 ? moveToApplications() : finishWithoutMoving()
+        switch selectedIndex {
+        case 0:
+            moveToApplications()
+        case 2:
+            UserDefaults.standard.set(true, forKey: Self.suppressMovePromptKey)
+            finishWithoutMoving()
+        default:
+            finishWithoutMoving()
+        }
     }
 
     private func finishWithoutMoving() {
@@ -138,7 +148,8 @@ private struct InstallationLocationView: View {
     private var choices: [(String, String)] {
         [
             (L10n.string("Move to Applications"), L10n.string("Copy Kehai to /Applications and reopen it from there.")),
-            (L10n.string("Not Now"), L10n.string("Continue running Kehai from its current location."))
+            (L10n.string("Not Now"), L10n.string("Continue running Kehai from its current location.")),
+            (L10n.string("Don’t Ask Again"), L10n.string("Continue from this location and stop showing this prompt."))
         ]
     }
 
@@ -148,6 +159,7 @@ private struct InstallationLocationView: View {
                 .font(.title2.weight(.semibold))
             Text("Running Kehai from Applications keeps permissions, updates, Dock shortcuts, and launches tied to one stable copy.")
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 6) {
                 ForEach(Array(choices.enumerated()), id: \.offset) { index, choice in
                     Button { choose(index) } label: {
@@ -156,7 +168,10 @@ private struct InstallationLocationView: View {
                                 .foregroundStyle(selectedIndex == index ? Color.accentColor : .secondary)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(choice.0).fontWeight(.medium)
-                                Text(choice.1).font(.caption).foregroundStyle(.secondary)
+                                Text(choice.1)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer()
                         }
@@ -167,14 +182,18 @@ private struct InstallationLocationView: View {
                 }
             }
             if let errorMessage {
-                Text(errorMessage).font(.caption).foregroundStyle(.red)
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("Use the arrow keys, then press Return. Escape chooses Not Now.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(20)
-        .frame(width: 460, height: 250)
+        .frame(width: 460, height: 330)
     }
 }
