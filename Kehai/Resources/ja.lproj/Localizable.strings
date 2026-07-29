@@ -146,6 +146,7 @@
 "Searching by meaning…" = "意味で検索中…";
 "No smart results" = "スマート検索の結果はありません";
 "Kehai could not close this window." = "Kehaiでこのウインドウを閉じられませんでした。";
+"Kehai could not quit this app." = "Kehaiでこのアプリを終了できませんでした。";
 "Analyzing %lld of %lld thumbnails…" = "%lld/%lld個のサムネイルを解析中…";
 "Refreshing windows and Safari tabs…" = "ウインドウとSafariのタブを更新中…";
 "Preparing screenshots…" = "スクリーンショットを準備中…";

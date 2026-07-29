@@ -363,12 +363,17 @@ final class OverviewViewModel {
         actionChooserSelection = 0
     }
 
-    private func closeWindow(_ window: WindowItem) {
-        let started = activator.close(window) { [weak self] didClose in
-            guard let self, didClose else { return }
-            self.windows.removeAll { $0.id == window.id }
-            self.reconcileCachedGroups()
-            self.preserveSelectionOrSelectFirst()
+    private func closeWindow(_ window: WindowItem, keepKehaiActive: Bool = true) {
+        let started = activator.close(window, keepKehaiActive: keepKehaiActive) { [weak self] didClose in
+            guard let self else { return }
+            if didClose {
+                self.windows.removeAll { $0.id == window.id }
+                self.reconcileCachedGroups()
+                self.preserveSelectionOrSelectFirst()
+            } else if keepKehaiActive {
+                // Unsaved-changes sheet likely appeared; stay in Kehai.
+                NSApp.activate(ignoringOtherApps: true)
+            }
         }
         if !started {
             errorMessage = L10n.string("Kehai could not close this window.")
@@ -684,11 +689,122 @@ final class OverviewViewModel {
             hoveredSwitcherWindowID = nil
         }
         guard let hoveredSwitcherWindowID,
-              let window = orderedFilteredWindows.first(where: { $0.id == hoveredSwitcherWindowID }) else {
+              let window = orderedFilteredWindows.first(where: { $0.id == hoveredSwitcherWindowID })
+                    ?? recentAppWindows.first(where: { $0.id == hoveredSwitcherWindowID }) else {
             return false
         }
         activate(window)
         return true
+    }
+
+    /// Command-Tab-style quit: quit the app for the hovered/selected item.
+    @discardableResult
+    func quitSelectedAppInSwitcherMode() -> Bool {
+        guard isSwitcherMode, let window = switcherTargetWindow(preferAppStrip: true) else { return false }
+        guard activator.quit(window) else {
+            errorMessage = L10n.string("Kehai could not quit this app.")
+            return false
+        }
+        let processID = window.processID
+        let bundleIdentifier = window.bundleIdentifier
+        windows.removeAll {
+            $0.processID == processID
+                || (bundleIdentifier != nil && $0.bundleIdentifier == bundleIdentifier)
+        }
+        reconcileCachedGroups()
+        selectedAppWindowID = nil
+        selectedWindowID = nil
+        hoveredSwitcherWindowID = nil
+        preserveSelectionOrSelectFirst()
+        SafeDiagnosticLog.shared.record("switcher: quit app")
+        return true
+    }
+
+    /// Close the hovered/selected window card (not an app-strip icon).
+    @discardableResult
+    func closeSelectedWindowInSwitcherMode() -> Bool {
+        guard isSwitcherMode else { return false }
+        // Prefer the window under the pointer; ignore app-strip selection for W.
+        let window: WindowItem?
+        if let hoveredSwitcherWindowID,
+           let hovered = windows.first(where: { $0.id == hoveredSwitcherWindowID })
+                ?? orderedFilteredWindows.first(where: { $0.id == hoveredSwitcherWindowID }) {
+            // If the hover target is only represented as an app icon (same id as strip),
+            // still allow closing that representative window.
+            window = hovered
+        } else if selectedAppWindowID == nil, let selectedWindowID {
+            window = windows.first(where: { $0.id == selectedWindowID })
+                ?? orderedFilteredWindows.first(where: { $0.id == selectedWindowID })
+        } else {
+            window = nil
+        }
+        guard let window else {
+            SafeDiagnosticLog.shared.record("switcher: close window missed target")
+            return false
+        }
+
+        // Optimistically drop the card so W feels immediate, like Command-Tab.
+        let closedID = window.id
+        windows.removeAll { $0.id == closedID }
+        if selectedWindowID == closedID { selectedWindowID = nil }
+        if hoveredSwitcherWindowID == closedID { hoveredSwitcherWindowID = nil }
+        reconcileCachedGroups()
+        preserveSelectionOrSelectFirst()
+
+        let started = activator.close(window, keepKehaiActive: true) { [weak self] didClose in
+            guard let self else { return }
+            if didClose {
+                // Already removed; keep selection coherent if inventory races.
+                self.windows.removeAll { $0.id == closedID }
+                self.reconcileCachedGroups()
+                self.preserveSelectionOrSelectFirst()
+                NSApp.activate(ignoringOtherApps: true)
+            } else {
+                // Close was blocked (e.g. unsaved changes). Restore the card and
+                // surface the target app so the user can respond to its prompt.
+                if !self.windows.contains(where: { $0.id == closedID }) {
+                    self.windows.insert(window, at: 0)
+                    self.reconcileCachedGroups()
+                }
+                self.selectedWindowID = closedID
+                self.activator.activate(window)
+            }
+        }
+        if !started {
+            if !windows.contains(where: { $0.id == closedID }) {
+                windows.insert(window, at: 0)
+                reconcileCachedGroups()
+            }
+            selectedWindowID = closedID
+            errorMessage = L10n.string("Kehai could not close this window.")
+            SafeDiagnosticLog.shared.record("switcher: close window failed to start")
+            return false
+        }
+        SafeDiagnosticLog.shared.record("switcher: close window")
+        return true
+    }
+
+    private func switcherTargetWindow(preferAppStrip: Bool) -> WindowItem? {
+        if preferAppStrip, let selectedAppWindowID,
+           let window = recentAppWindows.first(where: { $0.id == selectedAppWindowID })
+                ?? windows.first(where: { $0.id == selectedAppWindowID }) {
+            return window
+        }
+        if let hoveredSwitcherWindowID {
+            return windows.first(where: { $0.id == hoveredSwitcherWindowID })
+                ?? orderedFilteredWindows.first(where: { $0.id == hoveredSwitcherWindowID })
+                ?? recentAppWindows.first(where: { $0.id == hoveredSwitcherWindowID })
+        }
+        if let selectedWindowID,
+           let window = windows.first(where: { $0.id == selectedWindowID })
+                ?? orderedFilteredWindows.first(where: { $0.id == selectedWindowID }) {
+            return window
+        }
+        if let selectedAppWindowID {
+            return recentAppWindows.first(where: { $0.id == selectedAppWindowID })
+                ?? windows.first(where: { $0.id == selectedAppWindowID })
+        }
+        return nil
     }
 
     func prepareForPresentation(selectedGroupID: String? = nil) {

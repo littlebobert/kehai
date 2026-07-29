@@ -206,6 +206,23 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 }
                 return nil
             }
+            // Switcher Q/W: allow optional Shift (users often still hold ⌘⇧ from the hotkey).
+            // Swallow before AppKit menu Close (⌘W) can dismiss Kehai itself.
+            if self.model.isSwitcherMode,
+               modifiers.contains(.command),
+               !modifiers.contains(.control),
+               !modifiers.contains(.option) {
+                let character = event.charactersIgnoringModifiers?.lowercased()
+                // keyCode fallbacks: 12 = Q, 13 = W (ANSI).
+                if character == "q" || event.keyCode == 12 {
+                    _ = self.model.quitSelectedAppInSwitcherMode()
+                    return nil
+                }
+                if character == "w" || event.keyCode == 13 {
+                    _ = self.model.closeSelectedWindowInSwitcherMode()
+                    return nil
+                }
+            }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "f" {
                 self.model.searchFocusRequest += 1

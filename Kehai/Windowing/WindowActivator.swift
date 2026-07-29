@@ -27,33 +27,89 @@ final class WindowActivator {
     }
 
     @discardableResult
-    func close(_ item: WindowItem, completion: @escaping (Bool) -> Void) -> Bool {
+    func close(
+        _ item: WindowItem,
+        keepKehaiActive: Bool = true,
+        completion: @escaping (Bool) -> Void
+    ) -> Bool {
         let application = AXUIElementCreateApplication(item.processID)
-        guard let window = matchingWindow(item, in: application),
-              let closeButton: AXUIElement = value(window, attribute: kAXCloseButtonAttribute),
-              AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success else { return false }
+        guard let window = matchingWindow(item, in: application) else { return false }
+        // Raise within the app's AX hierarchy without activating it, so the
+        // close button is actionable while Kehai stays frontmost in switcher mode.
+        AXUIElementSetAttributeValue(window, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        guard pressClose(on: window) else { return false }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self else { return }
             let application = AXUIElementCreateApplication(item.processID)
-            if let remainingWindow = self.matchingWindow(item, in: application),
-               self.score(remainingWindow, item) >= 55,
-               let app = NSRunningApplication(processIdentifier: item.processID) {
+            let stillPresent: Bool = {
+                if let byID = self.matchingWindow(item, in: application),
+                   self.windowNumber(of: byID) == item.id {
+                    return true
+                }
+                if let remainingWindow = self.matchingWindow(item, in: application),
+                   self.score(remainingWindow, item) >= 55 {
+                    return true
+                }
+                return false
+            }()
+            if stillPresent {
                 completion(false)
-                app.activate(options: [.activateAllWindows])
-                AXUIElementPerformAction(remainingWindow, kAXRaiseAction as CFString)
-                AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, remainingWindow)
+                if keepKehaiActive {
+                    NSApp.activate(ignoringOtherApps: true)
+                } else if let remainingWindow = self.matchingWindow(item, in: application),
+                          let app = NSRunningApplication(processIdentifier: item.processID) {
+                    app.activate(options: [.activateAllWindows])
+                    AXUIElementPerformAction(remainingWindow, kAXRaiseAction as CFString)
+                    AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, remainingWindow)
+                }
             } else {
                 completion(true)
-                NSApp.activate(ignoringOtherApps: true)
+                if keepKehaiActive {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
             }
         }
         return true
     }
 
+    @discardableResult
+    func quit(_ item: WindowItem) -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: item.processID),
+              !app.isTerminated else { return false }
+        return app.terminate()
+    }
+
+    private func pressClose(on window: AXUIElement) -> Bool {
+        if let closeButton: AXUIElement = value(window, attribute: kAXCloseButtonAttribute),
+           AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success {
+            return true
+        }
+        // Some apps expose a Cancel action on sheets / utility windows.
+        if AXUIElementPerformAction(window, kAXCancelAction as CFString) == .success {
+            return true
+        }
+        return false
+    }
+
     private func matchingWindow(_ item: WindowItem, in application: AXUIElement) -> AXUIElement? {
         guard let windows: [AXUIElement] = value(application, attribute: kAXWindowsAttribute) else { return nil }
+        if let byNumber = windows.first(where: { windowNumber(of: $0) == item.id }) {
+            return byNumber
+        }
         return windows.max { score($0, item) < score($1, item) }
+    }
+
+    private func windowNumber(of element: AXUIElement) -> CGWindowID? {
+        // Public AX attribute that matches CGWindowID on modern macOS.
+        if let number: NSNumber = value(element, attribute: "AXWindowNumber") {
+            return CGWindowID(number.uint32Value)
+        }
+        if let number: Int = value(element, attribute: "AXWindowNumber") {
+            return CGWindowID(number)
+        }
+        return nil
     }
 
     private func score(_ element: AXUIElement, _ item: WindowItem) -> Double {

@@ -47,6 +47,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private lazy var hotKey = GlobalHotKey(
         pressed: { [weak self] in self?.beginSwitcherMode() },
         released: { [weak self] in
+            // Only finish on key-up when the shortcut has no modifiers (key alone).
+            // With ⌘⇧Space, Space may release while modifiers stay down for hover/Q/W.
             guard let self, self.shortcutModifierFlags.isEmpty else { return }
             self.finishSwitcherMode()
         }
@@ -155,9 +157,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         removeModifierMonitor()
         let requiredFlags = shortcutModifierFlags
         guard !requiredFlags.isEmpty else { return }
+        // Stay in switcher while *any* of the shortcut modifiers is still held.
+        // That lets users release Shift from ⌘⇧Space and keep Command for hover + Q/W
+        // (Command-Tab style), then release the last modifier to activate.
         let handleFlags: (NSEvent) -> Void = { [weak self] event in
             let heldFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-            if !heldFlags.isSuperset(of: requiredFlags) {
+            if heldFlags.intersection(requiredFlags).isEmpty {
                 Task { @MainActor [weak self] in self?.finishSwitcherMode() }
             }
         }
