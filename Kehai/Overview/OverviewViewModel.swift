@@ -168,9 +168,27 @@ final class OverviewViewModel {
 
     var recentAppWindows: [WindowItem] {
         _ = hiddenWindowsRevision
-        return WindowItem.orderedByRecency(windows.filter { window in
+        let eligibleWindows = windows.filter { window in
             !excludeHiddenWindows || !hiddenWindowStore.isHidden(window)
-        }).reduce(into: [WindowItem]()) { result, window in
+        }
+        let contextualWindows: [WindowItem]
+        if let smartSearchWindowIDs {
+            let windowsByID = Dictionary(uniqueKeysWithValues: eligibleWindows.map { ($0.id, $0) })
+            contextualWindows = smartSearchWindowIDs.compactMap { windowsByID[$0] }
+        } else if !query.isEmpty {
+            contextualWindows = WindowItem.orderedByRecency(eligibleWindows.filter { window in
+                window.title.localizedCaseInsensitiveContains(query)
+                    || window.appName.localizedCaseInsensitiveContains(query)
+                    || window.safariTabs.contains {
+                        $0.title.localizedCaseInsensitiveContains(query)
+                            || $0.url.localizedCaseInsensitiveContains(query)
+                    }
+            })
+        } else {
+            contextualWindows = WindowItem.orderedByRecency(eligibleWindows)
+        }
+
+        return contextualWindows.reduce(into: [WindowItem]()) { result, window in
             let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
             guard !result.contains(where: {
                 ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey

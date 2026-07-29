@@ -133,27 +133,40 @@ struct OverviewView: View {
         }
     }
 
+    @ViewBuilder
     private var recentAppsStrip: some View {
-        WrappingHStack(horizontalSpacing: 12, verticalSpacing: 8) {
-            ForEach(model.recentAppWindows) { window in
-                RecentAppButton(
-                    window: window,
-                    isSelected: model.selectedAppWindowID == window.id,
-                    activate: {
-                        model.selectedWindowID = nil
-                        model.selectedAppWindowID = window.id
-                        model.activate(window)
-                        close()
-                    },
-                    hoverChanged: { isHovering in
-                        model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
-                    }
-                )
+        if model.recentAppWindows.isEmpty, !model.query.isEmpty {
+            HStack(spacing: 6) {
+                if model.isSmartSearching { ProgressView().controlSize(.mini) }
+                Text(model.isSmartSearching ? "Finding matching apps…" : "No matching apps")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            .padding(.horizontal, 30)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            WrappingHStack(horizontalSpacing: 12, verticalSpacing: 8) {
+                ForEach(model.recentAppWindows) { window in
+                    RecentAppButton(
+                        window: window,
+                        isSelected: model.selectedAppWindowID == window.id,
+                        activate: {
+                            model.selectedWindowID = nil
+                            model.selectedAppWindowID = window.id
+                            model.activate(window)
+                            close()
+                        },
+                        hoverChanged: { isHovering in
+                            model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 30)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 30)
-        .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var controlBar: some View {
