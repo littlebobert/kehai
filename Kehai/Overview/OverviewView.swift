@@ -36,8 +36,7 @@ struct OverviewView: View {
                 searchHeader
 
                 recentAppsStrip
-                    .padding(.leading, 20)
-                    .padding(.trailing, 30)
+                    .padding(.horizontal, 30)
 
                 controlBar
                     .padding(.horizontal, 30)
@@ -164,7 +163,7 @@ struct OverviewView: View {
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                WrappingHStack(horizontalSpacing: 12, verticalSpacing: 8) {
+                WrappingHStack(horizontalSpacing: 4, verticalSpacing: 8) {
                     ForEach(model.recentAppWindows) { window in
                         RecentAppButton(
                             window: window,
@@ -228,7 +227,8 @@ struct OverviewView: View {
     }
 
     private func updateAppColumnCount(_ width: CGFloat) {
-        model.keyboardAppColumnCount = max(1, Int((max(0, width) + 12) / 92))
+        // Cell ≈ 72pt label + 4pt horizontal padding; 4pt gap between cells.
+        model.keyboardAppColumnCount = max(1, Int((max(0, width) + 4) / 80))
     }
 
     private func openSelectedWindow() {
@@ -423,7 +423,7 @@ private struct RecentAppButton: View {
                     .truncationMode(.tail)
                     .frame(width: 72)
             }
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 2)
             .padding(.vertical, 3)
             .background {
                 RoundedRectangle(cornerRadius: 12)
