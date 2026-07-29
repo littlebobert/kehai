@@ -14,6 +14,7 @@ struct KehaiApp: App {
                 aiExcludedApps: appDelegate.coordinator.aiExcludedAppStore,
                 permissionManager: appDelegate.coordinator.permissionManager,
                 openAIKeyStore: appDelegate.coordinator.openAIKeyStore,
+                anthropicKeyStore: appDelegate.coordinator.anthropicKeyStore,
                 safariService: appDelegate.coordinator.safari,
                 shortcutChanged: appDelegate.coordinator.registerHotKey,
                 appearanceChanged: appDelegate.coordinator.refreshBrowserAppearance,

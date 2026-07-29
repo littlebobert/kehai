@@ -6,14 +6,27 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let permissionManager = PermissionManager()
     let safari = SafariTabService()
     private let history = ActivityStore()
-    let openAIKeyStore = OpenAIKeyStore()
+    let openAIKeyStore = APIKeyStore.openAI()
+    let anthropicKeyStore = APIKeyStore.anthropic()
     let excludedAppStore = ExcludedAppStore()
     let aiExcludedAppStore = AIExcludedAppStore()
     let autoUpdates = AutoUpdateService()
     let appearanceSettings = AppearanceSettings()
     let idleGroupingSettings = IdleGroupingSettings()
     private lazy var activityMonitor = ActivityMonitor(store: history)
-    private lazy var viewModel = OverviewViewModel(catalog: WindowCatalog(excludedApps: excludedAppStore), thumbnails: ThumbnailService(), safari: safari, history: history, grouping: TaskGroupingService(), openAIKeyStore: openAIKeyStore, excludedAppStore: excludedAppStore, aiExcludedAppStore: aiExcludedAppStore, activator: WindowActivator(), activityMonitor: activityMonitor)
+    private lazy var viewModel = OverviewViewModel(
+        catalog: WindowCatalog(excludedApps: excludedAppStore),
+        thumbnails: ThumbnailService(),
+        safari: safari,
+        history: history,
+        grouping: TaskGroupingService(),
+        openAIKeyStore: openAIKeyStore,
+        anthropicKeyStore: anthropicKeyStore,
+        excludedAppStore: excludedAppStore,
+        aiExcludedAppStore: aiExcludedAppStore,
+        activator: WindowActivator(),
+        activityMonitor: activityMonitor
+    )
     private lazy var windowInventoryMonitor = WindowInventoryMonitor(
         changed: { [weak self] in
             self?.viewModel.scheduleBackgroundInventoryReconciliation()
@@ -28,6 +41,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         permissionManager: permissionManager,
         safariService: safari,
         openAIKeyStore: openAIKeyStore,
+        anthropicKeyStore: anthropicKeyStore,
         proceed: { [weak self] in self?.panelController.show() }
     )
     private lazy var hotKey = GlobalHotKey(
@@ -49,6 +63,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         aiExcludedApps: aiExcludedAppStore,
         permissionManager: permissionManager,
         openAIKeyStore: openAIKeyStore,
+        anthropicKeyStore: anthropicKeyStore,
         safariService: safari,
         shortcutChanged: { [weak self] in self?.registerHotKey() },
         appearanceChanged: { [weak self] in self?.refreshBrowserAppearance() },
@@ -104,6 +119,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         idleTimer = nil
         activityMonitor.stop()
         windowInventoryMonitor.stop()
+        viewModel.prepareForTermination()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
     }
 
@@ -270,6 +286,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         Task { await viewModel.refresh() }
     }
 
+    private var hasConfiguredAIKey: Bool {
+        switch AIProvider.current {
+        case .openAI: openAIKeyStore.hasKey
+        case .anthropic: anthropicKeyStore.hasKey
+        }
+    }
+
     func updateIdleGroupingMonitoring() {
         idleTimer?.invalidate()
         idleTimer = nil
@@ -293,7 +316,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         }
         guard !handledCurrentIdlePeriod,
               permissionManager.hasCorePermissions,
-              openAIKeyStore.hasKey,
+              hasConfiguredAIKey,
               !viewModel.isLoading,
               !viewModel.isGrouping else { return }
         handledCurrentIdlePeriod = true

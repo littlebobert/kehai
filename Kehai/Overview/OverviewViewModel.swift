@@ -91,7 +91,7 @@ final class OverviewViewModel {
     var thumbnailStatus: String?
     var refreshingThumbnailWindowIDs: Set<CGWindowID> = []
     var errorMessage: String?
-    var openAIErrorMessage: String?
+    var aiErrorMessage: String?
 
     private var hasPerformedInitialRefresh = false
     private var isPerformingInitialRefresh = false
@@ -103,7 +103,8 @@ final class OverviewViewModel {
     private let history: ActivityStore
     private let grouping: TaskGroupingService
     private let smartSearch = SmartSearchService()
-    private let openAIKeyStore: OpenAIKeyStore
+    private let openAIKeyStore: APIKeyStore
+    private let anthropicKeyStore: APIKeyStore
     private let excludedAppStore: ExcludedAppStore
     private let aiExcludedAppStore: AIExcludedAppStore
     private let activator: WindowActivator
@@ -122,7 +123,7 @@ final class OverviewViewModel {
     private static let minimumThumbnailCardWidth: CGFloat = 200
     private static let maximumThumbnailCardWidth: CGFloat = 440
 
-    init(catalog: WindowCatalog, thumbnails: ThumbnailService, safari: SafariTabService, history: ActivityStore, grouping: TaskGroupingService, openAIKeyStore: OpenAIKeyStore, excludedAppStore: ExcludedAppStore, aiExcludedAppStore: AIExcludedAppStore, activator: WindowActivator, activityMonitor: ActivityMonitor) {
+    init(catalog: WindowCatalog, thumbnails: ThumbnailService, safari: SafariTabService, history: ActivityStore, grouping: TaskGroupingService, openAIKeyStore: APIKeyStore, anthropicKeyStore: APIKeyStore, excludedAppStore: ExcludedAppStore, aiExcludedAppStore: AIExcludedAppStore, activator: WindowActivator, activityMonitor: ActivityMonitor) {
         let defaults = UserDefaults.standard
         let savedWidth = defaults.double(forKey: Self.thumbnailCardWidthKey)
         thumbnailCardWidth = savedWidth > 0 ? CGFloat(savedWidth) : Self.defaultThumbnailCardWidth
@@ -131,7 +132,13 @@ final class OverviewViewModel {
             ? true
             : defaults.bool(forKey: Self.excludeHiddenWindowsKey)
         self.catalog = catalog; self.thumbnails = thumbnails; self.safari = safari; self.history = history
-        self.grouping = grouping; self.openAIKeyStore = openAIKeyStore; self.excludedAppStore = excludedAppStore; self.aiExcludedAppStore = aiExcludedAppStore; self.activator = activator; self.activityMonitor = activityMonitor
+        self.grouping = grouping
+        self.openAIKeyStore = openAIKeyStore
+        self.anthropicKeyStore = anthropicKeyStore
+        self.excludedAppStore = excludedAppStore
+        self.aiExcludedAppStore = aiExcludedAppStore
+        self.activator = activator
+        self.activityMonitor = activityMonitor
         hasGeneratedGroups = taskGroupCache.hasCache
         groupsGeneratedAt = taskGroupCache.generatedAt
     }
@@ -244,6 +251,7 @@ final class OverviewViewModel {
         smartSearchStatus = L10n.string("Searching by meaning…")
         errorMessage = nil
         do {
+            let credentials = try currentAICredentials()
             let resultIDs = try await smartSearch.search(
                 query: query,
                 windows: windows.filter {
@@ -251,7 +259,8 @@ final class OverviewViewModel {
                         && !aiExcludedAppStore.contains(bundleIdentifier: $0.bundleIdentifier)
                 },
                 groups: taskGroups,
-                apiKey: openAIKeyStore.apiKey
+                provider: credentials.provider,
+                apiKey: credentials.apiKey
             )
             smartSearchWindowIDs = resultIDs
             smartSearchStatus = L10n.string(resultIDs.isEmpty ? "No smart results" : "Smart Results")
@@ -260,7 +269,7 @@ final class OverviewViewModel {
         } catch {
             smartSearchWindowIDs = nil
             smartSearchStatus = nil
-            openAIErrorMessage = error.localizedDescription
+            aiErrorMessage = error.localizedDescription
             SafeDiagnosticLog.shared.record("smart-search: failed")
         }
         isSmartSearching = false
@@ -427,6 +436,17 @@ final class OverviewViewModel {
         Task { await liveThumbnails.stop() }
     }
 
+    /// Synchronously tears down any active capture so nothing outlives the
+    /// process during app termination.
+    func prepareForTermination() {
+        liveThumbnailTask?.cancel()
+        liveThumbnailTask = nil
+        liveThumbnailWindowID = nil
+        liveThumbnail = nil
+        liveThumbnailEnabled = false
+        liveThumbnails.prepareForTermination()
+    }
+
     private func scheduleSelectedLiveThumbnail() {
         stopLiveThumbnail()
         guard liveThumbnailEnabled,
@@ -511,12 +531,13 @@ final class OverviewViewModel {
             selectedWindowID = nil
             return
         }
+        let visualRows = keyboardWindowRows(columnCount: columnCount)
         if vertical < 0,
            let selectedWindowID,
-           let selectedIndex = visible.firstIndex(where: { $0.id == selectedWindowID }),
-           selectedIndex < max(columnCount, 1),
+           let firstRow = visualRows.first,
+           let selectedColumn = firstRow.firstIndex(where: { $0.id == selectedWindowID }),
            !recentAppWindows.isEmpty {
-            let targetIndex = min(selectedIndex, recentAppWindows.count - 1)
+            let targetIndex = min(selectedColumn, recentAppWindows.count - 1)
             self.selectedWindowID = nil
             selectedAppWindowID = recentAppWindows[targetIndex].id
             return
@@ -543,11 +564,10 @@ final class OverviewViewModel {
             if apps.indices.contains(targetIndex) {
                 selectedAppWindowID = apps[targetIndex].id
             } else {
-                let windows = orderedFilteredWindows
-                guard !windows.isEmpty else { return }
-                let windowIndex = min(currentIndex % columns, windows.count - 1)
+                guard let firstRow = keyboardWindowRows(columnCount: keyboardColumnCount).first else { return }
+                let windowIndex = min(currentIndex % columns, firstRow.count - 1)
                 selectedAppWindowID = nil
-                selectedWindowID = windows[windowIndex].id
+                selectedWindowID = firstRow[windowIndex].id
             }
             return
         }
@@ -561,35 +581,53 @@ final class OverviewViewModel {
     }
 
     private func moveSelectionVertically(_ direction: Int, columnCount: Int) -> Bool {
-        let sections = windowSections
+        let rows = keyboardWindowRows(columnCount: columnCount)
         guard let selectedWindowID,
-              let sectionIndex = sections.firstIndex(where: { section in
-                  section.windows.contains { $0.id == selectedWindowID }
-              }),
-              let itemIndex = sections[sectionIndex].windows.firstIndex(where: { $0.id == selectedWindowID }) else {
+              let rowIndex = rows.firstIndex(where: { row in row.contains { $0.id == selectedWindowID } }),
+              let columnIndex = rows[rowIndex].firstIndex(where: { $0.id == selectedWindowID }) else {
             return false
         }
-
-        let columns = max(columnCount, 1)
-        let targetInSection = itemIndex + direction * columns
-        if sections[sectionIndex].windows.indices.contains(targetInSection) {
-            self.selectedWindowID = sections[sectionIndex].windows[targetInSection].id
-            return true
-        }
-
-        let adjacentSectionIndex = sectionIndex + direction
-        guard sections.indices.contains(adjacentSectionIndex) else { return true }
-        let column = itemIndex % columns
-        let adjacentWindows = sections[adjacentSectionIndex].windows
-        let targetIndex: Int
-        if direction > 0 {
-            targetIndex = min(column, adjacentWindows.count - 1)
-        } else {
-            let lastRowStart = ((adjacentWindows.count - 1) / columns) * columns
-            targetIndex = min(lastRowStart + column, adjacentWindows.count - 1)
-        }
-        self.selectedWindowID = adjacentWindows[targetIndex].id
+        let targetRowIndex = rowIndex + direction
+        guard rows.indices.contains(targetRowIndex) else { return true }
+        let targetRow = rows[targetRowIndex]
+        self.selectedWindowID = targetRow[min(columnIndex, targetRow.count - 1)].id
         return true
+    }
+
+    private func keyboardWindowRows(columnCount: Int) -> [[WindowItem]] {
+        let columns = max(columnCount, 1)
+        guard usesTaskSectionLayout else {
+            return stride(from: 0, to: orderedFilteredWindows.count, by: columns).map { start in
+                Array(orderedFilteredWindows[start..<min(start + columns, orderedFilteredWindows.count)])
+            }
+        }
+
+        var rows: [[WindowItem]] = []
+        var currentRow: [WindowItem] = []
+        var remainingSlots = columns
+        for section in windowSections {
+            var remainingWindows = section.windows
+            while !remainingWindows.isEmpty {
+                if remainingWindows.count <= columns,
+                   remainingWindows.count > remainingSlots,
+                   remainingSlots < columns {
+                    rows.append(currentRow)
+                    currentRow = []
+                    remainingSlots = columns
+                }
+                let count = min(remainingWindows.count, remainingSlots)
+                currentRow.append(contentsOf: remainingWindows.prefix(count))
+                remainingWindows.removeFirst(count)
+                remainingSlots -= count
+                if remainingSlots == 0 {
+                    rows.append(currentRow)
+                    currentRow = []
+                    remainingSlots = columns
+                }
+            }
+        }
+        if !currentRow.isEmpty { rows.append(currentRow) }
+        return rows
     }
 
     var selectedWindow: WindowItem? {
@@ -840,7 +878,7 @@ final class OverviewViewModel {
         let defaults = UserDefaults.standard
         guard !taskGroupCache.hasCache,
               !defaults.bool(forKey: Self.automaticGroupingAttemptedKey),
-              openAIKeyStore.hasKey,
+              hasConfiguredAIKey,
               windows.count >= 2 else { return }
         defaults.set(true, forKey: Self.automaticGroupingAttemptedKey)
         SafeDiagnosticLog.shared.record("grouping: automatic first-run generation started")
@@ -865,6 +903,7 @@ final class OverviewViewModel {
         groupingStatus = L10n.string("Preparing screenshots…")
         errorMessage = nil
         do {
+            let credentials = try currentAICredentials()
             let generated = try await grouping.groups(
                 for: windows.filter {
                     !hiddenWindowStore.isHidden($0)
@@ -874,7 +913,8 @@ final class OverviewViewModel {
                     !excludedAppStore.contains(appName: $0.appName)
                         && !aiExcludedAppStore.contains(appName: $0.appName)
                 },
-                apiKey: openAIKeyStore.apiKey,
+                provider: credentials.provider,
+                apiKey: credentials.apiKey,
                 progress: { [weak self] status in self?.groupingStatus = status }
             )
             taskGroups = generated
@@ -887,7 +927,7 @@ final class OverviewViewModel {
             }
             hasGeneratedGroups = true
         } catch {
-            openAIErrorMessage = error.localizedDescription
+            aiErrorMessage = error.localizedDescription
         }
         groupingStatus = nil
         isGrouping = false
@@ -897,5 +937,25 @@ final class OverviewViewModel {
 
     func activate(_ tab: SafariTab) async {
         do { try await safari.activate(tab) } catch { errorMessage = error.localizedDescription }
+    }
+
+    private var hasConfiguredAIKey: Bool {
+        switch AIProvider.current {
+        case .openAI: openAIKeyStore.hasKey
+        case .anthropic: anthropicKeyStore.hasKey
+        }
+    }
+
+    private func currentAICredentials() throws -> (provider: AIProvider, apiKey: String) {
+        let provider = AIProvider.current
+        let keyStore = switch provider {
+        case .openAI: openAIKeyStore
+        case .anthropic: anthropicKeyStore
+        }
+        let apiKey = keyStore.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !apiKey.isEmpty else {
+            throw TaskGroupingService.GroupingError.missingAPIKey
+        }
+        return (provider, apiKey)
     }
 }

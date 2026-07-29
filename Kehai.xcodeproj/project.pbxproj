@@ -12,12 +12,13 @@
 		0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */; };
 		10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */; };
 		231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */; };
-		26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */; };
 		29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */; };
+		3640ADB8CDEBD61BDD4779E1 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */; };
 		377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */; };
 		37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */; };
 		3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF36828CD74B41607115C48 /* GlobalHotKey.swift */; };
 		3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */; };
+		45B5DA8381693472971A4F02 /* AIProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 584098EB25E73AD7A58C80FE /* AIProvider.swift */; };
 		4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD56318C0B786481A7DDEFB /* AppearanceSettings.swift */; };
 		5237186877B286D004B95E8F /* SafeDiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ED420E516D54658E9EDC632 /* SafeDiagnosticLog.swift */; };
 		5C5D13DABD3074C2A0993400 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 70EFEF0B56A45347356BE54D /* Localizable.strings */; };
@@ -79,12 +80,13 @@
 		3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityMonitor.swift; sourceTree = "<group>"; };
 		3DAC3BCBF37ED6DAA797DA79 /* KehaiTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KehaiTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCoordinator.swift; sourceTree = "<group>"; };
+		40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		4AF36828CD74B41607115C48 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
+		584098EB25E73AD7A58C80FE /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
 		5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCatalog.swift; sourceTree = "<group>"; };
 		5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupCache.swift; sourceTree = "<group>"; };
 		5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivator.swift; sourceTree = "<group>"; };
 		621EE2F9EC9738189063682A /* KehaiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiApp.swift; sourceTree = "<group>"; };
-		6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeyStore.swift; sourceTree = "<group>"; };
 		6EEF963F2217DDBE06F29587 /* ActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStore.swift; sourceTree = "<group>"; };
 		70EFEF0B56A45347356BE54D /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInventoryMonitor.swift; sourceTree = "<group>"; };
@@ -143,7 +145,8 @@
 		3DCF5395836948366350CB6B /* Intelligence */ = {
 			isa = PBXGroup;
 			children = (
-				6E8327C8E5609C57D264D57E /* OpenAIKeyStore.swift */,
+				584098EB25E73AD7A58C80FE /* AIProvider.swift */,
+				40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */,
 				F83DC4DA61575FD4312E376C /* SmartSearchService.swift */,
 				5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */,
 				20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */,
@@ -357,6 +360,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				45B5DA8381693472971A4F02 /* AIProvider.swift in Sources */,
+				3640ADB8CDEBD61BDD4779E1 /* APIKeyStore.swift in Sources */,
 				10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */,
 				0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */,
 				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
@@ -374,7 +379,6 @@
 				C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */,
 				5D6CB92656365F9393F3501D /* Localization.swift in Sources */,
 				A5B4F0E5AF28DC8507A561CD /* OnboardingWindowController.swift in Sources */,
-				26A90E279A4C1CDC4EEBF66E /* OpenAIKeyStore.swift in Sources */,
 				A19A7D0DD4DA3D00CDF9BBB6 /* OverviewPanelController.swift in Sources */,
 				FE3852AC0962F0A243173825 /* OverviewToolbarViews.swift in Sources */,
 				74738DD10716F4ED75D0AB4D /* OverviewView.swift in Sources */,

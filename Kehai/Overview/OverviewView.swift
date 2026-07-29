@@ -33,10 +33,14 @@ struct OverviewView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 3) {
-                controlBar
-                    .padding(.horizontal, 30)
+                searchHeader
 
                 recentAppsStrip
+                    .padding(.leading, 20)
+                    .padding(.trailing, 30)
+
+                controlBar
+                    .padding(.horizontal, 30)
 
                 if let error = model.errorMessage {
                     Text(error)
@@ -123,49 +127,71 @@ struct OverviewView: View {
             model.keyboardColumnCount = gridColumnCount
         }
         .animation(.easeInOut(duration: 0.16), value: model.thumbnailCardWidth)
-        .alert("OpenAI request failed", isPresented: Binding(
-            get: { model.openAIErrorMessage != nil },
-            set: { if !$0 { model.openAIErrorMessage = nil } }
+        .alert("AI request failed", isPresented: Binding(
+            get: { model.aiErrorMessage != nil },
+            set: { if !$0 { model.aiErrorMessage = nil } }
         )) {
-            Button("OK") { model.openAIErrorMessage = nil }
+            Button("OK") { model.aiErrorMessage = nil }
         } message: {
-            Text(model.openAIErrorMessage ?? "OpenAI returned an unexpected error.")
+            Text(model.aiErrorMessage ?? "The AI provider returned an unexpected error.")
         }
     }
 
-    @ViewBuilder
+    private var searchHeader: some View {
+        HStack {
+            SearchControl(model: model, submit: openSelectedWindow)
+                .frame(width: 328)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 30)
+        .padding(.top, 5)
+    }
+
+    /// Height of a single app-icon row (icon 46 + spacing 3 + caption ~13 +
+    /// button padding 6 + strip padding 10), reserved up front so the
+    /// controls below don't jump when the icons load in.
+    private var recentAppsRowHeight: CGFloat { 78 }
+
     private var recentAppsStrip: some View {
-        if model.recentAppWindows.isEmpty, !model.query.isEmpty {
-            HStack(spacing: 6) {
-                if model.isSmartSearching { ProgressView().controlSize(.mini) }
-                Text(model.isSmartSearching ? "Finding matching apps…" : "No matching apps")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            WrappingHStack(horizontalSpacing: 12, verticalSpacing: 8) {
-                ForEach(model.recentAppWindows) { window in
-                    RecentAppButton(
-                        window: window,
-                        isSelected: model.selectedAppWindowID == window.id,
-                        activate: {
-                            model.selectedWindowID = nil
-                            model.selectedAppWindowID = window.id
-                            model.activate(window)
-                            close()
-                        },
-                        hoverChanged: { isHovering in
-                            model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
-                        }
-                    )
+        Group {
+            if model.recentAppWindows.isEmpty, !model.query.isEmpty {
+                HStack(spacing: 6) {
+                    if model.isSmartSearching { ProgressView().controlSize(.mini) }
+                    Text(model.isSmartSearching ? "Finding matching apps…" : "No matching apps")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
+                .padding(.vertical, 14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                WrappingHStack(horizontalSpacing: 12, verticalSpacing: 8) {
+                    ForEach(model.recentAppWindows) { window in
+                        RecentAppButton(
+                            window: window,
+                            isSelected: model.selectedAppWindowID == window.id,
+                            activate: {
+                                model.selectedWindowID = nil
+                                model.selectedAppWindowID = window.id
+                                model.activate(window)
+                                close()
+                            },
+                            hoverChanged: { isHovering in
+                                model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
+                            }
+                        )
+                    }
+                }
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 30)
-            .padding(.vertical, 5)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minHeight: recentAppsRowHeight, alignment: .leading)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { updateAppColumnCount(proxy.size.width) }
+                    .onChange(of: proxy.size.width) { _, width in updateAppColumnCount(width) }
+            }
         }
     }
 
@@ -173,17 +199,15 @@ struct OverviewView: View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 12) {
                 GroupingControl(model: model)
+                Spacer(minLength: 12)
                 ViewModeControl(model: model)
                 HiddenWindowsControl(model: model)
-                Spacer(minLength: 12)
-                SearchControl(model: model, submit: openSelectedWindow)
             }
 
             WrappingHStack(horizontalSpacing: 12, verticalSpacing: 10) {
                 GroupingControl(model: model)
                 ViewModeControl(model: model)
                 HiddenWindowsControl(model: model)
-                SearchControl(model: model, submit: openSelectedWindow)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -192,7 +216,10 @@ struct OverviewView: View {
     private func updateGridWidth(_ width: CGFloat) {
         gridWidth = width
         model.keyboardColumnCount = gridColumnCount
-        model.keyboardAppColumnCount = max(1, Int((max(0, width - 60) + 12) / 92))
+    }
+
+    private func updateAppColumnCount(_ width: CGFloat) {
+        model.keyboardAppColumnCount = max(1, Int((max(0, width) + 12) / 92))
     }
 
     private func openSelectedWindow() {
@@ -339,6 +366,25 @@ private struct RecentAppButton: View {
     let activate: () -> Void
     let hoverChanged: (Bool) -> Void
 
+    private var displayAppName: String {
+        let maximumWidth: CGFloat = 72
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        ]
+        func width(of text: String) -> CGFloat {
+            (text as NSString).size(withAttributes: attributes).width
+        }
+
+        guard width(of: window.appName) > maximumWidth else { return window.appName }
+        let words = window.appName.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard words.count > 1 else { return window.appName }
+        for count in stride(from: words.count - 1, through: 1, by: -1) {
+            let candidate = words.prefix(count).joined(separator: " ") + "…"
+            if width(of: candidate) <= maximumWidth { return candidate }
+        }
+        return window.appName
+    }
+
     var body: some View {
         Button(action: activate) {
             VStack(spacing: 3) {
@@ -356,7 +402,7 @@ private struct RecentAppButton: View {
                 }
                 .frame(width: 46, height: 46)
 
-                Text(window.appName)
+                Text(displayAppName)
                     .font(.caption2)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -398,7 +444,7 @@ private struct WindowActionChooser: View {
                 (L10n.string("Hide Window in Kehai"), L10n.string("Hide only this window from the browser."), false)
             ] + (canExcludeApp ? [(L10n.string("Exclude App…"), L10n.format("Choose whether to exclude every %@ window from AI or Kehai.", window.appName), false)] : [])
         case .exclusion:
-            return (canExcludeFromAI ? [(L10n.string("From AI Only"), L10n.format("Keep %@ visible locally, but never send its data to OpenAI.", window.appName), false)] : [])
+            return (canExcludeFromAI ? [(L10n.string("From AI Only"), L10n.format("Keep %@ visible locally, but never send its data to AI.", window.appName), false)] : [])
                 + [(L10n.string("From Kehai Entirely"), L10n.format("Remove %@ and never capture or send it.", window.appName), true)]
         }
     }

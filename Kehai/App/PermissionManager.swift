@@ -8,13 +8,14 @@ final class PermissionManager {
     private enum AttemptKey {
         static let screenCapture = "permissionAttempted.screenCapture"
         static let accessibility = "permissionAttempted.accessibility"
+        static let safariAutomationGranted = "permission.safariAutomationGranted"
     }
 
     var screenCaptureGranted = false
     var accessibilityGranted = false
     var screenCaptureAttempted = UserDefaults.standard.bool(forKey: AttemptKey.screenCapture)
     var accessibilityAttempted = UserDefaults.standard.bool(forKey: AttemptKey.accessibility)
-    var safariAutomationStatus = "Optional"
+    var safariAutomationStatus = UserDefaults.standard.bool(forKey: AttemptKey.safariAutomationGranted) ? "Granted" : "Optional"
     var safariAutomationError: String?
 
     var hasCorePermissions: Bool {
@@ -46,8 +47,10 @@ final class PermissionManager {
             do {
                 try await service.requestAutomationAccess()
                 safariAutomationStatus = "Granted"
+                UserDefaults.standard.set(true, forKey: AttemptKey.safariAutomationGranted)
             } catch {
                 safariAutomationStatus = "Needs permission"
+                UserDefaults.standard.set(false, forKey: AttemptKey.safariAutomationGranted)
                 safariAutomationError = error.localizedDescription
             }
         }

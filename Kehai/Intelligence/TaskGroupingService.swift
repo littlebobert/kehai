@@ -16,9 +16,9 @@ final class TaskGroupingService {
 
         var errorDescription: String? {
             switch self {
-            case .missingAPIKey: L10n.string("Add an OpenAI API key in Setup & Permissions first.")
-            case .invalidResponse: L10n.string("OpenAI returned an unexpected response.")
-            case .requestFailed(let status, let message): L10n.format("OpenAI request failed (%lld): %@", Int64(status), message)
+            case .missingAPIKey: L10n.string("Add an API key in Settings > AI first.")
+            case .invalidResponse: L10n.string("The AI provider returned an unexpected response.")
+            case .requestFailed(let status, let message): L10n.format("AI request failed (%lld): %@", Int64(status), message)
             }
         }
     }
@@ -34,6 +34,7 @@ final class TaskGroupingService {
     func groups(
         for windows: [WindowItem],
         events: [ActivityEvent],
+        provider: AIProvider,
         apiKey: String,
         progress: (String) -> Void
     ) async throws -> [TaskGroup] {
@@ -61,15 +62,6 @@ final class TaskGroupingService {
         \(recentTrail)
         """
 
-        var content: [[String: Any]] = [["type": "input_text", "text": prompt]]
-        for window in windows.prefix(12) {
-            guard window.thumbnailIsUsable,
-                  let thumbnail = window.thumbnail,
-                  let encoded = jpegDataURL(for: thumbnail) else { continue }
-            content.append(["type": "input_text", "text": "Screenshot for window ID \(window.id):"])
-            content.append(["type": "input_image", "image_url": encoded, "detail": "low"])
-        }
-
         let schema: [String: Any] = [
             "type": "object",
             "properties": [
@@ -89,6 +81,35 @@ final class TaskGroupingService {
             "required": ["groups"],
             "additionalProperties": false
         ]
+
+        progress(L10n.string("Uploading and analyzing…"))
+        let text: String
+        switch provider {
+        case .openAI:
+            text = try await openAIGroupsJSON(prompt: prompt, windows: windows, schema: schema, apiKey: key)
+        case .anthropic:
+            text = try await anthropicGroupsJSON(prompt: prompt, windows: windows, schema: schema, apiKey: key)
+        }
+        progress(L10n.string("Applying groups…"))
+        guard let json = text.data(using: .utf8) else { throw GroupingError.invalidResponse }
+        let generated = try JSONDecoder().decode(GeneratedGroups.self, from: json)
+        return Self.sanitize(generated.groups.map { ($0.name, $0.windowIDs) }, validWindowIDs: Set(windows.map(\.id)))
+    }
+
+    private func openAIGroupsJSON(
+        prompt: String,
+        windows: [WindowItem],
+        schema: [String: Any],
+        apiKey: String
+    ) async throws -> String {
+        var content: [[String: Any]] = [["type": "input_text", "text": prompt]]
+        for window in windows.prefix(12) {
+            guard window.thumbnailIsUsable,
+                  let thumbnail = window.thumbnail,
+                  let encoded = jpegDataURL(for: thumbnail) else { continue }
+            content.append(["type": "input_text", "text": "Screenshot for window ID \(window.id):"])
+            content.append(["type": "input_image", "image_url": encoded, "detail": "low"])
+        }
         let body: [String: Any] = [
             "model": "gpt-5.6-terra",
             "store": false,
@@ -96,33 +117,79 @@ final class TaskGroupingService {
             "input": [["role": "user", "content": content]],
             "text": ["format": ["type": "json_schema", "name": "task_groups", "strict": true, "schema": schema]]
         ]
-
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/responses")!)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 90
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        progress(L10n.string("Uploading and analyzing…"))
         let (data, response) = try await URLSession.shared.data(for: request)
-        progress(L10n.string("Applying groups…"))
         guard let http = response as? HTTPURLResponse else { throw GroupingError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
-            let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let error = object?["error"] as? [String: Any]
-            throw GroupingError.requestFailed(http.statusCode, error?["message"] as? String ?? L10n.string("Unknown error"))
+            throw GroupingError.requestFailed(http.statusCode, openAIErrorMessage(from: data))
         }
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let output = object["output"] as? [[String: Any]],
               let message = output.first(where: { $0["type"] as? String == "message" }),
               let parts = message["content"] as? [[String: Any]],
-              let text = parts.first(where: { $0["type"] as? String == "output_text" })?["text"] as? String,
-              let json = text.data(using: .utf8) else {
+              let text = parts.first(where: { $0["type"] as? String == "output_text" })?["text"] as? String else {
             throw GroupingError.invalidResponse
         }
-        let generated = try JSONDecoder().decode(GeneratedGroups.self, from: json)
-        return Self.sanitize(generated.groups.map { ($0.name, $0.windowIDs) }, validWindowIDs: Set(windows.map(\.id)))
+        return text
+    }
+
+    private func anthropicGroupsJSON(
+        prompt: String,
+        windows: [WindowItem],
+        schema: [String: Any],
+        apiKey: String
+    ) async throws -> String {
+        var content: [[String: Any]] = [["type": "text", "text": prompt]]
+        for window in windows.prefix(12) {
+            guard window.thumbnailIsUsable,
+                  let thumbnail = window.thumbnail,
+                  let encoded = jpegBase64(for: thumbnail) else { continue }
+            content.append(["type": "text", "text": "Screenshot for window ID \(window.id):"])
+            content.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": encoded
+                ]
+            ])
+        }
+        let body: [String: Any] = [
+            "model": "claude-opus-5",
+            "max_tokens": 4096,
+            "messages": [["role": "user", "content": content]],
+            "output_config": [
+                "format": [
+                    "type": "json_schema",
+                    "schema": schema
+                ]
+            ]
+        ]
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "POST"
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 90
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw GroupingError.invalidResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            throw GroupingError.requestFailed(http.statusCode, anthropicErrorMessage(from: data))
+        }
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let parts = object["content"] as? [[String: Any]],
+              let text = parts.first(where: { $0["type"] as? String == "text" })?["text"] as? String else {
+            throw GroupingError.invalidResponse
+        }
+        return text
     }
 
     nonisolated static func sanitize(_ groups: [(String, [Int])], validWindowIDs: Set<UInt32>) -> [TaskGroup] {
@@ -134,7 +201,28 @@ final class TaskGroupingService {
         }
     }
 
+    private func openAIErrorMessage(from data: Data) -> String {
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let error = object?["error"] as? [String: Any]
+        return error?["message"] as? String ?? L10n.string("Unknown error")
+    }
+
+    private func anthropicErrorMessage(from data: Data) -> String {
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let error = object?["error"] as? [String: Any]
+        return error?["message"] as? String ?? L10n.string("Unknown error")
+    }
+
     private func jpegDataURL(for image: NSImage) -> String? {
+        guard let data = jpegData(for: image) else { return nil }
+        return "data:image/jpeg;base64,\(data.base64EncodedString())"
+    }
+
+    private func jpegBase64(for image: NSImage) -> String? {
+        jpegData(for: image)?.base64EncodedString()
+    }
+
+    private func jpegData(for image: NSImage) -> Data? {
         var proposed = CGRect(origin: .zero, size: image.size)
         guard let source = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil) else { return nil }
         let maximum = CGSize(width: 448, height: 280)
@@ -154,7 +242,6 @@ final class TaskGroupingService {
         context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
         guard let resized = context.makeImage() else { return nil }
         let representation = NSBitmapImageRep(cgImage: resized)
-        guard let data = representation.representation(using: .jpeg, properties: [.compressionFactor: 0.55]) else { return nil }
-        return "data:image/jpeg;base64,\(data.base64EncodedString())"
+        return representation.representation(using: .jpeg, properties: [.compressionFactor: 0.55])
     }
 }

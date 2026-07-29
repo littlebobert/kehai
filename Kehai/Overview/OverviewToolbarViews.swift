@@ -11,7 +11,7 @@ struct GroupingControl: View {
             .buttonStyle(.bordered)
             .controlSize(.regular)
             .disabled(model.isLoading || model.isGrouping)
-            .help("Use OpenAI with downsampled window screenshots to infer task groups · Command-R")
+            .help("Use AI with downsampled window screenshots to infer task groups · Command-R")
             .frame(height: 24, alignment: .topLeading)
 
             HStack(spacing: 4) {
@@ -72,12 +72,19 @@ struct HiddenWindowsControl: View {
 struct SearchControl: View {
     @Bindable var model: OverviewViewModel
     let submit: () -> Void
+    @AppStorage("permission.safariAutomationGranted") private var safariAutomationGranted = false
     @FocusState private var isFocused: Bool
+
+    private var searchPrompt: String {
+        L10n.string(safariAutomationGranted
+            ? "Search windows, Safari tabs, and apps"
+            : "Search windows and apps")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 0) {
-                TextField("Search windows and Safari tabs", text: $model.query)
+                TextField(searchPrompt, text: $model.query)
                     .textFieldStyle(.roundedBorder)
                     .focused($isFocused)
                     .onSubmit(submit)

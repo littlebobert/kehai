@@ -18,7 +18,7 @@ Mac utility for returning to interrupted work. See every current window, grouped
 - **Accessibility** — opens the selected window.
 - **Automation → Safari** *(optional)* — shows and activates individual Safari tabs.
 
-An OpenAI API key is required to generate task groups.
+An OpenAI or Anthropic API key is required to generate task groups.
 
 ## Known limitations
 

@@ -74,6 +74,20 @@ final class LiveThumbnailService {
         try? await stream.stopCapture()
         logger.notice("Live capture stopped")
     }
+
+    /// Best-effort synchronous teardown for app termination, where awaiting
+    /// an async `stop()` would never get a chance to run before process exit.
+    func prepareForTermination() {
+        generation += 1
+        guard let stream else {
+            output = nil
+            return
+        }
+        self.stream = nil
+        output = nil
+        stream.stopCapture { _ in }
+        logger.notice("Live capture stopped for termination")
+    }
 }
 
 private final class LiveStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {

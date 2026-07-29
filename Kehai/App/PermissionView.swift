@@ -3,8 +3,17 @@ import SwiftUI
 struct PermissionView: View {
     @Bindable var permissionManager: PermissionManager
     var safariService: SafariTabService?
-    @Bindable var openAIKeyStore: OpenAIKeyStore
+    @Bindable var openAIKeyStore: APIKeyStore
+    @Bindable var anthropicKeyStore: APIKeyStore
     var close: () -> Void
+    @State private var selectedProvider = AIProvider.current
+
+    private var activeKeyStore: APIKeyStore {
+        switch selectedProvider {
+        case .openAI: openAIKeyStore
+        case .anthropic: anthropicKeyStore
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -44,20 +53,35 @@ struct PermissionView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("OpenAI")
+                Text("AI Provider")
                     .font(.headline)
-                SecureField("API key", text: $openAIKeyStore.apiKey)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { openAIKeyStore.save() }
+                Picker("Provider", selection: $selectedProvider) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: selectedProvider) { _, provider in
+                    AIProvider.current = provider
+                }
+
+                SecureField("API key", text: Binding(
+                    get: { activeKeyStore.apiKey },
+                    set: { activeKeyStore.apiKey = $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { activeKeyStore.save() }
+
                 HStack {
-                    Text(L10n.string(openAIKeyStore.hasUnsavedChanges ? "Save this key to your login Keychain." : openAIKeyStore.hasKey ? "Saved in your login Keychain. Window metadata and downsampled screenshots are sent when you refresh groups." : "Required for AI task grouping. Stored in your login Keychain."))
+                    Text(L10n.string(apiKeyHelpText))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Save Key") { openAIKeyStore.save() }
-                        .disabled(!openAIKeyStore.canSave)
+                    Button("Save Key") { activeKeyStore.save() }
+                        .disabled(!activeKeyStore.canSave)
                 }
-                if let saveError = openAIKeyStore.saveError {
+                if let saveError = activeKeyStore.saveError {
                     Text(saveError).font(.caption).foregroundStyle(.red)
                 }
             }
@@ -99,7 +123,25 @@ struct PermissionView: View {
             }
         }
         .padding(22)
-        .onAppear { permissionManager.refresh() }
+        .onAppear {
+            permissionManager.refresh()
+            selectedProvider = AIProvider.current
+        }
+    }
+
+    private var apiKeyHelpText: String {
+        if activeKeyStore.hasUnsavedChanges {
+            return "Save this key to your login Keychain."
+        }
+        if activeKeyStore.hasKey {
+            return selectedProvider == .anthropic
+                ? "Saved in your login Keychain. Window metadata and downsampled screenshots are sent to Anthropic when you refresh groups."
+                : "Saved in your login Keychain. Window metadata and downsampled screenshots are sent when you refresh groups."
+        }
+        return L10n.format(
+            "Required for AI task grouping with %@. Stored in your login Keychain.",
+            selectedProvider.modelDisplayName
+        )
     }
 
     private var readyLabel: some View {

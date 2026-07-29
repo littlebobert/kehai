@@ -9,12 +9,14 @@ struct SettingsView: View {
     @Bindable var excludedApps: ExcludedAppStore
     @Bindable var aiExcludedApps: AIExcludedAppStore
     @Bindable var permissionManager: PermissionManager
-    @Bindable var openAIKeyStore: OpenAIKeyStore
+    @Bindable var openAIKeyStore: APIKeyStore
+    @Bindable var anthropicKeyStore: APIKeyStore
     let safariService: SafariTabService
     let shortcutChanged: () -> Void
     let appearanceChanged: () -> Void
     let idleGroupingChanged: () -> Void
     let exclusionsChanged: () -> Void
+    @State private var selectedProvider = AIProvider.current
 
     var body: some View {
         TabView {
@@ -29,7 +31,15 @@ struct SettingsView: View {
             privacySettings
                 .tabItem { Label("Exclusions", systemImage: "hand.raised") }
         }
-        .frame(width: 560, height: 420)
+        .frame(width: 560, height: 460)
+        .onAppear { selectedProvider = AIProvider.current }
+    }
+
+    private var activeKeyStore: APIKeyStore {
+        switch selectedProvider {
+        case .openAI: openAIKeyStore
+        case .anthropic: anthropicKeyStore
+        }
     }
 
     private var generalSettings: some View {
@@ -126,25 +136,47 @@ struct SettingsView: View {
 
     private var aiSettings: some View {
         Form {
-            Section("OpenAI API Key") {
-                SecureField("API key", text: $openAIKeyStore.apiKey)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit { openAIKeyStore.save() }
+            Section("Provider") {
+                Picker("AI provider", selection: $selectedProvider) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: selectedProvider) { _, provider in
+                    AIProvider.current = provider
+                }
+                Text(L10n.format("Uses %@ for task groups and Smart Search.", selectedProvider.modelDisplayName))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(selectedProvider == .anthropic ? "Anthropic API Key" : "OpenAI API Key") {
+                SecureField("API key", text: Binding(
+                    get: { activeKeyStore.apiKey },
+                    set: { activeKeyStore.apiKey = $0 }
+                ))
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { activeKeyStore.save() }
                 HStack {
-                    Text(L10n.string(openAIKeyStore.hasUnsavedChanges ? "Save your changes to the login Keychain." : openAIKeyStore.hasSavedKey ? "Saved in your login Keychain." : "Required to generate task groups and use Smart Search."))
+                    Text(L10n.string(activeKeyStore.hasUnsavedChanges
+                        ? "Save your changes to the login Keychain."
+                        : activeKeyStore.hasSavedKey
+                            ? "Saved in your login Keychain."
+                            : "Required to generate task groups and use Smart Search."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    if openAIKeyStore.hasSavedKey {
+                    if activeKeyStore.hasSavedKey {
                         Button("Remove Key") {
-                            openAIKeyStore.apiKey = ""
-                            openAIKeyStore.save()
+                            activeKeyStore.apiKey = ""
+                            activeKeyStore.save()
                         }
                     }
-                    Button("Save Key") { openAIKeyStore.save() }
-                        .disabled(!openAIKeyStore.canSave)
+                    Button("Save Key") { activeKeyStore.save() }
+                        .disabled(!activeKeyStore.canSave)
                 }
-                if let saveError = openAIKeyStore.saveError {
+                if let saveError = activeKeyStore.saveError {
                     Text(saveError).font(.caption).foregroundStyle(.red)
                 }
             }
@@ -220,7 +252,7 @@ struct SettingsView: View {
     private var privacySettings: some View {
         Form {
             Section("Excluded from Kehai") {
-                Text("These apps do not appear in the browser and are never captured or sent to OpenAI.")
+                Text("These apps do not appear in the browser and are never captured or sent to AI.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if excludedApps.apps.isEmpty {
@@ -235,8 +267,8 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Excluded from AI") {
-                Text("These apps still appear in the browser, but their metadata, Safari tabs, thumbnails, and activity are never sent to OpenAI.")
+            Section("Exclude from AI requests") {
+                Text("These apps still appear in the browser, but their metadata, Safari tabs, thumbnails, and activity are never sent to your AI provider.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if aiExcludedApps.apps.isEmpty {

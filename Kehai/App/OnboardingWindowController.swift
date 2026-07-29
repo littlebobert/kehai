@@ -3,9 +3,15 @@ import SwiftUI
 
 @MainActor
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
-    private static let contentSize = NSSize(width: 640, height: 610)
+    private static let contentSize = NSSize(width: 640, height: 680)
 
-    init(permissionManager: PermissionManager, safariService: SafariTabService, openAIKeyStore: OpenAIKeyStore, proceed: @escaping () -> Void) {
+    init(
+        permissionManager: PermissionManager,
+        safariService: SafariTabService,
+        openAIKeyStore: APIKeyStore,
+        anthropicKeyStore: APIKeyStore,
+        proceed: @escaping () -> Void
+    ) {
         let size = Self.contentSize
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
@@ -23,6 +29,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
                 permissionManager: permissionManager,
                 safariService: safariService,
                 openAIKeyStore: openAIKeyStore,
+                anthropicKeyStore: anthropicKeyStore,
                 close: { [weak window] in
                     window?.close()
                     proceed()
@@ -38,21 +45,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     func present() {
         guard let window else { return }
-        let size = Self.contentSize
-        window.contentMinSize = size
-        window.contentMaxSize = size
-        window.setContentSize(size)
-
-        let targetScreen = NSApp.keyWindow?.screen ?? NSScreen.main ?? NSScreen.screens.first
-        if let visibleFrame = targetScreen?.visibleFrame {
-            let frame = window.frame
-            window.setFrameOrigin(NSPoint(
-                x: visibleFrame.midX - frame.width / 2,
-                y: visibleFrame.midY - frame.height / 2
-            ))
-        } else {
-            window.center()
-        }
+        window.center()
         showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
