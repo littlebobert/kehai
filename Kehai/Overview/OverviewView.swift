@@ -182,9 +182,6 @@ struct OverviewView: View {
                             },
                             dragExited: {
                                 model.dragHoverExited(windowID: window.id)
-                            },
-                            dragEnded: {
-                                model.dragSessionEnded()
                             }
                         )
                     }
@@ -324,7 +321,6 @@ struct OverviewView: View {
             hoverChanged: { isHovering in model.hoverWindowInSwitcherMode(isHovering ? window.id : nil) },
             dragEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
             dragExited: { model.dragHoverExited(windowID: window.id) },
-            dragEnded: { model.dragSessionEnded() },
             toggleHidden: { model.toggleHidden(window) },
             excludeApp: {
                 model.selectedWindowID = window.id
@@ -379,7 +375,6 @@ private struct RecentAppButton: View {
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
-    let dragEnded: () -> Void
 
     private var displayAppName: String {
         let maximumWidth: CGFloat = 72
@@ -439,7 +434,7 @@ private struct RecentAppButton: View {
         .help(window.appName)
         .contentShape(Rectangle())
         .onHover(perform: hoverChanged)
-        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onEnded: dragEnded)
+        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
     }
 }
 
@@ -520,7 +515,6 @@ private struct WindowCard: View {
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
-    let dragEnded: () -> Void
     let toggleHidden: () -> Void
     let excludeApp: () -> Void
     let selectTab: (SafariTab) -> Void
@@ -640,7 +634,7 @@ private struct WindowCard: View {
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
         .onHover(perform: hoverChanged)
-        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onEnded: dragEnded)
+        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
         .opacity(dusty ? 0.62 : 1)
     }
 }

@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 struct DragHoverCatcher: ViewModifier {
     var onEntered: () -> Void
     var onExited: () -> Void
-    var onEnded: () -> Void
 
     private static let acceptedTypes: [UTType] = [
         .item,
@@ -32,8 +31,7 @@ struct DragHoverCatcher: ViewModifier {
             of: Self.acceptedTypes,
             delegate: DragHoverDropDelegate(
                 onEntered: onEntered,
-                onExited: onExited,
-                onEnded: onEnded
+                onExited: onExited
             )
         )
     }
@@ -42,17 +40,15 @@ struct DragHoverCatcher: ViewModifier {
 extension View {
     func dragHoverCatcher(
         onEntered: @escaping () -> Void,
-        onExited: @escaping () -> Void,
-        onEnded: @escaping () -> Void
+        onExited: @escaping () -> Void
     ) -> some View {
-        modifier(DragHoverCatcher(onEntered: onEntered, onExited: onExited, onEnded: onEnded))
+        modifier(DragHoverCatcher(onEntered: onEntered, onExited: onExited))
     }
 }
 
 private struct DragHoverDropDelegate: DropDelegate {
     let onEntered: () -> Void
     let onExited: () -> Void
-    let onEnded: () -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
         // Advertise as a valid target so the system keeps sending hover updates.
@@ -76,7 +72,6 @@ private struct DragHoverDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         // Never ingest the payload. If dwell already activated a target and hid
         // Kehai, the drop lands on that app; if not, rejecting here is correct.
-        onEnded()
-        return false
+        false
     }
 }

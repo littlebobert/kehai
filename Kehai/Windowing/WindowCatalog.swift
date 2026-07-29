@@ -46,7 +46,10 @@ final class WindowCatalog {
             let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !title.isEmpty || app.applicationName == "Terminal" else { return nil }
 
-            if let signatures = accessibilityWindows[app.processID],
+            // Only apply the AX cross-check when Accessibility actually returned
+            // windows. An empty list often means AX is temporarily unavailable
+            // (common mid-drag / under heavy load) — don't wipe the inventory.
+            if let signatures = accessibilityWindows[app.processID], !signatures.isEmpty,
                !signatures.contains(where: { $0.matches(title: title, frame: window.frame) }) {
                 logger.notice("Excluded ScreenCaptureKit window without a matching Accessibility window")
                 SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched window")

@@ -56,18 +56,44 @@ final class OverviewViewModel {
     var liveThumbnail: NSImage?
     var isSwitcherMode = false
     private var hoveredSwitcherWindowID: CGWindowID?
-    /// True while a system drag is over a Kehai card/icon (Command-Tab-style redirect).
+    /// True while a system drag is interacting with Kehai (Command-Tab-style redirect).
     private(set) var isExternalDragActive = false
     /// Temporarily hides the selection halo during the pre-activate blink.
     private(set) var suppressSelectionHalo = false
     private var dragHoverWindowID: CGWindowID?
     private var dragDwellTask: Task<Void, Never>?
     private var dragSessionGeneration = 0
+    private var dragEndMonitors: [Any] = []
+    private var dragPasteboardPollTask: Task<Void, Never>?
+    /// Bumped when a drag freezes inventory so in-flight SCK/AX work is discarded on resume.
+    private var inventoryEpoch = 0
+    /// Frozen UI lists while dragging — inventory must not visually shrink mid-drag.
+    private var dragDisplayWindows: [WindowItem]?
+    private var dragDisplayTaskGroups: [TaskGroup]?
     /// Invoked when dwell-activate should hide the browser so the target can receive the drop.
     var onDragRedirectActivated: (() -> Void)?
     private static let dragDwellMilliseconds: UInt64 = 900
     private static let dragBlinkOffMilliseconds: UInt64 = 45
     private static let dragBlinkOnMilliseconds: UInt64 = 55
+
+    /// Mid-drag SCK/AX snapshots are incomplete and look like errant filtering.
+    private var shouldFreezeInventory: Bool {
+        isExternalDragActive
+    }
+
+    /// Windows shown in the browser grid/app strip. Uses a drag-time snapshot so
+    /// in-flight inventory mutations cannot empty the UI under the cursor.
+    private var displayWindows: [WindowItem] {
+        dragDisplayWindows ?? windows
+    }
+
+    private var displayTaskGroups: [TaskGroup] {
+        dragDisplayTaskGroups ?? taskGroups
+    }
+
+    private static var isSystemDragPasteboardActive: Bool {
+        !(NSPasteboard(name: .drag).pasteboardItems ?? []).isEmpty
+    }
     var searchFocusRequest = 0
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
@@ -157,10 +183,11 @@ final class OverviewViewModel {
 
     var filteredWindows: [WindowItem] {
         _ = hiddenWindowsRevision
+        let sourceWindows = displayWindows
         let selectedWindowIDs = selectedTaskGroupID.flatMap { selectedID in
-            taskGroups.first(where: { $0.id == selectedID }).map { Set($0.windowIDs) }
+            displayTaskGroups.first(where: { $0.id == selectedID }).map { Set($0.windowIDs) }
         }
-        let eligibleWindows = windows.filter { item in
+        let eligibleWindows = sourceWindows.filter { item in
             let belongsToSelectedGroup = selectedWindowIDs?.contains(item.id) ?? true
             let includedByHiddenFilter = !excludeHiddenWindows || !hiddenWindowStore.isHidden(item)
             return belongsToSelectedGroup && includedByHiddenFilter
@@ -179,6 +206,8 @@ final class OverviewViewModel {
     }
 
     func recordWindowFocus(windowID: CGWindowID, at date: Date) {
+        // Don't reshuffle MRU order under the cursor during a system drag.
+        guard !shouldFreezeInventory else { return }
         guard let index = windows.firstIndex(where: { $0.id == windowID }) else { return }
         var updatedWindows = windows
         updatedWindows[index].lastSeen = date
@@ -187,7 +216,7 @@ final class OverviewViewModel {
 
     var recentAppWindows: [WindowItem] {
         _ = hiddenWindowsRevision
-        let eligibleWindows = windows.filter { window in
+        let eligibleWindows = displayWindows.filter { window in
             !excludeHiddenWindows || !hiddenWindowStore.isHidden(window)
         }
         let contextualWindows: [WindowItem]
@@ -220,12 +249,12 @@ final class OverviewViewModel {
         if smartSearchWindowIDs != nil {
             return [BrowserWindowSection(id: "smart-search", title: L10n.string("Smart Results"), windows: filteredWindows)]
         }
-        guard viewMode == .grouped, !taskGroups.isEmpty else {
+        guard viewMode == .grouped, !displayTaskGroups.isEmpty else {
             return [BrowserWindowSection(id: "recent", title: nil, windows: filteredWindows)]
         }
 
         let visibleByID = Dictionary(uniqueKeysWithValues: filteredWindows.map { ($0.id, $0) })
-        let rankedSections = taskGroups.compactMap { group -> BrowserWindowSection? in
+        let rankedSections = displayTaskGroups.compactMap { group -> BrowserWindowSection? in
             let groupWindows = WindowItem.orderedByRecency(group.windowIDs.compactMap { visibleByID[$0] })
             guard !groupWindows.isEmpty else { return nil }
             return BrowserWindowSection(id: group.id, title: group.name, windows: groupWindows)
@@ -246,7 +275,7 @@ final class OverviewViewModel {
     }
 
     var usesTaskSectionLayout: Bool {
-        viewMode == .grouped && smartSearchWindowIDs == nil && !taskGroups.isEmpty
+        viewMode == .grouped && smartSearchWindowIDs == nil && !displayTaskGroups.isEmpty
     }
 
     var orderedFilteredWindows: [WindowItem] {
@@ -710,9 +739,33 @@ final class OverviewViewModel {
         }
     }
 
+    /// Called while the browser is open whenever a mouse-drag event arrives.
+    /// Freezes inventory as soon as a real system drag is in progress, before the
+    /// cursor reaches a card (where DropDelegate would finally fire).
+    func notePotentialSystemDrag() {
+        guard !isExternalDragActive else { return }
+        guard NSEvent.pressedMouseButtons != 0, Self.isSystemDragPasteboardActive else { return }
+        beginExternalDragSession()
+    }
+
+    /// Any system drag interacting with Kehai — freeze inventory so SCK/AX thrash can't shrink the list.
+    func beginExternalDragSession() {
+        guard !isExternalDragActive else { return }
+        isExternalDragActive = true
+        // Snapshot what the user currently sees; UI reads these until the drag ends.
+        dragDisplayWindows = windows
+        dragDisplayTaskGroups = taskGroups
+        // Invalidate any in-flight catalog work that may still apply after await.
+        inventoryEpoch += 1
+        inventoryReconciliationTask?.cancel()
+        inventoryReconciliationTask = nil
+        installDragEndMonitors()
+        SafeDiagnosticLog.shared.record("drag-session: begin freeze inventory count=\(windows.count)")
+    }
+
     /// Drag entered a window card or app icon — select it and start dwell-to-activate.
     func dragHoverEntered(windowID: CGWindowID, isAppStrip: Bool) {
-        isExternalDragActive = true
+        beginExternalDragSession()
         dragHoverWindowID = windowID
         if isAppStrip {
             selectedWindowID = nil
@@ -732,11 +785,17 @@ final class OverviewViewModel {
         dragDwellTask?.cancel()
         dragDwellTask = nil
         dragHoverWindowID = nil
-        // Still mid-session until drop ends or another target is entered.
+        // Still mid-session until mouse-up ends the drag.
     }
 
     func dragSessionEnded() {
+        let wasDragging = isExternalDragActive
         clearDragSessionState()
+        if wasDragging {
+            SafeDiagnosticLog.shared.record("drag-session: end thaw inventory")
+            // Catch up on opens/closes that happened while the list was frozen.
+            scheduleBackgroundInventoryReconciliation()
+        }
     }
 
     private func clearDragSessionState() {
@@ -745,7 +804,53 @@ final class OverviewViewModel {
         dragHoverWindowID = nil
         isExternalDragActive = false
         suppressSelectionHalo = false
+        dragDisplayWindows = nil
+        dragDisplayTaskGroups = nil
         dragSessionGeneration += 1
+        removeDragEndMonitors()
+    }
+
+    private func installDragEndMonitors() {
+        removeDragEndMonitors()
+        // SwiftUI DropDelegate never gets a cancel callback; mouse-up is the reliable end.
+        let mask: NSEvent.EventTypeMask = [.leftMouseUp, .rightMouseUp, .otherMouseUp]
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            Task { @MainActor in self?.dragSessionEnded() }
+            return event
+        }) {
+            dragEndMonitors.append(local)
+        }
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            Task { @MainActor in self?.dragSessionEnded() }
+        }) {
+            dragEndMonitors.append(global)
+        }
+        // Fallback if mouse-up is missed (e.g. drag ended in another space).
+        dragPasteboardPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .milliseconds(200))
+                } catch {
+                    return
+                }
+                guard let self, self.isExternalDragActive else { return }
+                // Only end when the mouse is up. Pasteboard alone is unreliable —
+                // macOS often leaves drag items around after the gesture ends.
+                if NSEvent.pressedMouseButtons == 0 {
+                    self.dragSessionEnded()
+                    return
+                }
+            }
+        }
+    }
+
+    private func removeDragEndMonitors() {
+        for monitor in dragEndMonitors {
+            NSEvent.removeMonitor(monitor)
+        }
+        dragEndMonitors.removeAll()
+        dragPasteboardPollTask?.cancel()
+        dragPasteboardPollTask = nil
     }
 
     private func restartDragDwellTimer() {
@@ -960,6 +1065,8 @@ final class OverviewViewModel {
     }
 
     func refreshForForeground() async {
+        // Don't re-inventory mid-drag — SCK/AX snapshots are incomplete and wipe the grid.
+        guard !shouldFreezeInventory else { return }
         guard hasPerformedInitialRefresh else {
             await performInitialRefreshIfNeeded()
             return
@@ -968,24 +1075,33 @@ final class OverviewViewModel {
     }
 
     func scheduleBackgroundInventoryReconciliation() {
+        // System drags make ScreenCaptureKit / Accessibility snapshots incomplete;
+        // reconciling then looks like "errant filtering" of apps and windows.
+        guard !shouldFreezeInventory else { return }
         inventoryReconciliationTask?.cancel()
         inventoryReconciliationTask = Task { [weak self] in
-            guard let self else { return }
+            guard let self, !self.shouldFreezeInventory else { return }
             await self.reconcileInventory(includeSafariTabs: false, showsGlobalLoading: self.windows.isEmpty)
         }
     }
 
     func refresh(generateInitialGroups: Bool = true, showsGlobalLoading: Bool = true) async {
+        guard !shouldFreezeInventory else {
+            // Never leave the first-launch spinner up if a drag blocked refresh.
+            if showsGlobalLoading, windows.isEmpty { isLoading = false }
+            return
+        }
         logger.notice("Thumbnail refresh started")
         SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh started")
         if showsGlobalLoading { isLoading = true }
         errorMessage = nil
         guard let pairs = await reconcileInventory(includeSafariTabs: true, showsGlobalLoading: showsGlobalLoading) else {
-            isLoading = false
+            if showsGlobalLoading { isLoading = false }
             return
         }
 
-        isLoading = false
+        // Inventory is ready; clear the global spinner before thumbnail capture.
+        if showsGlobalLoading { isLoading = false }
         await refreshThumbnails(for: pairs)
         if generateInitialGroups {
             await generateInitialGroupsIfNeeded()
@@ -997,18 +1113,33 @@ final class OverviewViewModel {
         includeSafariTabs: Bool,
         showsGlobalLoading: Bool
     ) async -> [(WindowItem, SCWindow)]? {
+        guard !shouldFreezeInventory else { return nil }
         guard !isReconcilingInventory else { return nil }
         isReconcilingInventory = true
+        let epochAtStart = inventoryEpoch
         defer { isReconcilingInventory = false }
         do {
             let seen = await history.lastSeen()
+            // Re-check after every await — a drag may have started mid-catalog.
+            guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+                SafeDiagnosticLog.shared.record("window-inventory: discarded after freeze mid-catalog")
+                return nil
+            }
             let pairs = try await catalog.windows(lastSeen: seen)
+            guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+                SafeDiagnosticLog.shared.record("window-inventory: discarded sparse catalog during drag")
+                return nil
+            }
             logger.notice("Window catalog returned \(pairs.count) capture candidates")
             var items = pairs.map(\.0)
 
             if includeSafariTabs {
                 do {
                     let tabs = try await safari.listTabs()
+                    guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+                        SafeDiagnosticLog.shared.record("window-inventory: discarded after freeze mid-safari")
+                        return nil
+                    }
                     assignSafariTabs(tabs, to: &items)
                 } catch {
                     errorMessage = L10n.format("Safari tabs are unavailable: %@", error.localizedDescription)
@@ -1029,10 +1160,43 @@ final class OverviewViewModel {
                     items[index].lastSeen = activationDate
                 }
             }
+
+            // Background ticks must not drop still-running windows. Sparse SCK/AX
+            // mid-drag (or under load) otherwise looks like the UI is "filtering".
+            if !includeSafariTabs {
+                let newIDs = Set(items.map(\.id))
+                for previous in windows where !newIDs.contains(previous.id) {
+                    let appStillRunning = NSRunningApplication(processIdentifier: previous.processID) != nil
+                    if appStillRunning {
+                        items.append(previous)
+                    }
+                }
+            }
+
             items = WindowItem.orderedByRecency(items)
 
             let previousIDs = Set(windows.map(\.id))
             let currentIDs = Set(items.map(\.id))
+            // Guard against sparse mid-drag / transient SCK snapshots replacing a healthy list.
+            // A sudden large collapse looks like "filtering" in the UI.
+            let removedCount = previousIDs.subtracting(currentIDs).count
+            if !windows.isEmpty,
+               removedCount > 0,
+               items.count < windows.count,
+               Double(items.count) < Double(windows.count) * 0.6 {
+                logger.notice("Rejected sparse inventory snapshot (\(items.count) vs \(self.windows.count))")
+                SafeDiagnosticLog.shared.record(
+                    "window-inventory: rejected sparse snapshot new=\(items.count) previous=\(windows.count) removed=\(removedCount)"
+                )
+                if showsGlobalLoading { isLoading = false }
+                return nil
+            }
+
+            guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+                SafeDiagnosticLog.shared.record("window-inventory: discarded before apply during drag")
+                return nil
+            }
+
             if previousIDs != currentIDs {
                 SafeDiagnosticLog.shared.record("window-inventory: reconciled added=\(currentIDs.subtracting(previousIDs).count) removed=\(previousIDs.subtracting(currentIDs).count)")
             }
@@ -1043,7 +1207,9 @@ final class OverviewViewModel {
             preserveSelectionOrSelectFirst()
             activityMonitor.update(windows: items)
             if showsGlobalLoading { isLoading = false }
-            return pairs
+            // Map returned pairs to the applied set (soft-merge may keep extras without SCWindow).
+            let appliedIDs = Set(items.map(\.id))
+            return pairs.filter { appliedIDs.contains($0.0.id) }
         } catch {
             logger.error("Window inventory reconciliation failed")
             SafeDiagnosticLog.shared.record("window-inventory: reconciliation failed")

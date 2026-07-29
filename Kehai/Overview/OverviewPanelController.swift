@@ -7,6 +7,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
+    private var globalDragMonitor: Any?
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
 
@@ -152,8 +153,22 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     private func installMouseMonitor() {
         guard mouseMonitor == nil else { return }
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .scrollWheel]) { [weak self] event in
-            guard let self, event.window === self.window else { return event }
+        let dragMask: NSEvent.EventTypeMask = [.leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+
+        // Local: drag events while Kehai is key, plus click/scroll handling.
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: dragMask.union([.leftMouseDown, .scrollWheel])) { [weak self] event in
+            guard let self else { return event }
+
+            // Freeze inventory as soon as a system drag is underway — before the
+            // cursor hits a card DropDelegate (which is too late to stop SCK thrash).
+            if event.type == .leftMouseDragged
+                || event.type == .rightMouseDragged
+                || event.type == .otherMouseDragged {
+                self.model.notePotentialSystemDrag()
+                return event
+            }
+
+            guard event.window === self.window else { return event }
 
             if event.type == .scrollWheel,
                self.model.isSwitcherMode,
@@ -192,12 +207,25 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             return event
         }
+
+        // Global: drags that start in another app and enter Kehai (local monitors miss these).
+        if globalDragMonitor == nil {
+            globalDragMonitor = NSEvent.addGlobalMonitorForEvents(matching: dragMask) { [weak self] _ in
+                Task { @MainActor in
+                    self?.model.notePotentialSystemDrag()
+                }
+            }
+        }
     }
 
     private func removeMouseMonitor() {
         if let mouseMonitor {
             NSEvent.removeMonitor(mouseMonitor)
             self.mouseMonitor = nil
+        }
+        if let globalDragMonitor {
+            NSEvent.removeMonitor(globalDragMonitor)
+            self.globalDragMonitor = nil
         }
     }
 
