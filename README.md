@@ -4,7 +4,7 @@ Mac utility for returning to interrupted work. See every current window, grouped
 
 ## Download
 
-[Download Kehai 0.1.25 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.1.25/Kehai-0.1.25-mac.zip)
+[Download Kehai 0.1.26 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.1.26/Kehai-0.1.26-mac.zip)
 
 ## Build and run
 
