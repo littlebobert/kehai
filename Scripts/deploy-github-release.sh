@@ -18,6 +18,7 @@ APPCAST_PRODUCT_LINK="${APPCAST_PRODUCT_LINK:-https://littlebobert.github.io/keh
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-kehai}"
 OPENAI_MODEL="${OPENAI_MODEL:-gpt-5.6}"
 OPENAI_REASONING_EFFORT="${OPENAI_REASONING_EFFORT:-high}"
+ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-5}"
 PUBLIC_LANDING_URL="${PUBLIC_LANDING_URL:-https://littlebobert.github.io/kehai.html}"
 PUBLIC_APPCAST_URL="${PUBLIC_APPCAST_URL:-https://littlebobert.github.io/kehai-appcast.xml}"
 CURRENT_VERSION="$(ruby -e 'puts File.read(ARGV[0])[/MARKETING_VERSION: "([^"]+)"/, 1]' "$ROOT_DIR/project.yml")"
@@ -39,8 +40,12 @@ With an explicit version, uses that version and still increments the build.
 
 The script validates the repositories, updates versions and release notes,
 compiles tests and creates a notarized build, commits/pushes Kehai, creates the GitHub release,
-translates the notes to Japanese with OpenAI, generates and deploys the
+translates the notes to Japanese with OpenAI (Anthropic Opus 5 fallback), generates and deploys the
     Sparkle appcast and bilingual landing-page changelog, then redownloads and verifies the public artifact.
+
+Translation keys are loaded from .env.release (or RELEASE_ENV_FILE):
+  OPENAI_API_KEY=...
+  ANTHROPIC_API_KEY=...   # optional fallback when OpenAI is missing or fails
 EOF
 }
 
@@ -95,7 +100,7 @@ RELEASE_DIR="$ROOT_DIR/.build/releases"
 RELEASE_ZIP="$RELEASE_DIR/Kehai-$VERSION-mac.zip"
 NOTES_FILE="$RELEASE_DIR/release-notes-$VERSION.md"
 NOTES_TRANSLATIONS_FILE="$RELEASE_DIR/release-notes-$VERSION-translations.json"
-OPENAI_RESPONSE_FILE="$RELEASE_DIR/release-notes-$VERSION-openai.json"
+TRANSLATION_RESPONSE_FILE="$RELEASE_DIR/release-notes-$VERSION-translation-response.json"
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$TAG/Kehai-$VERSION-mac.zip"
 KEHAI_BRANCH="$(git -C "$ROOT_DIR" branch --show-current)"
 WEBSITE_BRANCH="$(git -C "$WEBSITE_DIR" branch --show-current)"
@@ -129,20 +134,31 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "GitHub release: $REPO tag $TAG"
   echo "Landing page: $LANDING_PAGE"
   echo "Appcast: $APPCAST_PATH"
-  echo "Release notes will be translated to Japanese with $OPENAI_MODEL."
+  if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+    echo "Release notes will be translated to Japanese with $OPENAI_MODEL (Anthropic $ANTHROPIC_MODEL fallback if configured)."
+  elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "Release notes will be translated to Japanese with Anthropic $ANTHROPIC_MODEL."
+  else
+    echo "Release notes translation requires OPENAI_API_KEY and/or ANTHROPIC_API_KEY in .env.release."
+  fi
   exit 0
 fi
 
-[[ -n "${OPENAI_API_KEY:-}" ]] || { echo "error: OPENAI_API_KEY is required to translate release notes" >&2; exit 1; }
+if [[ -z "${OPENAI_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+  echo "error: set OPENAI_API_KEY and/or ANTHROPIC_API_KEY in .env.release to translate release notes" >&2
+  exit 1
+fi
 
-echo "Translating release notes to Japanese with $OPENAI_MODEL ($OPENAI_REASONING_EFFORT reasoning)..."
-python3 - "$OPENAI_MODEL" "$OPENAI_REASONING_EFFORT" "$VERSION" "$NOTES_FILE" <<'PY' \
-  | curl -fsS https://api.openai.com/v1/responses \
-      -H "Authorization: Bearer ${OPENAI_API_KEY}" \
-      -H "Content-Type: application/json" \
-      -d @- > "$OPENAI_RESPONSE_FILE"
+translate_release_notes() {
+  local provider="$1"
+  local response_file="$2"
+  local request_file="$RELEASE_DIR/release-notes-$VERSION-$provider-request.json"
+
+  python3 - "$provider" "$OPENAI_MODEL" "$OPENAI_REASONING_EFFORT" "$ANTHROPIC_MODEL" "$VERSION" "$NOTES_FILE" "$request_file" <<'PY'
 import json, sys
-model, effort, version, notes_path = sys.argv[1:5]
+from pathlib import Path
+
+provider, openai_model, effort, anthropic_model, version, notes_path, request_path = sys.argv[1:8]
 notes = []
 for line in open(notes_path):
     line = line.strip()
@@ -161,34 +177,140 @@ Write complete, concise Japanese sentences without Markdown bullet markers.
 English release notes:
 {json.dumps(notes, ensure_ascii=False)}
 """.strip()
-print(json.dumps({
-    "model": model,
-    "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
-    "reasoning": {"effort": effort},
-}))
+
+if provider == "openai":
+    body = {
+        "model": openai_model,
+        "input": [{"role": "user", "content": [{"type": "input_text", "text": prompt}]}],
+        "reasoning": {"effort": effort},
+    }
+elif provider == "anthropic":
+    schema = {
+        "type": "object",
+        "properties": {
+            "en": {"type": "array", "items": {"type": "string"}},
+            "ja": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["en", "ja"],
+        "additionalProperties": False,
+    }
+    body = {
+        "model": anthropic_model,
+        "max_tokens": 4096,
+        "messages": [{"role": "user", "content": prompt}],
+        "output_config": {"format": {"type": "json_schema", "schema": schema}},
+    }
+else:
+    raise SystemExit(f"error: unknown translation provider: {provider}")
+
+Path(request_path).write_text(json.dumps(body))
+print(provider)
 PY
 
-python3 - "$OPENAI_RESPONSE_FILE" "$NOTES_TRANSLATIONS_FILE" <<'PY'
+  case "$provider" in
+    openai)
+      echo "Translating release notes to Japanese with $OPENAI_MODEL ($OPENAI_REASONING_EFFORT reasoning)..."
+      if ! curl -fsS https://api.openai.com/v1/responses \
+          -H "Authorization: Bearer ${OPENAI_API_KEY}" \
+          -H "Content-Type: application/json" \
+          -d @"$request_file" > "$response_file"; then
+        echo "warning: OpenAI translation request failed" >&2
+        rm -f "$request_file" "$response_file"
+        return 1
+      fi
+      ;;
+    anthropic)
+      echo "Translating release notes to Japanese with Anthropic $ANTHROPIC_MODEL..."
+      if ! curl -fsS https://api.anthropic.com/v1/messages \
+          -H "x-api-key: ${ANTHROPIC_API_KEY}" \
+          -H "anthropic-version: 2023-06-01" \
+          -H "Content-Type: application/json" \
+          -d @"$request_file" > "$response_file"; then
+        echo "warning: Anthropic translation request failed" >&2
+        rm -f "$request_file" "$response_file"
+        return 1
+      fi
+      ;;
+    *)
+      echo "error: unknown translation provider: $provider" >&2
+      return 1
+      ;;
+  esac
+  rm -f "$request_file"
+
+  if ! python3 - "$provider" "$response_file" "$NOTES_TRANSLATIONS_FILE" <<'PY'
 import json, sys
-response_path, output_path = sys.argv[1:3]
+
+provider, response_path, output_path = sys.argv[1:4]
 data = json.load(open(response_path))
-text = (data.get("output_text") or "").strip()
-if not text:
+
+def strip_fences(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+    return text.strip()
+
+if provider == "openai":
+    text = (data.get("output_text") or "").strip()
+    if not text:
+        text = "\n".join(
+            part.get("text", "")
+            for item in data.get("output", [])
+            for part in item.get("content", [])
+            if part.get("text")
+        ).strip()
+elif provider == "anthropic":
     text = "\n".join(
         part.get("text", "")
-        for item in data.get("output", [])
-        for part in item.get("content", [])
-        if part.get("text")
+        for part in data.get("content", [])
+        if part.get("type") == "text" and part.get("text")
     ).strip()
-if text.startswith("```"):
-    lines = text.splitlines()
-    text = "\n".join(lines[1:-1] if lines[-1].startswith("```") else lines[1:])
+else:
+    raise SystemExit(f"error: unknown translation provider: {provider}")
+
+text = strip_fences(text)
+if not text:
+    raise SystemExit(f"error: {provider} returned an empty translation response")
+
 notes = json.loads(text)
 en, ja = notes.get("en") or [], notes.get("ja") or []
 if not en or len(en) != len(ja):
-    raise SystemExit(f"error: OpenAI returned {len(ja)} Japanese notes for {len(en)} English notes")
+    raise SystemExit(f"error: {provider} returned {len(ja)} Japanese notes for {len(en)} English notes")
 json.dump({"en": en, "ja": ja}, open(output_path, "w"), ensure_ascii=False)
+print(f"Translated {len(en)} release-note item(s) with {provider}.")
 PY
+  then
+    rm -f "$response_file"
+    return 1
+  fi
+  rm -f "$response_file"
+  return 0
+}
+
+TRANSLATED=false
+if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  if translate_release_notes openai "$TRANSLATION_RESPONSE_FILE"; then
+    TRANSLATED=true
+  elif [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "Falling back to Anthropic $ANTHROPIC_MODEL..."
+  else
+    echo "error: OpenAI translation failed and ANTHROPIC_API_KEY is not set" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$TRANSLATED" != true ]]; then
+  if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+    if ! translate_release_notes anthropic "$TRANSLATION_RESPONSE_FILE"; then
+      echo "error: Anthropic translation failed" >&2
+      exit 1
+    fi
+  else
+    echo "error: no translation provider succeeded" >&2
+    exit 1
+  fi
+fi
 
 "$ROOT_DIR/Scripts/bump-version.sh" "$VERSION" "$BUILD"
 
@@ -286,7 +408,7 @@ cp "$NOTES_FILE" "$APPCAST_WORK/Kehai-$VERSION-mac.md"
   "$APPCAST_WORK"
 cp "$APPCAST_WORK/appcast.xml" "$APPCAST_PATH"
 
-rm -f "$NOTES_FILE" "$NOTES_TRANSLATIONS_FILE" "$OPENAI_RESPONSE_FILE"
+rm -f "$NOTES_FILE" "$NOTES_TRANSLATIONS_FILE" "$TRANSLATION_RESPONSE_FILE"
 git -C "$ROOT_DIR" add -A
 git -C "$ROOT_DIR" commit -m "Release Kehai $VERSION"
 git -C "$ROOT_DIR" push origin "$KEHAI_BRANCH"
