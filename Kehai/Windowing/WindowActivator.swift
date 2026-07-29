@@ -19,12 +19,18 @@ final class WindowActivator {
     func activate(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
         app.activate(options: [.activateAllWindows])
+        // App-only strip entries (no open windows) just need the app frontmost.
+        guard !item.isAppPlaceholder else { return }
         raiseWindow(item)
     }
 
     /// Raise the target window for a drag-redirect without forcing every app window up first.
     func activateForDragRedirect(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
+        if item.isAppPlaceholder {
+            app.activate(options: [.activateAllWindows])
+            return
+        }
         app.activate(options: [])
         raiseWindow(item)
     }

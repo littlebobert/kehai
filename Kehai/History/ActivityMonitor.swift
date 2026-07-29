@@ -86,6 +86,11 @@ final class ActivityMonitor {
         return date
     }
 
+    /// Most recent activation for this process, if Kehai observed it this session.
+    func activationDate(for processID: pid_t) -> Date? {
+        activationDatesByProcessID[processID]
+    }
+
     func stop() {
         if let observer { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         observer = nil

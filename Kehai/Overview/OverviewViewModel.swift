@@ -236,12 +236,52 @@ final class OverviewViewModel {
             contextualWindows = WindowItem.orderedByRecency(eligibleWindows)
         }
 
-        return contextualWindows.reduce(into: [WindowItem]()) { result, window in
+        // One representative per app that currently has an open window.
+        var apps = contextualWindows.reduce(into: [WindowItem]()) { result, window in
             let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
             guard !result.contains(where: {
                 ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey
             }) else { return }
             result.append(window)
+        }
+
+        // Command-Tab also shows running apps with no open windows (e.g. menu-bar-only
+        // or everything closed). Smart Search is window-scoped, so skip there.
+        if smartSearchWindowIDs == nil {
+            apps.append(contentsOf: windowlessRunningApps(excluding: apps))
+            apps = WindowItem.orderedByRecency(apps)
+        }
+        return apps
+    }
+
+    /// Regular running apps that aren't already represented by an open window in the strip.
+    private func windowlessRunningApps(excluding represented: [WindowItem]) -> [WindowItem] {
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let presentKeys = Set(represented.map { $0.bundleIdentifier ?? "pid:\($0.processID)" })
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return NSWorkspace.shared.runningApplications.compactMap { application in
+            guard application.activationPolicy == .regular,
+                  !application.isTerminated,
+                  application.processIdentifier != ownPID,
+                  !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier)
+            else { return nil }
+
+            let appKey = application.bundleIdentifier ?? "pid:\(application.processIdentifier)"
+            guard !presentKeys.contains(appKey) else { return nil }
+
+            let name = application.localizedName ?? ""
+            if !trimmedQuery.isEmpty,
+               !name.localizedCaseInsensitiveContains(trimmedQuery),
+               !(application.bundleIdentifier?.localizedCaseInsensitiveContains(trimmedQuery) ?? false) {
+                return nil
+            }
+
+            return WindowItem.appPlaceholder(
+                for: application,
+                lastSeen: activityMonitor.activationDate(for: application.processIdentifier)
+                    ?? application.launchDate
+            )
         }
     }
 
