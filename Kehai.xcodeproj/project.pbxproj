@@ -26,6 +26,7 @@
 		5DA9D8116AC2635EC23782E6 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 05B4814C0CDF87EB11EBCC22 /* InfoPlist.strings */; };
 		5F85770E36548BA54BAAC7E7 /* ThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A2694A32A4197AFA761F2B /* ThumbnailService.swift */; };
 		639984D12068C4B3DD3C111A /* WindowInventoryMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */; };
+		68D0F9034EB8164CA8976FDB /* DragHoverCatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE1A696C398C1FF32425EAC9 /* DragHoverCatcher.swift */; };
 		6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */; };
 		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
 		7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */; };
@@ -101,6 +102,7 @@
 		C2F443FAB9945628682B0572 /* Kehai.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kehai.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D57C5BE757B41B4FD3795131 /* PermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionView.swift; sourceTree = "<group>"; };
 		D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariTabService.swift; sourceTree = "<group>"; };
+		DE1A696C398C1FF32425EAC9 /* DragHoverCatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DragHoverCatcher.swift; sourceTree = "<group>"; };
 		E2E335A1351B9F8BAD68A631 /* KehaiTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiTests.swift; sourceTree = "<group>"; };
 		E381EAE0107549241DC07F5B /* DiagnosticReportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticReportService.swift; sourceTree = "<group>"; };
 		E64C863413D1E203C541734B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -157,6 +159,7 @@
 		6CE99583433845D1AA21E63C /* Overview */ = {
 			isa = PBXGroup;
 			children = (
+				DE1A696C398C1FF32425EAC9 /* DragHoverCatcher.swift */,
 				0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */,
 				0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */,
 				E9828342C2F7E02777B67673 /* OverviewView.swift */,
@@ -370,6 +373,7 @@
 				4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */,
 				CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */,
 				3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */,
+				68D0F9034EB8164CA8976FDB /* DragHoverCatcher.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
 				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,

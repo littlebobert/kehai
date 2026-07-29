@@ -23,30 +23,32 @@ final class ThumbnailService {
         configuration.showsCursor = false
         configuration.ignoreShadowsSingleWindow = true
         let filter = SCContentFilter(desktopIndependentWindow: window)
-            logger.notice("Thumbnail capture started size=\(configuration.width)x\(configuration.height)")
+        let appName = window.owningApplication?.applicationName ?? "Unknown"
+        logger.notice("Thumbnail capture started size=\(configuration.width)x\(configuration.height)")
         do {
+            // SCWindow isn't Sendable, so capture stays here; CPU post-process moves off-main.
             let source = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-            let flattened = flatten(source)
-            let analysis = Self.analyze(flattened)
-            let appName = window.owningApplication?.applicationName ?? "Unknown"
-            let terminalCoverageIsUsable = appName != "Terminal" || analysis.detailCoverage >= 0.55
-            let isUsable = analysis.isUsable && terminalCoverageIsUsable
-            let rejectionReason: String? = if !analysis.isUsable {
-                "insufficient image detail"
-            } else if !terminalCoverageIsUsable {
-                "terminal detail is confined to too little of the capture"
-            } else {
-                nil
-            }
-                logger.notice("Thumbnail analyzed accepted=\(isUsable) variance=\(analysis.luminanceVariance, format: .fixed(precision: 1)) edges=\(analysis.edgeRatio, format: .fixed(precision: 4)) coverage=\(analysis.detailCoverage, format: .fixed(precision: 3))")
-            return CapturedThumbnail(
-                image: NSImage(cgImage: flattened, size: NSSize(width: flattened.width, height: flattened.height)),
-                isUsable: isUsable,
-                luminanceVariance: analysis.luminanceVariance,
-                edgeRatio: analysis.edgeRatio,
-                detailCoverage: analysis.detailCoverage,
-                rejectionReason: rejectionReason
-            )
+            return await Task.detached(priority: .utility) {
+                let flattened = Self.flatten(source)
+                let analysis = Self.analyze(flattened)
+                let terminalCoverageIsUsable = appName != "Terminal" || analysis.detailCoverage >= 0.55
+                let isUsable = analysis.isUsable && terminalCoverageIsUsable
+                let rejectionReason: String? = if !analysis.isUsable {
+                    "insufficient image detail"
+                } else if !terminalCoverageIsUsable {
+                    "terminal detail is confined to too little of the capture"
+                } else {
+                    nil
+                }
+                return CapturedThumbnail(
+                    image: NSImage(cgImage: flattened, size: NSSize(width: flattened.width, height: flattened.height)),
+                    isUsable: isUsable,
+                    luminanceVariance: analysis.luminanceVariance,
+                    edgeRatio: analysis.edgeRatio,
+                    detailCoverage: analysis.detailCoverage,
+                    rejectionReason: rejectionReason
+                )
+            }.value
         } catch {
             logger.error("Thumbnail capture failed")
             SafeDiagnosticLog.shared.record("thumbnail: capture failed")
@@ -110,7 +112,7 @@ final class ThumbnailService {
         return (usable, variance, edgeRatio, detailCoverage)
     }
 
-    private func flatten(_ source: CGImage) -> CGImage {
+    nonisolated private static func flatten(_ source: CGImage) -> CGImage {
         guard let context = CGContext(
             data: nil,
             width: source.width,
@@ -120,7 +122,7 @@ final class ThumbnailService {
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
         ) else { return source }
-        context.setFillColor(NSColor.windowBackgroundColor.cgColor)
+        context.setFillColor(CGColor(gray: 0.93, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: source.width, height: source.height))
         context.draw(source, in: CGRect(x: 0, y: 0, width: source.width, height: source.height))
         return context.makeImage() ?? source

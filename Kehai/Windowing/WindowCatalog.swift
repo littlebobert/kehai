@@ -7,6 +7,7 @@ import ScreenCaptureKit
 final class WindowCatalog {
     private let logger = Logger(subsystem: "com.justin.Kehai", category: "WindowCatalog")
     private let excludedApps: ExcludedAppStore
+    private var iconCache: [String: NSImage] = [:]
 
     init(excludedApps: ExcludedAppStore) {
         self.excludedApps = excludedApps
@@ -24,12 +25,21 @@ final class WindowCatalog {
                 && window.frame.height >= 100
         }
         let candidatesByProcess = Dictionary(grouping: candidates, by: { $0.owningApplication!.processID })
-        var accessibilityWindows: [pid_t: [AccessibilityWindowSignature]] = [:]
-        for (processID, _) in candidatesByProcess {
-            if let signatures = accessibilityWindowSignatures(for: processID) {
-                accessibilityWindows[processID] = signatures
+
+        // AX IPC is synchronous and can stall for hundreds of ms per app.
+        // Run it off the main actor so background inventory doesn't beachball the UI.
+        let processIDs = Array(candidatesByProcess.keys)
+        let accessibilityWindows = await Task.detached(priority: .userInitiated) {
+            var result: [pid_t: [AccessibilityWindowSignature]] = [:]
+            result.reserveCapacity(processIDs.count)
+            for processID in processIDs {
+                if Task.isCancelled { break }
+                if let signatures = accessibilityWindowSignatures(for: processID) {
+                    result[processID] = signatures
+                }
             }
-        }
+            return result
+        }.value
 
         let items: [(WindowItem, SCWindow)] = candidates.compactMap { window -> (WindowItem, SCWindow)? in
             guard let app = window.owningApplication else { return nil }
@@ -52,54 +62,62 @@ final class WindowCatalog {
                 frame: window.frame,
                 isOnScreen: window.isOnScreen,
                 lastSeen: lastSeen[window.windowID],
-                appIcon: NSRunningApplication(processIdentifier: app.processID)?.icon
+                appIcon: cachedIcon(for: app)
             )
             return (item, window)
         }
-        let orderedItems = WindowItem.orderedByRecency(items.map { $0.0 })
+        let orderedItems = WindowItem.orderedByRecency(items.map(\.0))
         let pairsByID: [CGWindowID: (WindowItem, SCWindow)] = Dictionary(
             uniqueKeysWithValues: items.map { ($0.0.id, $0) }
         )
         return orderedItems.compactMap { pairsByID[$0.id] }
     }
 
-    private func accessibilityWindowSignatures(for processID: pid_t) -> [AccessibilityWindowSignature]? {
-        let application = AXUIElementCreateApplication(processID)
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(application, kAXWindowsAttribute as CFString, &value) == .success,
-              let windows = value as? [AXUIElement] else { return nil }
-
-        return windows.compactMap { window in
-            var subroleValue: CFTypeRef?
-            if AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subroleValue) == .success,
-               let subrole = subroleValue as? String,
-               subrole != kAXStandardWindowSubrole as String,
-               subrole != kAXDialogSubrole as String {
-                return nil
-            }
-
-            var titleValue: CFTypeRef?
-            AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleValue)
-            let title = (titleValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-            var positionValue: CFTypeRef?
-            var sizeValue: CFTypeRef?
-            AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue)
-            AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue)
-            var origin = CGPoint.zero
-            var size = CGSize.zero
-            if let positionValue, CFGetTypeID(positionValue) == AXValueGetTypeID() {
-                AXValueGetValue(positionValue as! AXValue, .cgPoint, &origin)
-            }
-            if let sizeValue, CFGetTypeID(sizeValue) == AXValueGetTypeID() {
-                AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
-            }
-            return AccessibilityWindowSignature(title: title, frame: CGRect(origin: origin, size: size))
-        }
+    private func cachedIcon(for app: SCRunningApplication) -> NSImage? {
+        let cacheKey = app.bundleIdentifier.isEmpty ? "pid:\(app.processID)" : app.bundleIdentifier
+        if let cached = iconCache[cacheKey] { return cached }
+        guard let icon = NSRunningApplication(processIdentifier: app.processID)?.icon else { return nil }
+        iconCache[cacheKey] = icon
+        return icon
     }
 }
 
-private struct AccessibilityWindowSignature {
+private func accessibilityWindowSignatures(for processID: pid_t) -> [AccessibilityWindowSignature]? {
+    let application = AXUIElementCreateApplication(processID)
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(application, kAXWindowsAttribute as CFString, &value) == .success,
+          let windows = value as? [AXUIElement] else { return nil }
+
+    return windows.compactMap { window in
+        var subroleValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(window, kAXSubroleAttribute as CFString, &subroleValue) == .success,
+           let subrole = subroleValue as? String,
+           subrole != kAXStandardWindowSubrole as String,
+           subrole != kAXDialogSubrole as String {
+            return nil
+        }
+
+        var titleValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleValue)
+        let title = (titleValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue)
+        AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue)
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        if let positionValue, CFGetTypeID(positionValue) == AXValueGetTypeID() {
+            AXValueGetValue(positionValue as! AXValue, .cgPoint, &origin)
+        }
+        if let sizeValue, CFGetTypeID(sizeValue) == AXValueGetTypeID() {
+            AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        }
+        return AccessibilityWindowSignature(title: title, frame: CGRect(origin: origin, size: size))
+    }
+}
+
+private struct AccessibilityWindowSignature: Sendable {
     let title: String
     let frame: CGRect
 

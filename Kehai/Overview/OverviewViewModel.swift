@@ -56,6 +56,18 @@ final class OverviewViewModel {
     var liveThumbnail: NSImage?
     var isSwitcherMode = false
     private var hoveredSwitcherWindowID: CGWindowID?
+    /// True while a system drag is over a Kehai card/icon (Command-Tab-style redirect).
+    private(set) var isExternalDragActive = false
+    /// Temporarily hides the selection halo during the pre-activate blink.
+    private(set) var suppressSelectionHalo = false
+    private var dragHoverWindowID: CGWindowID?
+    private var dragDwellTask: Task<Void, Never>?
+    private var dragSessionGeneration = 0
+    /// Invoked when dwell-activate should hide the browser so the target can receive the drop.
+    var onDragRedirectActivated: (() -> Void)?
+    private static let dragDwellMilliseconds: UInt64 = 900
+    private static let dragBlinkOffMilliseconds: UInt64 = 45
+    private static let dragBlinkOnMilliseconds: UInt64 = 55
     var searchFocusRequest = 0
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
@@ -246,14 +258,15 @@ final class OverviewViewModel {
     }
 
     func performSmartSearch() async {
-        guard !isSmartSearching else { return }
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !isSmartSearching, !trimmedQuery.isEmpty else { return }
         isSmartSearching = true
         smartSearchStatus = L10n.string("Searching by meaning…")
         errorMessage = nil
         do {
             let credentials = try currentAICredentials()
             let resultIDs = try await smartSearch.search(
-                query: query,
+                query: trimmedQuery,
                 windows: windows.filter {
                     (!hiddenWindowStore.isHidden($0) || !excludeHiddenWindows)
                         && !aiExcludedAppStore.contains(bundleIdentifier: $0.bundleIdentifier)
@@ -660,6 +673,21 @@ final class OverviewViewModel {
     func beginSwitcherMode() {
         isSwitcherMode = true
         hoveredSwitcherWindowID = nil
+        // Hotkey switcher should always show the full inventory, not a leftover
+        // search, smart-search result set, or Dock-selected task group.
+        clearTransientFilters(selectedGroupID: nil)
+    }
+
+    /// Clears search / smart-search / optional group filter left over from a prior session.
+    func clearTransientFilters(selectedGroupID: String? = nil) {
+        smartSearchWindowIDs = nil
+        smartSearchStatus = nil
+        isSmartSearching = false
+        if !query.isEmpty {
+            query = ""
+        }
+        selectedTaskGroupID = selectedGroupID
+        suppressSelectionHalo = false
     }
 
     func hoverWindowInSwitcherMode(_ windowID: CGWindowID?) {
@@ -682,18 +710,124 @@ final class OverviewViewModel {
         }
     }
 
+    /// Drag entered a window card or app icon — select it and start dwell-to-activate.
+    func dragHoverEntered(windowID: CGWindowID, isAppStrip: Bool) {
+        isExternalDragActive = true
+        dragHoverWindowID = windowID
+        if isAppStrip {
+            selectedWindowID = nil
+            selectedAppWindowID = windowID
+        } else {
+            selectedAppWindowID = nil
+            selectedWindowID = windowID
+        }
+        if isSwitcherMode {
+            hoveredSwitcherWindowID = windowID
+        }
+        restartDragDwellTimer()
+    }
+
+    func dragHoverExited(windowID: CGWindowID) {
+        guard dragHoverWindowID == windowID else { return }
+        dragDwellTask?.cancel()
+        dragDwellTask = nil
+        dragHoverWindowID = nil
+        // Still mid-session until drop ends or another target is entered.
+    }
+
+    func dragSessionEnded() {
+        clearDragSessionState()
+    }
+
+    private func clearDragSessionState() {
+        dragDwellTask?.cancel()
+        dragDwellTask = nil
+        dragHoverWindowID = nil
+        isExternalDragActive = false
+        suppressSelectionHalo = false
+        dragSessionGeneration += 1
+    }
+
+    private func restartDragDwellTimer() {
+        dragDwellTask?.cancel()
+        suppressSelectionHalo = false
+        let windowID = dragHoverWindowID
+        let generation = dragSessionGeneration
+        dragDwellTask = Task { [weak self] in
+            do {
+                // Command-Tab-like dwell before raising the target under a live drag.
+                try await Task.sleep(for: .milliseconds(Self.dragDwellMilliseconds))
+            } catch {
+                return
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  self.dragSessionGeneration == generation,
+                  self.dragHoverWindowID == windowID,
+                  let windowID,
+                  let window = self.windowForDragTarget(windowID) else { return }
+
+            // Blink the focus halo twice as a final cue, then open.
+            for _ in 0..<2 {
+                guard !Task.isCancelled,
+                      self.dragSessionGeneration == generation,
+                      self.dragHoverWindowID == windowID else {
+                    self.suppressSelectionHalo = false
+                    return
+                }
+                self.suppressSelectionHalo = true
+                do {
+                    try await Task.sleep(for: .milliseconds(Self.dragBlinkOffMilliseconds))
+                } catch {
+                    self.suppressSelectionHalo = false
+                    return
+                }
+                self.suppressSelectionHalo = false
+                do {
+                    try await Task.sleep(for: .milliseconds(Self.dragBlinkOnMilliseconds))
+                } catch {
+                    return
+                }
+            }
+
+            guard !Task.isCancelled,
+                  self.dragSessionGeneration == generation,
+                  self.dragHoverWindowID == windowID else { return }
+
+            self.activator.activateForDragRedirect(window)
+            // End switcher immediately; modifier-release later only tears down monitors.
+            self.isSwitcherMode = false
+            self.hoveredSwitcherWindowID = nil
+            self.clearDragSessionState()
+            SafeDiagnosticLog.shared.record("drag-redirect: dwell activated")
+            // Hide Kehai so the raised window can receive the drop at the cursor.
+            self.onDragRedirectActivated?()
+        }
+    }
+
+    private func windowForDragTarget(_ windowID: CGWindowID) -> WindowItem? {
+        windows.first(where: { $0.id == windowID })
+            ?? orderedFilteredWindows.first(where: { $0.id == windowID })
+            ?? recentAppWindows.first(where: { $0.id == windowID })
+    }
+
     @discardableResult
     func finishSwitcherMode() -> Bool {
         defer {
             isSwitcherMode = false
             hoveredSwitcherWindowID = nil
         }
-        guard let hoveredSwitcherWindowID,
-              let window = orderedFilteredWindows.first(where: { $0.id == hoveredSwitcherWindowID })
-                    ?? recentAppWindows.first(where: { $0.id == hoveredSwitcherWindowID }) else {
+        // Prefer the drag-hover target when finishing mid-drag (release keys while dragging).
+        let targetID = dragHoverWindowID ?? hoveredSwitcherWindowID
+        guard let targetID,
+              let window = windowForDragTarget(targetID) else {
             return false
         }
-        activate(window)
+        if isExternalDragActive {
+            activator.activateForDragRedirect(window)
+        } else {
+            activate(window)
+        }
         return true
     }
 
@@ -809,8 +943,9 @@ final class OverviewViewModel {
 
     func prepareForPresentation(selectedGroupID: String? = nil) {
         stopLiveThumbnail()
-        selectedTaskGroupID = selectedGroupID
+        clearTransientFilters(selectedGroupID: selectedGroupID)
         selectedWindowID = nil
+        selectedAppWindowID = nil
         isGrouping = false
         isLoading = windows.isEmpty
         errorMessage = nil
@@ -888,6 +1023,7 @@ final class OverviewViewModel {
                     items[index].thumbnail = previous.thumbnail
                     items[index].thumbnailIsUsable = previous.thumbnailIsUsable
                     items[index].thumbnailRevision = previous.thumbnailRevision
+                    if previous.appIcon != nil { items[index].appIcon = previous.appIcon }
                     if !includeSafariTabs { items[index].safariTabs = previous.safariTabs }
                 } else if let activationDate = activityMonitor.recentActivationDate(for: items[index].processID) {
                     items[index].lastSeen = activationDate
@@ -955,6 +1091,8 @@ final class OverviewViewModel {
                 continue
             }
             thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", Int64(offset + 1), Int64(prioritizedPairs.count))
+            // Yield so key events / scrolling can run between captures.
+            await Task.yield()
             var capture = await thumbnails.image(for: window)
             if capture == nil {
                 try? await Task.sleep(for: .milliseconds(250))

@@ -19,6 +19,17 @@ final class WindowActivator {
     func activate(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
         app.activate(options: [.activateAllWindows])
+        raiseWindow(item)
+    }
+
+    /// Raise the target window for a drag-redirect without forcing every app window up first.
+    func activateForDragRedirect(_ item: WindowItem) {
+        guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
+        app.activate(options: [])
+        raiseWindow(item)
+    }
+
+    private func raiseWindow(_ item: WindowItem) {
         let application = AXUIElementCreateApplication(item.processID)
         guard let best = matchingWindow(item, in: application) else { return }
         AXUIElementSetAttributeValue(best, kAXMinimizedAttribute as CFString, kCFBooleanFalse)

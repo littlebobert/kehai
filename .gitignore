@@ -1,4 +1,5 @@
 .build/
+.derivedData/
 DerivedData/
 .env.release
 Kehai.xcodeproj/xcuserdata/

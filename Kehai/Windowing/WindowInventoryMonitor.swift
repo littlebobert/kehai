@@ -145,7 +145,7 @@ final class WindowInventoryMonitor {
         scheduleChange()
     }
 
-    private func scheduleChange(after delay: Duration = .milliseconds(180)) {
+    private func scheduleChange(after delay: Duration = .milliseconds(350)) {
         changeTask?.cancel()
         changeTask = Task { [weak self] in
             do {

@@ -168,7 +168,7 @@ struct OverviewView: View {
                     ForEach(model.recentAppWindows) { window in
                         RecentAppButton(
                             window: window,
-                            isSelected: model.selectedAppWindowID == window.id,
+                            isSelected: model.selectedAppWindowID == window.id && !model.suppressSelectionHalo,
                             activate: {
                                 model.selectedWindowID = nil
                                 model.selectedAppWindowID = window.id
@@ -177,6 +177,15 @@ struct OverviewView: View {
                             },
                             hoverChanged: { isHovering in
                                 model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
+                            },
+                            dragEntered: {
+                                model.dragHoverEntered(windowID: window.id, isAppStrip: true)
+                            },
+                            dragExited: {
+                                model.dragHoverExited(windowID: window.id)
+                            },
+                            dragEnded: {
+                                model.dragSessionEnded()
                             }
                         )
                     }
@@ -305,7 +314,7 @@ struct OverviewView: View {
             window: window,
             dusty: dusty,
             tint: tint,
-            isSelected: model.selectedWindowID == window.id,
+            isSelected: model.selectedWindowID == window.id && !model.suppressSelectionHalo,
             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
             isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.id),
             thumbnailCellHeight: thumbnailCellHeight,
@@ -313,6 +322,9 @@ struct OverviewView: View {
             canExcludeApp: model.canExcludeApp(window),
             select: { model.activate(window); close() },
             hoverChanged: { isHovering in model.hoverWindowInSwitcherMode(isHovering ? window.id : nil) },
+            dragEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
+            dragExited: { model.dragHoverExited(windowID: window.id) },
+            dragEnded: { model.dragSessionEnded() },
             toggleHidden: { model.toggleHidden(window) },
             excludeApp: {
                 model.selectedWindowID = window.id
@@ -365,6 +377,9 @@ private struct RecentAppButton: View {
     let isSelected: Bool
     let activate: () -> Void
     let hoverChanged: (Bool) -> Void
+    let dragEntered: () -> Void
+    let dragExited: () -> Void
+    let dragEnded: () -> Void
 
     private var displayAppName: String {
         let maximumWidth: CGFloat = 72
@@ -424,6 +439,7 @@ private struct RecentAppButton: View {
         .help(window.appName)
         .contentShape(Rectangle())
         .onHover(perform: hoverChanged)
+        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onEnded: dragEnded)
     }
 }
 
@@ -502,6 +518,9 @@ private struct WindowCard: View {
     let canExcludeApp: Bool
     let select: () -> Void
     let hoverChanged: (Bool) -> Void
+    let dragEntered: () -> Void
+    let dragExited: () -> Void
+    let dragEnded: () -> Void
     let toggleHidden: () -> Void
     let excludeApp: () -> Void
     let selectTab: (SafariTab) -> Void
@@ -621,6 +640,7 @@ private struct WindowCard: View {
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
         .onHover(perform: hoverChanged)
+        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onEnded: dragEnded)
         .opacity(dusty ? 0.62 : 1)
     }
 }

@@ -13,6 +13,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     init(model: OverviewViewModel, appearance: AppearanceSettings) {
         self.model = model
         self.appearance = appearance
+        super.init()
+        model.onDragRedirectActivated = { [weak self] in
+            // After dwell-activate, hide Kehai so the raised window can receive the drop.
+            self?.close()
+        }
     }
 
     var isVisible: Bool { window?.isVisible == true }
@@ -48,15 +53,25 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func finishSwitcherMode() {
         guard model.isSwitcherMode else { return }
+        let wasDragging = model.isExternalDragActive
         if model.finishSwitcherMode() {
+            // Always close after a successful activate so a live drag can land on the target.
             close()
+        } else if wasDragging {
+            // Keys released mid-drag with no target — end switcher but keep the browser open.
+            model.dragSessionEnded()
         }
     }
 
     func show(selectedGroupID: String? = nil) {
         if let window {
+            // Drop leftover search / smart-search / group filters unless this open
+            // explicitly targets a Dock menu group.
             if let selectedGroupID {
+                model.clearTransientFilters(selectedGroupID: selectedGroupID)
                 model.selectTaskGroup(model.taskGroups.first { $0.id == selectedGroupID })
+            } else {
+                model.clearTransientFilters(selectedGroupID: nil)
             }
             updateAppearance()
             installKeyMonitor()
@@ -130,6 +145,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         model.setLiveThumbnailEnabled(false)
+        model.dragSessionEnded()
         removeKeyMonitor()
         removeMouseMonitor()
     }
