@@ -48,8 +48,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func beginSwitcherMode() {
-        model.beginSwitcherMode()
         show()
+        model.beginSwitcherMode()
     }
 
     func finishSwitcherMode() {
