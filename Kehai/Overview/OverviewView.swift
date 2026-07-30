@@ -8,9 +8,6 @@ struct OverviewView: View {
     @State private var gridWidth: CGFloat = 0
     @State private var appStripWidth: CGFloat = 0
     @State private var frozenAppWindows: [WindowItem]?
-    @State private var previousAppStripPointerLocation: CGPoint?
-    @State private var appStripPointerLocation: CGPoint?
-    @State private var preservesAppFocusForPointerIntent = false
 
     private let gridSpacing: CGFloat = 18
     private let taskTintPalette: [Color] = [
@@ -133,16 +130,6 @@ struct OverviewView: View {
         .onChange(of: model.thumbnailCardWidth) {
             model.keyboardColumnCount = gridColumnCount
         }
-        .onContinuousHover(coordinateSpace: .local) { phase in
-            switch phase {
-            case let .active(location):
-                updatePointerIntent(location)
-            case .ended:
-                previousAppStripPointerLocation = nil
-                appStripPointerLocation = nil
-                preservesAppFocusForPointerIntent = false
-            }
-        }
         .animation(.easeInOut(duration: 0.16), value: model.thumbnailCardWidth)
         .alert("AI request failed", isPresented: Binding(
             get: { model.aiErrorMessage != nil },
@@ -216,8 +203,7 @@ struct OverviewView: View {
                     .id("all-windows")
                     .help("Show all windows")
                     .onHover { isHovering in
-                        guard model.isSwitcherMode, isHovering,
-                              !preservesAppFocusForPointerIntent else { return }
+                        guard model.isSwitcherMode, isHovering else { return }
                         withAnimation(.easeInOut(duration: 0.12)) {
                             model.selectAllWindowsApp()
                         }
@@ -238,8 +224,7 @@ struct OverviewView: View {
                                 close()
                             },
                             hoverChanged: { isHovering in
-                                guard isHovering,
-                                      !shouldPreserveAppFocus(whenEnteringAppAt: index) else { return }
+                                guard isHovering else { return }
                                 withAnimation(.easeInOut(duration: 0.12)) {
                                     model.hoverAppInSwitcherMode(window.id)
                                 }
@@ -274,36 +259,6 @@ struct OverviewView: View {
             }
         }
         .frame(height: recentAppsRowHeight, alignment: .leading)
-    }
-
-    private func updatePointerIntent(_ location: CGPoint) {
-        previousAppStripPointerLocation = appStripPointerLocation
-        appStripPointerLocation = location
-        guard model.isSwitcherMode, model.focusedAppKey != nil,
-              let previous = previousAppStripPointerLocation else {
-            preservesAppFocusForPointerIntent = false
-            return
-        }
-        let deltaX = location.x - previous.x
-        let deltaY = location.y - previous.y
-        let appStripBottom = 24 + 5 + 40 + recentAppsRowHeight
-        if location.y > appStripBottom + 8 {
-            preservesAppFocusForPointerIntent = false
-        } else if deltaY > 0, abs(deltaX) <= max(5, deltaY * 1.8) {
-            preservesAppFocusForPointerIntent = true
-        } else if abs(deltaX) > max(4, abs(deltaY) * 1.4) {
-            preservesAppFocusForPointerIntent = false
-        }
-    }
-
-    private func shouldPreserveAppFocus(whenEnteringAppAt index: Int) -> Bool {
-        guard preservesAppFocusForPointerIntent,
-              let location = appStripPointerLocation else { return false }
-        let appStripTop: CGFloat = 24 + 5 + 40
-        let targetCenterX = 34 + CGFloat(index + 1) * (appStripCellWidth + 4) + appStripCellWidth / 2
-        let verticalProgress = max(0, min(1, (location.y - appStripTop) / recentAppsRowHeight))
-        let corridorHalfWidth = appStripCellWidth / 2 + 24 + verticalProgress * 80
-        return abs(location.x - targetCenterX) <= corridorHalfWidth
     }
 
     private var controlBar: some View {
