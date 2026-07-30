@@ -69,10 +69,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             // Drop leftover search / smart-search / group filters unless this open
             // explicitly targets a Dock menu group.
             if let selectedGroupID {
-                model.clearTransientFilters(selectedGroupID: selectedGroupID)
+                model.prepareForBrowserPresentation(selectedGroupID: selectedGroupID)
                 model.selectTaskGroup(model.taskGroups.first { $0.id == selectedGroupID })
             } else {
-                model.clearTransientFilters(selectedGroupID: nil)
+                model.prepareForBrowserPresentation(selectedGroupID: nil)
             }
             updateAppearance()
             installKeyMonitor()
@@ -117,6 +117,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func close() {
+        model.prepareForBrowserPresentation(selectedGroupID: nil)
         window?.close()
     }
 
@@ -183,13 +184,20 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 if let scrollView = view as? NSScrollView,
                    let documentView = scrollView.documentView {
                     let clipView = scrollView.contentView
-                    let maximumY = max(0, documentView.bounds.height - clipView.bounds.height)
-                    let wheelDelta = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
+                    let usesHorizontalScrolling = documentView.bounds.width > clipView.bounds.width
+                    let dominantDelta = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
                         ? event.scrollingDeltaY
                         : event.scrollingDeltaX
-                    let distance = wheelDelta * 18
-                    let targetY = min(max(clipView.bounds.origin.y - distance, 0), maximumY)
-                    clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: targetY))
+                    let distance = dominantDelta * 18
+                    if usesHorizontalScrolling {
+                        let maximumX = max(0, documentView.bounds.width - clipView.bounds.width)
+                        let targetX = min(max(clipView.bounds.origin.x - distance, 0), maximumX)
+                        clipView.scroll(to: NSPoint(x: targetX, y: clipView.bounds.origin.y))
+                    } else {
+                        let maximumY = max(0, documentView.bounds.height - clipView.bounds.height)
+                        let targetY = min(max(clipView.bounds.origin.y - distance, 0), maximumY)
+                        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: targetY))
+                    }
                     scrollView.reflectScrolledClipView(clipView)
                     return nil
                 }
@@ -316,9 +324,17 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
 
             let editingText = self.window?.firstResponder is NSTextView
-            if event.keyCode == 53, editingText {
-                self.window?.makeFirstResponder(self.window?.contentView)
-                return nil
+            if event.keyCode == 53 {
+                if editingText {
+                    self.window?.makeFirstResponder(self.window?.contentView)
+                    return nil
+                }
+                if self.model.focusedAppKey != nil {
+                    withAnimation(.easeInOut(duration: 0.12)) {
+                        self.model.clearAppFocus()
+                    }
+                    return nil
+                }
             }
             if event.keyCode == 36 || event.keyCode == 76 {
                 guard !editingText else { return event }

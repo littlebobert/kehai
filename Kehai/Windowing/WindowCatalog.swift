@@ -17,7 +17,9 @@ final class WindowCatalog {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let candidates = content.windows.filter { window in
-            guard let app = window.owningApplication else { return false }
+            guard let app = window.owningApplication,
+                  let runningApplication = NSRunningApplication(processIdentifier: app.processID),
+                  Self.isUserSwitchableApplication(runningApplication) else { return false }
             return app.processID != ownPID
                 && !excludedApps.contains(bundleIdentifier: app.bundleIdentifier)
                 && window.windowLayer == 0
@@ -74,6 +76,19 @@ final class WindowCatalog {
             uniqueKeysWithValues: items.map { ($0.0.id, $0) }
         )
         return orderedItems.compactMap { pairsByID[$0.id] }
+    }
+
+    private static func isUserSwitchableApplication(_ application: NSRunningApplication) -> Bool {
+        guard application.activationPolicy == .regular,
+              let executableURL = application.executableURL else { return false }
+        let pathComponents = executableURL.pathComponents
+        guard !pathComponents.contains(where: { $0.hasSuffix(".appex") }) else { return false }
+
+        guard let bundleURL = application.bundleURL,
+              let bundle = Bundle(url: bundleURL) else { return true }
+        return (bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool) != true
+            && (bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool) != true
+            && bundle.object(forInfoDictionaryKey: "NSExtension") == nil
     }
 
     private func cachedIcon(for app: SCRunningApplication) -> NSImage? {

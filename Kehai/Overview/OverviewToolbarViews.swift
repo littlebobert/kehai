@@ -83,27 +83,10 @@ struct SearchControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 0) {
-                TextField(searchPrompt, text: $model.query)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isFocused)
-                    .onSubmit(submit)
-                    .padding(.trailing, model.query.isEmpty ? 0 : 24)
-            }
-            .overlay(alignment: .trailing) {
-                if !model.query.isEmpty {
-                    Button {
-                        model.query = ""
-                        isFocused = true
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear Search")
-                    .padding(.trailing, 7)
-                }
-            }
+            TextField(searchPrompt, text: $model.query)
+                .textFieldStyle(.roundedBorder)
+                .focused($isFocused)
+                .onSubmit(submit)
             .overlay {
                 RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(isFocused ? Color.accentColor.opacity(0.75) : .clear, lineWidth: 1.5)

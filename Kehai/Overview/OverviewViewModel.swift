@@ -52,6 +52,16 @@ final class OverviewViewModel {
             }
         }
     }
+    private(set) var focusedAppKey: String?
+    private(set) var isAllWindowsAppSelected = false
+    private var appWindowIDBeforeEnteringWindows: CGWindowID?
+
+    private struct WindowSelectionSnapshot {
+        let id: CGWindowID
+        let processID: pid_t
+        let bundleIdentifier: String?
+        let title: String
+    }
     var liveThumbnailWindowID: CGWindowID?
     var liveThumbnail: NSImage?
     var isSwitcherMode = false
@@ -99,7 +109,6 @@ final class OverviewViewModel {
     var actionChooserStage: WindowActionChooserStage?
     var actionChooserSelection = 0
     var keyboardColumnCount = 1
-    var keyboardAppColumnCount = 1
     var hiddenWindowsRevision = 0
     var thumbnailCardWidth: CGFloat {
         didSet { UserDefaults.standard.set(Double(thumbnailCardWidth), forKey: Self.thumbnailCardWidthKey) }
@@ -181,6 +190,30 @@ final class OverviewViewModel {
         groupsGeneratedAt = taskGroupCache.generatedAt
     }
 
+    private func appKey(for window: WindowItem) -> String {
+        window.bundleIdentifier ?? "pid:\(window.processID)"
+    }
+
+    var focusedAppName: String? {
+        guard let focusedAppKey else { return nil }
+        return recentAppWindows.first(where: { appKey(for: $0) == focusedAppKey })?.appName
+    }
+
+    func isAppFocused(_ windowID: CGWindowID) -> Bool {
+        guard let focusedAppKey,
+              let representative = recentAppWindows.first(where: { $0.id == windowID }) else { return false }
+        return appKey(for: representative) == focusedAppKey
+    }
+
+    func taskContext(for windowID: CGWindowID) -> String? {
+        guard focusedAppKey != nil else { return nil }
+        let names = displayTaskGroups
+            .filter { $0.windowIDs.contains(windowID) }
+            .map(\.name)
+        guard !names.isEmpty else { return nil }
+        return names.prefix(2).joined(separator: " · ")
+    }
+
     var filteredWindows: [WindowItem] {
         _ = hiddenWindowsRevision
         let sourceWindows = displayWindows
@@ -190,7 +223,8 @@ final class OverviewViewModel {
         let eligibleWindows = sourceWindows.filter { item in
             let belongsToSelectedGroup = selectedWindowIDs?.contains(item.id) ?? true
             let includedByHiddenFilter = !excludeHiddenWindows || !hiddenWindowStore.isHidden(item)
-            return belongsToSelectedGroup && includedByHiddenFilter
+            let belongsToFocusedApp = focusedAppKey.map { appKey(for: item) == $0 } ?? true
+            return belongsToSelectedGroup && includedByHiddenFilter && belongsToFocusedApp
         }
         if let smartSearchWindowIDs {
             let windowsByID = Dictionary(uniqueKeysWithValues: eligibleWindows.map { ($0.id, $0) })
@@ -254,7 +288,7 @@ final class OverviewViewModel {
         return apps
     }
 
-    /// Regular running apps that aren't already represented by an open window in the strip.
+    /// Regular, user-switchable apps that aren't already represented by an open window in the strip.
     private func windowlessRunningApps(excluding represented: [WindowItem]) -> [WindowItem] {
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let presentKeys = Set(represented.map { $0.bundleIdentifier ?? "pid:\($0.processID)" })
@@ -264,6 +298,7 @@ final class OverviewViewModel {
             guard application.activationPolicy == .regular,
                   !application.isTerminated,
                   application.processIdentifier != ownPID,
+                  isUserSwitchableApplication(application),
                   !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier)
             else { return nil }
 
@@ -285,7 +320,26 @@ final class OverviewViewModel {
         }
     }
 
+    private func isUserSwitchableApplication(_ application: NSRunningApplication) -> Bool {
+        guard let executableURL = application.executableURL else { return false }
+        let pathComponents = executableURL.pathComponents
+        guard !pathComponents.contains(where: { $0.hasSuffix(".appex") }) else { return false }
+
+        guard let bundleURL = application.bundleURL,
+              let bundle = Bundle(url: bundleURL) else { return true }
+        return (bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool) != true
+            && (bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool) != true
+            && bundle.object(forInfoDictionaryKey: "NSExtension") == nil
+    }
+
     var windowSections: [BrowserWindowSection] {
+        if let focusedAppKey {
+            return [BrowserWindowSection(
+                id: "app-focus-\(focusedAppKey)",
+                title: focusedAppName,
+                windows: filteredWindows
+            )]
+        }
         if smartSearchWindowIDs != nil {
             return [BrowserWindowSection(id: "smart-search", title: L10n.string("Smart Results"), windows: filteredWindows)]
         }
@@ -315,7 +369,7 @@ final class OverviewViewModel {
     }
 
     var usesTaskSectionLayout: Bool {
-        viewMode == .grouped && smartSearchWindowIDs == nil && !displayTaskGroups.isEmpty
+        focusedAppKey == nil && viewMode == .grouped && smartSearchWindowIDs == nil && !displayTaskGroups.isEmpty
     }
 
     var orderedFilteredWindows: [WindowItem] {
@@ -371,6 +425,10 @@ final class OverviewViewModel {
     }
 
     private func preserveSelectionOrSelectFirst() {
+        if let focusedAppKey,
+           !recentAppWindows.contains(where: { appKey(for: $0) == focusedAppKey }) {
+            self.focusedAppKey = nil
+        }
         if let selectedAppWindowID {
             if recentAppWindows.contains(where: { $0.id == selectedAppWindowID }) {
                 return
@@ -382,6 +440,33 @@ final class OverviewViewModel {
             return
         }
         selectFirstFilteredWindow()
+    }
+
+    private func selectionSnapshot() -> WindowSelectionSnapshot? {
+        guard let selectedWindowID,
+              let window = windows.first(where: { $0.id == selectedWindowID })
+                ?? orderedFilteredWindows.first(where: { $0.id == selectedWindowID }) else { return nil }
+        return WindowSelectionSnapshot(
+            id: window.id,
+            processID: window.processID,
+            bundleIdentifier: window.bundleIdentifier,
+            title: window.title
+        )
+    }
+
+    private func restoreSelection(from snapshot: WindowSelectionSnapshot?) {
+        guard let snapshot else {
+            preserveSelectionOrSelectFirst()
+            return
+        }
+        let visible = orderedFilteredWindows
+        let restored = visible.first(where: { $0.id == snapshot.id })
+            ?? visible.first(where: {
+                $0.processID == snapshot.processID
+                    && $0.bundleIdentifier == snapshot.bundleIdentifier
+                    && $0.title == snapshot.title
+            })
+        selectedWindowID = restored?.id ?? visible.first?.id
     }
 
     func showActionChooserForSelectedWindow() {
@@ -599,16 +684,26 @@ final class OverviewViewModel {
         let representatives = recentAppWindows
         guard !representatives.isEmpty else { return }
 
-        let currentIndex = selectedAppWindowID.flatMap { id in
-            representatives.firstIndex { $0.id == id }
-        } ?? (direction > 0 ? -1 : 0)
-        let targetIndex = (currentIndex + direction + representatives.count) % representatives.count
-        selectedWindowID = nil
-        selectedAppWindowID = representatives[targetIndex].id
+        let itemCount = representatives.count + 1
+        let currentIndex: Int
+        if isAllWindowsAppSelected {
+            currentIndex = 0
+        } else if let selectedAppWindowID,
+                  let appIndex = representatives.firstIndex(where: { $0.id == selectedAppWindowID }) {
+            currentIndex = appIndex + 1
+        } else {
+            currentIndex = direction > 0 ? -1 : 0
+        }
+        let targetIndex = (currentIndex + direction + itemCount) % itemCount
+        if targetIndex == 0 {
+            selectAllWindowsApp()
+        } else {
+            focusApp(representatives[targetIndex - 1].id)
+        }
     }
 
     func moveSelection(horizontal: Int = 0, vertical: Int = 0, columnCount: Int) {
-        if selectedAppWindowID != nil {
+        if selectedAppWindowID != nil || isAllWindowsAppSelected {
             moveAppSelection(horizontal: horizontal, vertical: vertical)
             return
         }
@@ -618,15 +713,22 @@ final class OverviewViewModel {
             selectedWindowID = nil
             return
         }
+        if selectedWindowID == nil || !visible.contains(where: { $0.id == selectedWindowID }) {
+            selectedWindowID = visible.first?.id
+            return
+        }
         let visualRows = keyboardWindowRows(columnCount: columnCount)
         if vertical < 0,
            let selectedWindowID,
            let firstRow = visualRows.first,
-           let selectedColumn = firstRow.firstIndex(where: { $0.id == selectedWindowID }),
-           !recentAppWindows.isEmpty {
-            let targetIndex = min(selectedColumn, recentAppWindows.count - 1)
-            self.selectedWindowID = nil
-            selectedAppWindowID = recentAppWindows[targetIndex].id
+           firstRow.contains(where: { $0.id == selectedWindowID }) {
+            if let appWindowIDBeforeEnteringWindows,
+               recentAppWindows.contains(where: { $0.id == appWindowIDBeforeEnteringWindows }) {
+                focusApp(appWindowIDBeforeEnteringWindows)
+            } else {
+                selectAllWindowsApp()
+            }
+            appWindowIDBeforeEnteringWindows = nil
             return
         }
         selectedAppWindowID = nil
@@ -642,29 +744,27 @@ final class OverviewViewModel {
         let apps = recentAppWindows
         guard !apps.isEmpty else {
             selectedAppWindowID = nil
+            isAllWindowsAppSelected = true
             return
         }
-        let columns = max(keyboardAppColumnCount, 1)
-        let currentIndex = selectedAppWindowID.flatMap { id in apps.firstIndex { $0.id == id } } ?? 0
+        let currentIndex = isAllWindowsAppSelected
+            ? 0
+            : (selectedAppWindowID.flatMap { id in apps.firstIndex { $0.id == id } }.map { $0 + 1 } ?? 1)
         if vertical > 0 {
-            let targetIndex = currentIndex + columns
-            if apps.indices.contains(targetIndex) {
-                selectedAppWindowID = apps[targetIndex].id
-            } else {
-                guard let firstRow = keyboardWindowRows(columnCount: keyboardColumnCount).first else { return }
-                let windowIndex = min(currentIndex % columns, firstRow.count - 1)
-                selectedAppWindowID = nil
-                selectedWindowID = firstRow[windowIndex].id
-            }
+            guard let mostRecentWindow = orderedFilteredWindows.first else { return }
+            appWindowIDBeforeEnteringWindows = selectedAppWindowID
+            isAllWindowsAppSelected = false
+            selectedAppWindowID = nil
+            selectedWindowID = mostRecentWindow.id
             return
         }
-        if vertical < 0 {
-            let targetIndex = currentIndex - columns
-            if apps.indices.contains(targetIndex) { selectedAppWindowID = apps[targetIndex].id }
-            return
+        if vertical < 0 { return }
+        let targetIndex = min(max(currentIndex + horizontal, 0), apps.count)
+        if targetIndex == 0 {
+            selectAllWindowsApp()
+        } else {
+            focusApp(apps[targetIndex - 1].id)
         }
-        let targetIndex = min(max(currentIndex + horizontal, 0), apps.count - 1)
-        selectedAppWindowID = apps[targetIndex].id
     }
 
     private func moveSelectionVertically(_ direction: Int, columnCount: Int) -> Bool {
@@ -749,6 +849,8 @@ final class OverviewViewModel {
 
     /// Clears search / smart-search / optional group filter left over from a prior session.
     func clearTransientFilters(selectedGroupID: String? = nil) {
+        focusedAppKey = nil
+        isAllWindowsAppSelected = false
         smartSearchWindowIDs = nil
         smartSearchStatus = nil
         isSmartSearching = false
@@ -757,6 +859,15 @@ final class OverviewViewModel {
         }
         selectedTaskGroupID = selectedGroupID
         suppressSelectionHalo = false
+    }
+
+    func prepareForBrowserPresentation(selectedGroupID: String? = nil) {
+        isSwitcherMode = false
+        hoveredSwitcherWindowID = nil
+        appWindowIDBeforeEnteringWindows = nil
+        clearTransientFilters(selectedGroupID: selectedGroupID)
+        selectedAppWindowID = nil
+        preserveSelectionOrSelectFirst()
     }
 
     func hoverWindowInSwitcherMode(_ windowID: CGWindowID?) {
@@ -768,15 +879,35 @@ final class OverviewViewModel {
         }
     }
 
+    func focusApp(_ windowID: CGWindowID) {
+        guard let representative = recentAppWindows.first(where: { $0.id == windowID }) else { return }
+        appWindowIDBeforeEnteringWindows = nil
+        isAllWindowsAppSelected = false
+        focusedAppKey = appKey(for: representative)
+        selectedWindowID = nil
+        selectedAppWindowID = windowID
+    }
+
+    func selectAllWindowsApp() {
+        focusedAppKey = nil
+        selectedWindowID = nil
+        selectedAppWindowID = nil
+        hoveredSwitcherWindowID = nil
+        isAllWindowsAppSelected = true
+    }
+
+    func clearAppFocus() {
+        focusedAppKey = nil
+        selectedAppWindowID = nil
+        hoveredSwitcherWindowID = nil
+        isAllWindowsAppSelected = false
+        preserveSelectionOrSelectFirst()
+    }
+
     func hoverAppInSwitcherMode(_ windowID: CGWindowID?) {
-        guard isSwitcherMode else { return }
+        guard isSwitcherMode, let windowID else { return }
         hoveredSwitcherWindowID = windowID
-        if let windowID {
-            selectedWindowID = nil
-            selectedAppWindowID = windowID
-        } else {
-            selectedAppWindowID = nil
-        }
+        focusApp(windowID)
     }
 
     /// Called while the browser is open whenever a mouse-drag event arrives.
@@ -961,6 +1092,8 @@ final class OverviewViewModel {
         defer {
             isSwitcherMode = false
             hoveredSwitcherWindowID = nil
+            focusedAppKey = nil
+            isAllWindowsAppSelected = false
         }
         // Prefer the drag-hover target when finishing mid-drag (release keys while dragging).
         let targetID = dragHoverWindowID ?? hoveredSwitcherWindowID
@@ -1088,9 +1221,7 @@ final class OverviewViewModel {
 
     func prepareForPresentation(selectedGroupID: String? = nil) {
         stopLiveThumbnail()
-        clearTransientFilters(selectedGroupID: selectedGroupID)
-        selectedWindowID = nil
-        selectedAppWindowID = nil
+        prepareForBrowserPresentation(selectedGroupID: selectedGroupID)
         isGrouping = false
         isLoading = windows.isEmpty
         errorMessage = nil
@@ -1352,9 +1483,11 @@ final class OverviewViewModel {
 
     func refreshAndRegenerateGroups() async {
         guard !isGrouping, !isLoading else { return }
+        let selection = selectionSnapshot()
         groupingStatus = L10n.string("Refreshing windows and Safari tabs…")
         await refresh(generateInitialGroups: false)
         await refreshTaskGroups()
+        restoreSelection(from: selection)
     }
 
     func refreshTaskGroups() async {

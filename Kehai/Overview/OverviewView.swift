@@ -6,6 +6,11 @@ struct OverviewView: View {
     @Bindable var appearance: AppearanceSettings
     let close: () -> Void
     @State private var gridWidth: CGFloat = 0
+    @State private var appStripWidth: CGFloat = 0
+    @State private var frozenAppWindows: [WindowItem]?
+    @State private var previousAppStripPointerLocation: CGPoint?
+    @State private var appStripPointerLocation: CGPoint?
+    @State private var preservesAppFocusForPointerIntent = false
 
     private let gridSpacing: CGFloat = 18
     private let taskTintPalette: [Color] = [
@@ -82,6 +87,7 @@ struct OverviewView: View {
                             .padding(.top, 10)
                             .padding(.bottom, 30)
                             .animation(.easeInOut(duration: 0.14), value: model.viewMode)
+                            .animation(.easeInOut(duration: 0.12), value: model.focusedAppKey)
                         }
                         .scrollIndicators(.automatic)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -94,7 +100,9 @@ struct OverviewView: View {
                         }
                         .onChange(of: model.selectedWindowID) { _, selectedWindowID in
                             guard !model.isSwitcherMode, let selectedWindowID else { return }
-                            withAnimation(.easeOut(duration: 0.16)) {
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
                                 scrollProxy.scrollTo(selectedWindowID, anchor: .center)
                             }
                         }
@@ -125,6 +133,16 @@ struct OverviewView: View {
         .onChange(of: model.thumbnailCardWidth) {
             model.keyboardColumnCount = gridColumnCount
         }
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case let .active(location):
+                updatePointerIntent(location)
+            case .ended:
+                previousAppStripPointerLocation = nil
+                appStripPointerLocation = nil
+                preservesAppFocusForPointerIntent = false
+            }
+        }
         .animation(.easeInOut(duration: 0.16), value: model.thumbnailCardWidth)
         .alert("AI request failed", isPresented: Binding(
             get: { model.aiErrorMessage != nil },
@@ -146,14 +164,21 @@ struct OverviewView: View {
         .padding(.top, 5)
     }
 
-    /// Height of a single app-icon row (icon 46 + spacing 3 + caption ~13 +
-    /// button padding 6 + strip padding 10), reserved up front so the
-    /// controls below don't jump when the icons load in.
-    private var recentAppsRowHeight: CGFloat { 78 }
+    /// Reserve one stable row while icon and label sizes adapt to the app count.
+    private var recentAppsRowHeight: CGFloat { 88 }
+    private var displayedAppWindows: [WindowItem] { frozenAppWindows ?? model.recentAppWindows }
+    private var appStripItemCount: Int { displayedAppWindows.count + 1 }
+    private var appStripCellWidth: CGFloat {
+        guard appStripItemCount > 0, appStripWidth > 0 else { return 52 }
+        return max(16, min(60, (appStripWidth - CGFloat(appStripItemCount - 1) * 4 - 8) / CGFloat(appStripItemCount)))
+    }
+    private var appStripIconSize: CGFloat {
+        max(14, min(42, appStripCellWidth - 6))
+    }
 
     private var recentAppsStrip: some View {
         Group {
-            if model.recentAppWindows.isEmpty, !model.query.isEmpty {
+            if displayedAppWindows.isEmpty, !model.query.isEmpty {
                 HStack(spacing: 6) {
                     if model.isSmartSearching { ProgressView().controlSize(.mini) }
                     Text(model.isSmartSearching ? "Finding matching apps…" : "No matching apps")
@@ -163,11 +188,49 @@ struct OverviewView: View {
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                WrappingHStack(horizontalSpacing: 4, verticalSpacing: 8) {
-                    ForEach(model.recentAppWindows) { window in
+                HStack(spacing: 4) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.12)) {
+                            model.selectAllWindowsApp()
+                        }
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: "square.grid.2x2")
+                                .font(.system(size: max(14, appStripIconSize * 0.58), weight: .medium))
+                                .frame(width: appStripIconSize, height: appStripIconSize)
+                                .padding(4)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(model.isAllWindowsAppSelected ? Color.accentColor.opacity(0.12) : .clear)
+                                }
+                            Text(model.isAllWindowsAppSelected ? "All Windows" : " ")
+                                .font(.caption2)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .padding(.vertical, 4)
+                        .frame(width: appStripCellWidth)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .id("all-windows")
+                    .help("Show all windows")
+                    .onHover { isHovering in
+                        guard model.isSwitcherMode, isHovering,
+                              !preservesAppFocusForPointerIntent else { return }
+                        withAnimation(.easeInOut(duration: 0.12)) {
+                            model.selectAllWindowsApp()
+                        }
+                    }
+
+                    ForEach(Array(displayedAppWindows.enumerated()), id: \.element.id) { index, window in
                         RecentAppButton(
                             window: window,
-                            isSelected: model.selectedAppWindowID == window.id && !model.suppressSelectionHalo,
+                            isSelected: model.isAppFocused(window.id) && !model.suppressSelectionHalo,
+                            cellWidth: appStripCellWidth,
+                            iconSize: appStripIconSize,
+                            stripWidth: appStripWidth,
+                            itemCenterX: 4 + CGFloat(index + 1) * (appStripCellWidth + 4) + appStripCellWidth / 2,
                             activate: {
                                 model.selectedWindowID = nil
                                 model.selectedAppWindowID = window.id
@@ -175,7 +238,11 @@ struct OverviewView: View {
                                 close()
                             },
                             hoverChanged: { isHovering in
-                                model.hoverAppInSwitcherMode(isHovering ? window.id : nil)
+                                guard isHovering,
+                                      !shouldPreserveAppFocus(whenEnteringAppAt: index) else { return }
+                                withAnimation(.easeInOut(duration: 0.12)) {
+                                    model.hoverAppInSwitcherMode(window.id)
+                                }
                             },
                             dragEntered: {
                                 model.dragHoverEntered(windowID: window.id, isAppStrip: true)
@@ -186,18 +253,57 @@ struct OverviewView: View {
                         )
                     }
                 }
-                .padding(.vertical, 5)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 9)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onHover { isHovering in
+                    if isHovering {
+                        if frozenAppWindows == nil { frozenAppWindows = model.recentAppWindows }
+                    } else {
+                        frozenAppWindows = nil
+                    }
+                }
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear
+                            .onAppear { appStripWidth = proxy.size.width }
+                            .onChange(of: proxy.size.width) { _, width in appStripWidth = width }
+                    }
+                }
             }
         }
-        .frame(minHeight: recentAppsRowHeight, alignment: .leading)
-        .background {
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { updateAppColumnCount(proxy.size.width) }
-                    .onChange(of: proxy.size.width) { _, width in updateAppColumnCount(width) }
-            }
+        .frame(height: recentAppsRowHeight, alignment: .leading)
+    }
+
+    private func updatePointerIntent(_ location: CGPoint) {
+        previousAppStripPointerLocation = appStripPointerLocation
+        appStripPointerLocation = location
+        guard model.isSwitcherMode, model.focusedAppKey != nil,
+              let previous = previousAppStripPointerLocation else {
+            preservesAppFocusForPointerIntent = false
+            return
         }
+        let deltaX = location.x - previous.x
+        let deltaY = location.y - previous.y
+        let appStripBottom = 24 + 5 + 40 + recentAppsRowHeight
+        if location.y > appStripBottom + 8 {
+            preservesAppFocusForPointerIntent = false
+        } else if deltaY > 0, abs(deltaX) <= max(5, deltaY * 1.8) {
+            preservesAppFocusForPointerIntent = true
+        } else if abs(deltaX) > max(4, abs(deltaY) * 1.4) {
+            preservesAppFocusForPointerIntent = false
+        }
+    }
+
+    private func shouldPreserveAppFocus(whenEnteringAppAt index: Int) -> Bool {
+        guard preservesAppFocusForPointerIntent,
+              let location = appStripPointerLocation else { return false }
+        let appStripTop: CGFloat = 24 + 5 + 40
+        let targetCenterX = 34 + CGFloat(index + 1) * (appStripCellWidth + 4) + appStripCellWidth / 2
+        let verticalProgress = max(0, min(1, (location.y - appStripTop) / recentAppsRowHeight))
+        let corridorHalfWidth = appStripCellWidth / 2 + 24 + verticalProgress * 80
+        return abs(location.x - targetCenterX) <= corridorHalfWidth
     }
 
     private var controlBar: some View {
@@ -221,11 +327,6 @@ struct OverviewView: View {
     private func updateGridWidth(_ width: CGFloat) {
         gridWidth = width
         model.keyboardColumnCount = gridColumnCount
-    }
-
-    private func updateAppColumnCount(_ width: CGFloat) {
-        // Cell ≈ 72pt label + 4pt horizontal padding; 4pt gap between cells.
-        model.keyboardAppColumnCount = max(1, Int((max(0, width) + 4) / 80))
     }
 
     private func openSelectedWindow() {
@@ -295,6 +396,7 @@ struct OverviewView: View {
                 }
             }
             .font(.title2.bold())
+            .foregroundStyle(taskTint(for: segment.section, at: segment.sectionIndex) ?? .primary)
             .lineLimit(1)
             HStack(spacing: gridSpacing) {
                 ForEach(segment.windows) { window in
@@ -317,6 +419,7 @@ struct OverviewView: View {
             thumbnailCellHeight: thumbnailCellHeight,
             isHidden: model.isWindowHidden(window),
             canExcludeApp: model.canExcludeApp(window),
+            taskContext: model.taskContext(for: window.id),
             select: { model.activate(window); close() },
             hoverChanged: { isHovering in model.hoverWindowInSwitcherMode(isHovering ? window.id : nil) },
             dragEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
@@ -371,28 +474,27 @@ private struct TaskFlowSegment: Identifiable {
 private struct RecentAppButton: View {
     let window: WindowItem
     let isSelected: Bool
+    let cellWidth: CGFloat
+    let iconSize: CGFloat
+    let stripWidth: CGFloat
+    let itemCenterX: CGFloat
     let activate: () -> Void
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
 
-    private var displayAppName: String {
-        let maximumWidth: CGFloat = 72
+    private var appNameWidth: CGFloat {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         ]
-        func width(of text: String) -> CGFloat {
-            (text as NSString).size(withAttributes: attributes).width
-        }
+        return ceil((window.appName as NSString).size(withAttributes: attributes).width)
+    }
 
-        guard width(of: window.appName) > maximumWidth else { return window.appName }
-        let words = window.appName.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard words.count > 1 else { return window.appName }
-        for count in stride(from: words.count - 1, through: 1, by: -1) {
-            let candidate = words.prefix(count).joined(separator: " ") + "…"
-            if width(of: candidate) <= maximumWidth { return candidate }
-        }
-        return window.appName
+    private var labelAlignment: Alignment {
+        let halfWidth = appNameWidth / 2
+        if itemCenterX - halfWidth < 0 { return .leading }
+        if itemCenterX + halfWidth > stripWidth { return .trailing }
+        return .center
     }
 
     var body: some View {
@@ -410,28 +512,28 @@ private struct RecentAppButton: View {
                             .padding(8)
                     }
                 }
-                .frame(width: 46, height: 46)
+                .frame(width: iconSize, height: iconSize)
+                .padding(4)
+                .background {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
+                }
 
-                Text(displayAppName)
+                Text(isSelected ? window.appName : " ")
                     .font(.caption2)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(width: 72)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(width: cellWidth, alignment: labelAlignment)
             }
-            .padding(.horizontal, 2)
-            .padding(.vertical, 3)
-            .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.vertical, 4)
+            .frame(width: cellWidth)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help(window.appName)
         .contentShape(Rectangle())
         .onHover(perform: hoverChanged)
         .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
@@ -511,6 +613,7 @@ private struct WindowCard: View {
     let thumbnailCellHeight: CGFloat
     let isHidden: Bool
     let canExcludeApp: Bool
+    let taskContext: String?
     let select: () -> Void
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
@@ -584,7 +687,16 @@ private struct WindowCard: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
             HStack(alignment: .bottom) {
-                VStack(alignment: .leading) { Text(window.title).font(.headline).lineLimit(1); Text(window.appName).foregroundStyle(.secondary).lineLimit(1) }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(window.title).font(.headline).lineLimit(1)
+                    Text(window.appName).foregroundStyle(.secondary).lineLimit(1)
+                    if let taskContext {
+                        Text(taskContext)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
                 if !window.safariTabs.isEmpty { Text(L10n.format("%lld tabs", Int64(window.safariTabs.count))).font(.caption).foregroundStyle(.secondary).fixedSize() }
@@ -621,7 +733,7 @@ private struct WindowCard: View {
         .background {
             if let tint {
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(tint.opacity(0.14))
+                    .fill(tint.opacity(0.20))
             } else {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(.regularMaterial)
@@ -629,7 +741,10 @@ private struct WindowCard: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: 15)
-                .strokeBorder(isSelected ? Color.accentColor.opacity(0.85) : .clear, lineWidth: 2)
+                .strokeBorder(
+                    isSelected ? Color.accentColor.opacity(0.85) : (tint?.opacity(0.42) ?? .clear),
+                    lineWidth: isSelected ? 2 : 1
+                )
                 .padding(1)
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
