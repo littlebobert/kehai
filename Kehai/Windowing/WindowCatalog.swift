@@ -27,6 +27,9 @@ final class WindowCatalog {
                 && window.frame.height >= 100
         }
         let candidatesByProcess = Dictionary(grouping: candidates, by: { $0.owningApplication!.processID })
+        let liveWindowIDs = await Task.detached(priority: .userInitiated) {
+            currentCoreGraphicsWindowIDs()
+        }.value
 
         // AX IPC is synchronous and can stall for hundreds of ms per app.
         // Run it off the main actor so background inventory doesn't beachball the UI.
@@ -47,6 +50,13 @@ final class WindowCatalog {
             guard let app = window.owningApplication else { return nil }
             let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !title.isEmpty || app.applicationName == "Terminal" else { return nil }
+
+            if app.bundleIdentifier == "com.apple.Safari",
+               !liveWindowIDs.contains(window.windowID) {
+                logger.notice("Excluded cached Safari window missing from the live Core Graphics list")
+                SafeDiagnosticLog.shared.record("window-catalog: excluded stale Safari window")
+                return nil
+            }
 
             // Only apply the AX cross-check when Accessibility actually returned
             // windows. An empty list often means AX is temporarily unavailable
@@ -98,6 +108,14 @@ final class WindowCatalog {
         iconCache[cacheKey] = icon
         return icon
     }
+}
+
+private func currentCoreGraphicsWindowIDs() -> Set<CGWindowID> {
+    guard let windowInfo = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
+        as? [[CFString: Any]] else { return [] }
+    return Set(windowInfo.compactMap { info in
+        (info[kCGWindowNumber] as? NSNumber).map { CGWindowID($0.uint32Value) }
+    })
 }
 
 private func accessibilityWindowSignatures(for processID: pid_t) -> [AccessibilityWindowSignature]? {
