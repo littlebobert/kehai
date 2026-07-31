@@ -24,7 +24,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     var isVisible: Bool { window?.isVisible == true }
 
     private var minimumContentSize: NSSize {
-        NSSize(width: model.thumbnailCardWidth + 88, height: 490)
+        // One default-width thumbnail plus the browser's horizontal insets and scrollbar.
+        NSSize(width: 356, height: 490)
     }
 
     private func applyMinimumSize(to window: NSWindow) {

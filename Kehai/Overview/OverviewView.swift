@@ -144,7 +144,7 @@ struct OverviewView: View {
     private var searchHeader: some View {
         HStack {
             SearchControl(model: model, submit: openSelectedWindow)
-                .frame(width: 328)
+                .frame(maxWidth: 328)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 30)
@@ -157,12 +157,20 @@ struct OverviewView: View {
         model.isSwitcherMode ? model.recentAppWindows : (frozenAppWindows ?? model.recentAppWindows)
     }
     private var appStripItemCount: Int { displayedAppWindows.count + 1 }
+    private var appStripSpacing: CGFloat {
+        guard appStripItemCount > 1, appStripWidth > 0 else { return 4 }
+        let widthPerItem = appStripWidth / CGFloat(appStripItemCount)
+        return max(1, min(4, (widthPerItem - 16) / 6))
+    }
     private var appStripCellWidth: CGFloat {
-        guard appStripItemCount > 0, appStripWidth > 0 else { return 52 }
-        return max(16, min(60, (appStripWidth - CGFloat(appStripItemCount - 1) * 4 - 8) / CGFloat(appStripItemCount)))
+        guard appStripItemCount > 0, appStripWidth > 0 else { return 42 }
+        return max(12, min(60, (appStripWidth - CGFloat(appStripItemCount - 1) * appStripSpacing - 8) / CGFloat(appStripItemCount)))
+    }
+    private var appStripIconPadding: CGFloat {
+        max(1, min(4, appStripCellWidth * 0.08))
     }
     private var appStripIconSize: CGFloat {
-        max(14, min(42, appStripCellWidth - 6))
+        max(10, min(42, appStripCellWidth - appStripIconPadding * 2))
     }
 
     private var recentAppsStrip: some View {
@@ -177,7 +185,7 @@ struct OverviewView: View {
                 .padding(.vertical, 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                HStack(spacing: 4) {
+                HStack(spacing: appStripSpacing) {
                     Button {
                         withAnimation(.easeInOut(duration: 0.12)) {
                             model.selectAllWindowsApp()
@@ -187,12 +195,12 @@ struct OverviewView: View {
                             Image(systemName: "square.grid.2x2")
                                 .font(.system(size: max(14, appStripIconSize * 0.58), weight: .medium))
                                 .frame(width: appStripIconSize, height: appStripIconSize)
-                                .padding(4)
+                                .padding(appStripIconPadding)
                                 .background {
                                     RoundedRectangle(cornerRadius: 10)
                                         .fill(model.isAllWindowsAppSelected ? Color.accentColor.opacity(0.12) : .clear)
                                 }
-                            Text(model.isAllWindowsAppSelected ? "All Windows" : " ")
+                            Text(model.isAllWindowsAppSelected && appStripWidth > 0 ? "All Windows" : " ")
                                 .font(.caption2)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
@@ -217,8 +225,9 @@ struct OverviewView: View {
                             isSelected: model.isAppFocused(window.id) && !model.suppressSelectionHalo,
                             cellWidth: appStripCellWidth,
                             iconSize: appStripIconSize,
+                            iconPadding: appStripIconPadding,
                             stripWidth: appStripWidth,
-                            itemCenterX: 4 + CGFloat(index + 1) * (appStripCellWidth + 4) + appStripCellWidth / 2,
+                            itemCenterX: 4 + CGFloat(index + 1) * (appStripCellWidth + appStripSpacing) + appStripCellWidth / 2,
                             activate: {
                                 if model.isAppFocused(window.id) {
                                     model.activate(window)
@@ -258,13 +267,22 @@ struct OverviewView: View {
                 .background {
                     GeometryReader { proxy in
                         Color.clear
-                            .onAppear { appStripWidth = proxy.size.width }
-                            .onChange(of: proxy.size.width) { _, width in appStripWidth = width }
+                            .onAppear { updateAppStripWidth(proxy.size.width) }
+                            .onChange(of: proxy.size.width) { _, width in updateAppStripWidth(width) }
                     }
                 }
             }
         }
         .frame(height: recentAppsRowHeight, alignment: .leading)
+    }
+
+    private func updateAppStripWidth(_ width: CGFloat) {
+        guard width > 0, width != appStripWidth else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            appStripWidth = width
+        }
     }
 
     private var controlBar: some View {
@@ -437,6 +455,7 @@ private struct RecentAppButton: View {
     let isSelected: Bool
     let cellWidth: CGFloat
     let iconSize: CGFloat
+    let iconPadding: CGFloat
     let stripWidth: CGFloat
     let itemCenterX: CGFloat
     let activate: () -> Void
@@ -474,7 +493,7 @@ private struct RecentAppButton: View {
                     }
                 }
                 .frame(width: iconSize, height: iconSize)
-                .padding(4)
+                .padding(iconPadding)
                 .background {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
@@ -484,7 +503,7 @@ private struct RecentAppButton: View {
                         .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
                 }
 
-                Text(isSelected ? window.appName : " ")
+                Text(isSelected && stripWidth > 0 ? window.appName : " ")
                     .font(.caption2)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
