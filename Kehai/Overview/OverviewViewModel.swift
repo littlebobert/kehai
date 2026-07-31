@@ -1290,6 +1290,15 @@ final class OverviewViewModel {
         SafeDiagnosticLog.shared.record("thumbnail-pipeline: refresh started")
         if showsGlobalLoading { isLoading = true }
         errorMessage = nil
+
+        // A user/foreground refresh must run after any background pass rather than
+        // being dropped by reconcileInventory's single-flight guard.
+        if let backgroundTask = inventoryReconciliationTask {
+            inventoryReconciliationTask = nil
+            backgroundTask.cancel()
+            await backgroundTask.value
+        }
+
         guard let pairs = await reconcileInventory(includeSafariTabs: true, showsGlobalLoading: showsGlobalLoading) else {
             if showsGlobalLoading { isLoading = false }
             return

@@ -45,23 +45,33 @@ final class WindowCatalog {
             }
             return result
         }.value
+        let validatedSafariWindowIDs = validatedSafariWindowIDs(
+            candidates: candidates,
+            accessibilityWindows: accessibilityWindows,
+            liveWindowIDs: liveWindowIDs
+        )
 
         let items: [(WindowItem, SCWindow)] = candidates.compactMap { window -> (WindowItem, SCWindow)? in
             guard let app = window.owningApplication else { return nil }
             let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !title.isEmpty || app.applicationName == "Terminal" else { return nil }
 
+            // For Safari, a successful AX query returning zero windows is authoritative:
+            // the process can remain running after its last browser window closes while
+            // ScreenCaptureKit continues reporting cached window records.
             if app.bundleIdentifier == "com.apple.Safari",
-               !liveWindowIDs.contains(window.windowID) {
-                logger.notice("Excluded cached Safari window missing from the live Core Graphics list")
-                SafeDiagnosticLog.shared.record("window-catalog: excluded stale Safari window")
+               accessibilityWindows[app.processID] != nil,
+               !validatedSafariWindowIDs.contains(window.windowID) {
+                logger.notice("Excluded ScreenCaptureKit Safari window without a unique Accessibility match")
+                SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched Safari window")
                 return nil
             }
 
             // Only apply the AX cross-check when Accessibility actually returned
             // windows. An empty list often means AX is temporarily unavailable
             // (common mid-drag / under heavy load) — don't wipe the inventory.
-            if let signatures = accessibilityWindows[app.processID], !signatures.isEmpty,
+            if app.bundleIdentifier != "com.apple.Safari",
+               let signatures = accessibilityWindows[app.processID], !signatures.isEmpty,
                !signatures.contains(where: { $0.matches(title: title, frame: window.frame) }) {
                 logger.notice("Excluded ScreenCaptureKit window without a matching Accessibility window")
                 SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched window")
@@ -110,6 +120,48 @@ final class WindowCatalog {
     }
 }
 
+private func validatedSafariWindowIDs(
+    candidates: [SCWindow],
+    accessibilityWindows: [pid_t: [AccessibilityWindowSignature]],
+    liveWindowIDs: Set<CGWindowID>
+) -> Set<CGWindowID> {
+    let safariCandidates = candidates.filter { $0.owningApplication?.bundleIdentifier == "com.apple.Safari" }
+    var validated: Set<CGWindowID> = []
+
+    for (processID, processCandidates) in Dictionary(grouping: safariCandidates, by: { $0.owningApplication!.processID }) {
+        guard let signatures = accessibilityWindows[processID], !signatures.isEmpty else { continue }
+        var unmatchedSignatures = signatures
+
+        for candidate in processCandidates where liveWindowIDs.contains(candidate.windowID) {
+            guard let matchIndex = unmatchedSignatures.firstIndex(where: { $0.windowID == candidate.windowID }) else { continue }
+            validated.insert(candidate.windowID)
+            unmatchedSignatures.remove(at: matchIndex)
+        }
+
+        unmatchedSignatures.removeAll { $0.windowID != nil }
+        let unmatchedCandidates = processCandidates
+            .filter { liveWindowIDs.contains($0.windowID) && !validated.contains($0.windowID) }
+            .sorted { left, right in
+                if left.isOnScreen != right.isOnScreen { return left.isOnScreen }
+                return left.windowID > right.windowID
+            }
+
+        for candidate in unmatchedCandidates {
+            let title = candidate.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard let matchIndex = unmatchedSignatures.indices
+                .filter({ unmatchedSignatures[$0].matches(title: title, frame: candidate.frame) })
+                .min(by: {
+                    unmatchedSignatures[$0].matchDistance(title: title, frame: candidate.frame)
+                        < unmatchedSignatures[$1].matchDistance(title: title, frame: candidate.frame)
+                }) else { continue }
+            validated.insert(candidate.windowID)
+            unmatchedSignatures.remove(at: matchIndex)
+        }
+    }
+
+    return validated
+}
+
 private func currentCoreGraphicsWindowIDs() -> Set<CGWindowID> {
     guard let windowInfo = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
         as? [[CFString: Any]] else { return [] }
@@ -133,6 +185,10 @@ private func accessibilityWindowSignatures(for processID: pid_t) -> [Accessibili
             return nil
         }
 
+        var windowNumberValue: CFTypeRef?
+        AXUIElementCopyAttributeValue(window, "AXWindowNumber" as CFString, &windowNumberValue)
+        let windowID = (windowNumberValue as? NSNumber).map { CGWindowID($0.uint32Value) }
+
         var titleValue: CFTypeRef?
         AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleValue)
         let title = (titleValue as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -149,11 +205,16 @@ private func accessibilityWindowSignatures(for processID: pid_t) -> [Accessibili
         if let sizeValue, CFGetTypeID(sizeValue) == AXValueGetTypeID() {
             AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
         }
-        return AccessibilityWindowSignature(title: title, frame: CGRect(origin: origin, size: size))
+        return AccessibilityWindowSignature(
+            windowID: windowID,
+            title: title,
+            frame: CGRect(origin: origin, size: size)
+        )
     }
 }
 
 private struct AccessibilityWindowSignature: Sendable {
+    let windowID: CGWindowID?
     let title: String
     let frame: CGRect
 
@@ -162,10 +223,13 @@ private struct AccessibilityWindowSignature: Sendable {
             || (!title.isEmpty && !candidateTitle.isEmpty
                 && (title.localizedCaseInsensitiveContains(candidateTitle)
                     || candidateTitle.localizedCaseInsensitiveContains(title)))
-        let frameDistance = abs(frame.origin.x - candidateFrame.origin.x)
+        return titleMatches && matchDistance(title: candidateTitle, frame: candidateFrame) <= 24
+    }
+
+    func matchDistance(title candidateTitle: String, frame candidateFrame: CGRect) -> CGFloat {
+        abs(frame.origin.x - candidateFrame.origin.x)
             + abs(frame.origin.y - candidateFrame.origin.y)
             + abs(frame.width - candidateFrame.width)
             + abs(frame.height - candidateFrame.height)
-        return titleMatches && frameDistance <= 24
     }
 }
