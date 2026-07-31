@@ -1107,12 +1107,17 @@ final class OverviewViewModel {
 
     @discardableResult
     func finishSwitcherMode() -> Bool {
+        let preservesAllWindowsSelection = isAllWindowsAppSelected
+            && dragHoverWindowID == nil
+            && hoveredSwitcherWindowID == nil
         defer {
             isSwitcherMode = false
             switcherAppWindows = nil
             hoveredSwitcherWindowID = nil
             focusedAppKey = nil
-            isAllWindowsAppSelected = false
+            if !preservesAllWindowsSelection {
+                isAllWindowsAppSelected = false
+            }
         }
         // Prefer the drag-hover target when finishing mid-drag (release keys while dragging).
         let targetID = dragHoverWindowID ?? hoveredSwitcherWindowID
