@@ -65,6 +65,7 @@ final class OverviewViewModel {
     var liveThumbnailWindowID: CGWindowID?
     var liveThumbnail: NSImage?
     var isSwitcherMode = false
+    private var switcherAppWindows: [WindowItem]?
     private var hoveredSwitcherWindowID: CGWindowID?
     /// True while a system drag is interacting with Kehai (Command-Tab-style redirect).
     private(set) var isExternalDragActive = false
@@ -249,6 +250,20 @@ final class OverviewViewModel {
     }
 
     var recentAppWindows: [WindowItem] {
+        if let switcherAppWindows { return switcherAppWindows }
+        return currentRecentAppWindows
+    }
+
+    private func appendNewAppsToSwitcherSnapshot() {
+        guard var switcherAppWindows else { return }
+        var knownKeys = Set(switcherAppWindows.map(appKey(for:)))
+        let newApps = currentRecentAppWindows.filter { knownKeys.insert(appKey(for: $0)).inserted }
+        guard !newApps.isEmpty else { return }
+        switcherAppWindows.append(contentsOf: newApps)
+        self.switcherAppWindows = switcherAppWindows
+    }
+
+    private var currentRecentAppWindows: [WindowItem] {
         _ = hiddenWindowsRevision
         let eligibleWindows = displayWindows.filter { window in
             !excludeHiddenWindows || !hiddenWindowStore.isHidden(window)
@@ -688,8 +703,8 @@ final class OverviewViewModel {
         let currentIndex: Int
         if isAllWindowsAppSelected {
             currentIndex = 0
-        } else if let selectedAppWindowID,
-                  let appIndex = representatives.firstIndex(where: { $0.id == selectedAppWindowID }) {
+        } else if let focusedAppKey,
+                  let appIndex = representatives.firstIndex(where: { appKey(for: $0) == focusedAppKey }) {
             currentIndex = appIndex + 1
         } else {
             currentIndex = direction > 0 ? -1 : 0
@@ -749,7 +764,7 @@ final class OverviewViewModel {
         }
         let currentIndex = isAllWindowsAppSelected
             ? 0
-            : (selectedAppWindowID.flatMap { id in apps.firstIndex { $0.id == id } }.map { $0 + 1 } ?? 1)
+            : (focusedAppKey.flatMap { key in apps.firstIndex { appKey(for: $0) == key } }.map { $0 + 1 } ?? 1)
         if vertical > 0 {
             guard let mostRecentWindow = orderedFilteredWindows.first else { return }
             appWindowIDBeforeEnteringWindows = selectedAppWindowID
@@ -831,8 +846,8 @@ final class OverviewViewModel {
 
     @discardableResult
     func activateCurrentSelection() -> Bool {
-        if let selectedAppWindowID,
-           let window = recentAppWindows.first(where: { $0.id == selectedAppWindowID }) {
+        if let focusedAppKey,
+           let window = recentAppWindows.first(where: { appKey(for: $0) == focusedAppKey }) {
             activate(window)
             return true
         }
@@ -840,11 +855,12 @@ final class OverviewViewModel {
     }
 
     func beginSwitcherMode() {
-        isSwitcherMode = true
-        hoveredSwitcherWindowID = nil
         // Hotkey switcher should always show the full inventory, not a leftover
         // search, smart-search result set, or Dock-selected task group.
         clearTransientFilters(selectedGroupID: nil)
+        switcherAppWindows = currentRecentAppWindows
+        isSwitcherMode = true
+        hoveredSwitcherWindowID = nil
     }
 
     /// Clears search / smart-search / optional group filter left over from a prior session.
@@ -863,6 +879,7 @@ final class OverviewViewModel {
 
     func prepareForBrowserPresentation(selectedGroupID: String? = nil) {
         isSwitcherMode = false
+        switcherAppWindows = nil
         hoveredSwitcherWindowID = nil
         appWindowIDBeforeEnteringWindows = nil
         clearTransientFilters(selectedGroupID: selectedGroupID)
@@ -1073,6 +1090,7 @@ final class OverviewViewModel {
             self.activator.activateForDragRedirect(window)
             // End switcher immediately; modifier-release later only tears down monitors.
             self.isSwitcherMode = false
+            self.switcherAppWindows = nil
             self.hoveredSwitcherWindowID = nil
             self.clearDragSessionState()
             SafeDiagnosticLog.shared.record("drag-redirect: dwell activated")
@@ -1091,6 +1109,7 @@ final class OverviewViewModel {
     func finishSwitcherMode() -> Bool {
         defer {
             isSwitcherMode = false
+            switcherAppWindows = nil
             hoveredSwitcherWindowID = nil
             focusedAppKey = nil
             isAllWindowsAppSelected = false
@@ -1334,11 +1353,13 @@ final class OverviewViewModel {
 
             // Background ticks must not drop still-running windows. Sparse SCK/AX
             // mid-drag (or under load) otherwise looks like the UI is "filtering".
+            // Safari is the exception: keeping every missing window while Safari is
+            // still running leaves genuinely closed browser windows in the inventory.
             if !includeSafariTabs {
                 let newIDs = Set(items.map(\.id))
                 for previous in windows where !newIDs.contains(previous.id) {
                     let appStillRunning = NSRunningApplication(processIdentifier: previous.processID) != nil
-                    if appStillRunning {
+                    if appStillRunning, previous.bundleIdentifier != "com.apple.Safari" {
                         items.append(previous)
                     }
                 }
@@ -1349,12 +1370,19 @@ final class OverviewViewModel {
             let previousIDs = Set(windows.map(\.id))
             let currentIDs = Set(items.map(\.id))
             // Guard against sparse mid-drag / transient SCK snapshots replacing a healthy list.
-            // A sudden large collapse looks like "filtering" in the UI.
-            let removedCount = previousIDs.subtracting(currentIDs).count
-            if !windows.isEmpty,
+            // Missing Safari windows are authoritative, so only protected non-Safari
+            // removals participate in this safety check.
+            let protectedPreviousIDs = Set(windows.lazy
+                .filter { $0.bundleIdentifier != "com.apple.Safari" }
+                .map(\.id))
+            let protectedCurrentCount = items.lazy
+                .filter { $0.bundleIdentifier != "com.apple.Safari" }
+                .count
+            let removedCount = protectedPreviousIDs.subtracting(currentIDs).count
+            if !protectedPreviousIDs.isEmpty,
                removedCount > 0,
-               items.count < windows.count,
-               Double(items.count) < Double(windows.count) * 0.6 {
+               protectedCurrentCount < protectedPreviousIDs.count,
+               Double(protectedCurrentCount) < Double(protectedPreviousIDs.count) * 0.6 {
                 logger.notice("Rejected sparse inventory snapshot (\(items.count) vs \(self.windows.count))")
                 SafeDiagnosticLog.shared.record(
                     "window-inventory: rejected sparse snapshot new=\(items.count) previous=\(windows.count) removed=\(removedCount)"
@@ -1374,6 +1402,7 @@ final class OverviewViewModel {
 
             windows = items
             hiddenWindowStore.reconcile(with: items)
+            appendNewAppsToSwitcherSnapshot()
             reconcileCachedGroups()
             preserveSelectionOrSelectFirst()
             activityMonitor.update(windows: items)

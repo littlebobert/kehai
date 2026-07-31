@@ -153,7 +153,9 @@ struct OverviewView: View {
 
     /// Reserve one stable row while icon and label sizes adapt to the app count.
     private var recentAppsRowHeight: CGFloat { 88 }
-    private var displayedAppWindows: [WindowItem] { frozenAppWindows ?? model.recentAppWindows }
+    private var displayedAppWindows: [WindowItem] {
+        model.isSwitcherMode ? model.recentAppWindows : (frozenAppWindows ?? model.recentAppWindows)
+    }
     private var appStripItemCount: Int { displayedAppWindows.count + 1 }
     private var appStripCellWidth: CGFloat {
         guard appStripItemCount > 0, appStripWidth > 0 else { return 52 }
@@ -218,10 +220,14 @@ struct OverviewView: View {
                             stripWidth: appStripWidth,
                             itemCenterX: 4 + CGFloat(index + 1) * (appStripCellWidth + 4) + appStripCellWidth / 2,
                             activate: {
-                                model.selectedWindowID = nil
-                                model.selectedAppWindowID = window.id
-                                model.activate(window)
-                                close()
+                                if model.isAppFocused(window.id) {
+                                    model.activate(window)
+                                    close()
+                                } else {
+                                    withAnimation(.easeInOut(duration: 0.12)) {
+                                        model.focusApp(window.id)
+                                    }
+                                }
                             },
                             hoverChanged: { isHovering in
                                 guard isHovering else { return }
