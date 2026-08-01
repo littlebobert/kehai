@@ -67,11 +67,11 @@ final class WindowCatalog {
                 return nil
             }
 
-            // Only apply the AX cross-check when Accessibility actually returned
-            // windows. An empty list often means AX is temporarily unavailable
-            // (common mid-drag / under heavy load) — don't wipe the inventory.
+            // A present entry means AX successfully returned an inventory, including
+            // an authoritative empty inventory when an app remains running with no windows.
+            // A missing entry means AX failed, so retain ScreenCaptureKit's candidate.
             if app.bundleIdentifier != "com.apple.Safari",
-               let signatures = accessibilityWindows[app.processID], !signatures.isEmpty,
+               let signatures = accessibilityWindows[app.processID],
                !signatures.contains(where: { $0.matches(title: title, frame: window.frame) }) {
                 logger.notice("Excluded ScreenCaptureKit window without a matching Accessibility window")
                 SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched window")
