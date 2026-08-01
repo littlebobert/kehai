@@ -456,6 +456,12 @@ struct CompactSwitcherView: View {
     let openBrowser: () -> Void
     let close: () -> Void
     @State private var compactWidth: CGFloat = 676
+    @State private var appStripPointerLocation: CGPoint?
+    @State private var activeHoveredAppID: String?
+    @State private var pendingHoveredAppID: String?
+    @State private var pointerIntentLockedAppID: String?
+    @State private var pointerIntentLockExpiresAt = Date.distantPast
+    @State private var deferredAppHoverTask: Task<Void, Never>?
 
     private let compactAppCellWidth: CGFloat = 55
     private let compactAppSpacing: CGFloat = 2
@@ -563,6 +569,16 @@ struct CompactSwitcherView: View {
         .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
         .frame(height: 66)
         .clipped()
+        .onContinuousHover(coordinateSpace: .local) { phase in
+            switch phase {
+            case .active(let location):
+                updateAppStripPointerIntent(at: location)
+            case .ended:
+                appStripPointerLocation = nil
+                activeHoveredAppID = nil
+                cancelDeferredAppHover()
+            }
+        }
     }
 
     private func allWindowsButton(itemIndex: Int) -> some View {
@@ -578,8 +594,9 @@ struct CompactSwitcherView: View {
         .buttonStyle(.plain)
         .id("compact-all-windows")
         .onHover { hovering in
-            guard hovering else { return }
-            model.selectAllWindowsApp()
+            handleCompactAppHover(appID: "compact-all-windows", hovering: hovering) {
+                model.selectAllWindowsApp()
+            }
         }
     }
 
@@ -613,8 +630,9 @@ struct CompactSwitcherView: View {
             .disabled(!model.canExcludeAppFromAI(window) && !model.canExcludeApp(window))
         }
         .onHover { hovering in
-            guard hovering else { return }
-            model.hoverAppInSwitcherMode(window.id)
+            handleCompactAppHover(appID: compactAppHoverID(window), hovering: hovering) {
+                model.hoverAppInSwitcherMode(window.id)
+            }
         }
         .dragHoverCatcher(
             onEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: true) },
@@ -683,6 +701,75 @@ struct CompactSwitcherView: View {
         return min(max(itemCenterX, minimumCenter), maximumCenter) - itemCenterX
     }
 
+    private func compactAppHoverID(_ window: WindowItem) -> String {
+        "compact-app-\(window.id)"
+    }
+
+    private func updateAppStripPointerIntent(at location: CGPoint) {
+        defer { appStripPointerLocation = location }
+        guard let previous = appStripPointerLocation else { return }
+
+        let deltaX = location.x - previous.x
+        let deltaY = location.y - previous.y
+        let isMovingTowardWindows = opensUp ? deltaY < 0 : deltaY > 0
+        let isPrimarilyVertical = abs(deltaY) > abs(deltaX) * 0.75
+
+        if isMovingTowardWindows, isPrimarilyVertical, let activeHoveredAppID {
+            pointerIntentLockedAppID = activeHoveredAppID
+            pointerIntentLockExpiresAt = Date().addingTimeInterval(0.18)
+        } else if abs(deltaX) > abs(deltaY) {
+            clearPointerIntentLock()
+        }
+    }
+
+    private func handleCompactAppHover(
+        appID: String,
+        hovering: Bool,
+        action: @escaping @MainActor () -> Void
+    ) {
+        if !hovering {
+            if pendingHoveredAppID == appID { cancelDeferredAppHover() }
+            return
+        }
+
+        let remainingLockDuration = pointerIntentLockExpiresAt.timeIntervalSinceNow
+        if let pointerIntentLockedAppID,
+           pointerIntentLockedAppID != appID,
+           remainingLockDuration > 0 {
+            cancelDeferredAppHover()
+            pendingHoveredAppID = appID
+            deferredAppHoverTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(remainingLockDuration))
+                guard !Task.isCancelled, pendingHoveredAppID == appID else { return }
+                selectHoveredCompactApp(appID: appID, action: action)
+            }
+            return
+        }
+
+        selectHoveredCompactApp(appID: appID, action: action)
+    }
+
+    private func selectHoveredCompactApp(
+        appID: String,
+        action: @MainActor () -> Void
+    ) {
+        cancelDeferredAppHover()
+        activeHoveredAppID = appID
+        action()
+    }
+
+    private func clearPointerIntentLock() {
+        pointerIntentLockedAppID = nil
+        pointerIntentLockExpiresAt = .distantPast
+        cancelDeferredAppHover()
+    }
+
+    private func cancelDeferredAppHover() {
+        deferredAppHoverTask?.cancel()
+        deferredAppHoverTask = nil
+        pendingHoveredAppID = nil
+    }
+
     private func updateCompactWidth(_ width: CGFloat) {
         guard width > 0, width != compactWidth else { return }
         var transaction = Transaction()
@@ -692,21 +779,25 @@ struct CompactSwitcherView: View {
         }
     }
 
-    @ViewBuilder
     private var compactWindows: some View {
-        if displayedWindows.isEmpty {
-            Text("No open windows")
-                .font(.body)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity)
-        } else {
-            HStack(spacing: 8) {
-                ForEach(displayedWindows) { window in
-                    compactWindowButton(window)
+        Group {
+            if displayedWindows.isEmpty {
+                Text("No open windows")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity)
+            } else {
+                HStack(spacing: 8) {
+                    ForEach(displayedWindows) { window in
+                        compactWindowButton(window)
+                    }
                 }
+                .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: opensRight ? .leading : .trailing)
+                .animation(.easeInOut(duration: 0.07), value: model.focusedAppKey)
             }
-            .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: opensRight ? .leading : .trailing)
-            .animation(.easeInOut(duration: 0.07), value: model.focusedAppKey)
+        }
+        .onContinuousHover { phase in
+            if case .active = phase { clearPointerIntentLock() }
         }
     }
 
