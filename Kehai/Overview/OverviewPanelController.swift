@@ -8,10 +8,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var compactWindow: NSWindow?
     private var compactWindowFrameHeight: CGFloat?
+    private var compactWindowsAboveAppStrip = false
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private var globalDragMonitor: Any?
     private var accessibilityDisplayOptionsObserver: NSObjectProtocol?
+    private var menuTrackingObservers: [NSObjectProtocol] = []
+    private var menuTrackingDepth = 0
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
     private let isShortcutSessionActive: () -> Bool
@@ -41,6 +44,22 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in self?.updateAppearance() }
         }
+        menuTrackingObservers = [
+            NotificationCenter.default.addObserver(
+                forName: NSMenu.didBeginTrackingNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.menuTrackingDidBegin() }
+            },
+            NotificationCenter.default.addObserver(
+                forName: NSMenu.didEndTrackingNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.menuTrackingDidEnd() }
+            }
+        ]
         model.onDragRedirectActivated = { [weak self] in
             // After dwell-activate, hide Kehai so the raised window can receive the drop.
             self?.close()
@@ -50,6 +69,20 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     var isVisible: Bool { isFullBrowserVisible || isMiniBrowserVisible }
     var isFullBrowserVisible: Bool { window?.isVisible == true }
     var isMiniBrowserVisible: Bool { compactWindow?.isVisible == true }
+
+    private func menuTrackingDidBegin() {
+        menuTrackingDepth += 1
+        if menuTrackingDepth == 1 {
+            model.setMenuTrackingActive(true)
+        }
+    }
+
+    private func menuTrackingDidEnd() {
+        menuTrackingDepth = max(0, menuTrackingDepth - 1)
+        if menuTrackingDepth == 0 {
+            model.setMenuTrackingActive(false)
+        }
+    }
 
     private func notifyPresentationChanged() {
         presentationChanged(isFullBrowserVisible, isMiniBrowserVisible)
@@ -138,6 +171,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let topStripIconInset: CGFloat = 38
         let bottomStripIconInset: CGFloat = 60
         let opensUp = pointer.y - (height - topStripIconInset) < visibleFrame.minY
+        compactWindowsAboveAppStrip = opensUp
         let iconCenterX = opensRight ? allWindowsIconHorizontalInset : width - allWindowsIconHorizontalInset
         let iconCenterY = opensUp ? bottomStripIconInset : height - topStripIconInset
         let proposedOriginX = pointer.x - iconCenterX
@@ -546,7 +580,15 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             if event.keyCode == 36 || event.keyCode == 76 {
                 guard !editingText else { return event }
-                if self.model.activateCurrentSelection() { self.close() }
+                if event.window === self.compactWindow, self.model.isAllWindowsAppSelected {
+                    self.showFullBrowserFromCompactSwitcher()
+                } else if self.model.activateCurrentSelection() {
+                    if event.window === self.compactWindow {
+                        self.dismissCompactSwitcherAfterActivation()
+                    } else {
+                        self.close()
+                    }
+                }
                 return nil
             }
             guard !editingText else { return event }
@@ -557,7 +599,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
 
             if modifiers.isEmpty, event.keyCode == 51 {
-                self.model.showActionChooserForSelectedWindow()
+                if !self.model.showExclusionChooserForFocusedApp() {
+                    self.model.showActionChooserForSelectedWindow()
+                }
                 return nil
             }
 
@@ -580,9 +624,17 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             case 124:
                 self.model.moveSelection(horizontal: 1, columnCount: self.model.keyboardColumnCount)
             case 125:
-                self.model.moveSelection(vertical: 1, columnCount: self.model.keyboardColumnCount)
+                self.model.moveSelection(
+                    vertical: 1,
+                    columnCount: self.model.keyboardColumnCount,
+                    windowsAboveAppStrip: event.window === self.compactWindow && self.compactWindowsAboveAppStrip
+                )
             case 126:
-                self.model.moveSelection(vertical: -1, columnCount: self.model.keyboardColumnCount)
+                self.model.moveSelection(
+                    vertical: -1,
+                    columnCount: self.model.keyboardColumnCount,
+                    windowsAboveAppStrip: event.window === self.compactWindow && self.compactWindowsAboveAppStrip
+                )
             default:
                 return event
             }

@@ -109,6 +109,7 @@ final class OverviewViewModel {
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
     var actionChooserSelection = 0
+    private var actionChooserReturnsToRemoval = false
     var keyboardColumnCount = 1
     var hiddenWindowsRevision = 0
     var thumbnailCardWidth: CGFloat {
@@ -164,6 +165,7 @@ final class OverviewViewModel {
     private let liveThumbnails = LiveThumbnailService()
     private var liveThumbnailTask: Task<Void, Never>?
     private var liveThumbnailEnabled = false
+    private var liveThumbnailPausedForMenu = false
     private var smartSearchWindowIDs: [CGWindowID]?
     private let taskGroupCache = TaskGroupCache()
     private let hiddenWindowStore = HiddenWindowStore()
@@ -205,7 +207,8 @@ final class OverviewViewModel {
     }
 
     func isAppFocused(_ windowID: CGWindowID) -> Bool {
-        guard let focusedAppKey,
+        guard selectedAppWindowID != nil,
+              let focusedAppKey,
               let representative = recentAppWindows.first(where: { $0.id == windowID }) else { return false }
         return appKey(for: representative) == focusedAppKey
     }
@@ -490,9 +493,23 @@ final class OverviewViewModel {
 
     func showActionChooserForSelectedWindow() {
         guard let selectedWindow else { return }
-        actionChooserWindow = selectedWindow
-        actionChooserStage = .removal
+        showActionChooser(for: selectedWindow, stage: .removal)
+    }
+
+    func showExclusionChooserForFocusedApp() -> Bool {
+        guard selectedAppWindowID != nil,
+              let focusedAppKey,
+              let window = recentAppWindows.first(where: { appKey(for: $0) == focusedAppKey }),
+              canExcludeApp(window) else { return false }
+        showActionChooser(for: window, stage: .exclusion)
+        return true
+    }
+
+    func showActionChooser(for window: WindowItem, stage: WindowActionChooserStage) {
+        actionChooserWindow = window
+        actionChooserStage = stage
         actionChooserSelection = 0
+        actionChooserReturnsToRemoval = stage == .removal
     }
 
     func moveActionChooserSelection(_ direction: Int) {
@@ -527,7 +544,7 @@ final class OverviewViewModel {
     }
 
     func cancelActionChooser() {
-        if actionChooserStage == .exclusion {
+        if actionChooserStage == .exclusion, actionChooserReturnsToRemoval {
             actionChooserStage = .removal
             actionChooserSelection = 2
         } else {
@@ -547,6 +564,29 @@ final class OverviewViewModel {
         actionChooserWindow = nil
         actionChooserStage = nil
         actionChooserSelection = 0
+        actionChooserReturnsToRemoval = false
+    }
+
+    func closeWindowFromMenu(_ window: WindowItem) {
+        closeWindow(window)
+    }
+
+    func quitApp(_ window: WindowItem) {
+        guard window.bundleIdentifier?.caseInsensitiveCompare("com.apple.finder") != .orderedSame,
+              window.appName.caseInsensitiveCompare("Finder") != .orderedSame else {
+            SafeDiagnosticLog.shared.record("menu: ignored quit for Finder")
+            return
+        }
+        guard activator.quit(window) else {
+            errorMessage = L10n.string("Kehai could not quit this app.")
+            return
+        }
+        windows.removeAll {
+            $0.processID == window.processID
+                || (window.bundleIdentifier != nil && $0.bundleIdentifier == window.bundleIdentifier)
+        }
+        reconcileCachedGroups()
+        preserveSelectionOrSelectFirst()
     }
 
     private func closeWindow(_ window: WindowItem, keepKehaiActive: Bool = true) {
@@ -627,6 +667,16 @@ final class OverviewViewModel {
         Task { await liveThumbnails.stop() }
     }
 
+    func setMenuTrackingActive(_ active: Bool) {
+        guard liveThumbnailPausedForMenu != active else { return }
+        liveThumbnailPausedForMenu = active
+        if active {
+            stopLiveThumbnail()
+        } else if liveThumbnailEnabled {
+            scheduleSelectedLiveThumbnail()
+        }
+    }
+
     /// Synchronously tears down any active capture so nothing outlives the
     /// process during app termination.
     func prepareForTermination() {
@@ -659,6 +709,7 @@ final class OverviewViewModel {
     private func scheduleSelectedLiveThumbnail() {
         stopLiveThumbnail()
         guard liveThumbnailEnabled,
+              !liveThumbnailPausedForMenu,
               NSApp.isActive,
               let windowID = selectedWindowID,
               windows.contains(where: { $0.id == windowID }) else { return }
@@ -739,9 +790,18 @@ final class OverviewViewModel {
         }
     }
 
-    func moveSelection(horizontal: Int = 0, vertical: Int = 0, columnCount: Int) {
+    func moveSelection(
+        horizontal: Int = 0,
+        vertical: Int = 0,
+        columnCount: Int,
+        windowsAboveAppStrip: Bool = false
+    ) {
         if selectedAppWindowID != nil || isAllWindowsAppSelected {
-            moveAppSelection(horizontal: horizontal, vertical: vertical)
+            moveAppSelection(
+                horizontal: horizontal,
+                vertical: vertical,
+                windowsAboveAppStrip: windowsAboveAppStrip
+            )
             return
         }
 
@@ -755,7 +815,8 @@ final class OverviewViewModel {
             return
         }
         let visualRows = keyboardWindowRows(columnCount: columnCount)
-        if vertical < 0,
+        let returnsToAppStrip = windowsAboveAppStrip ? vertical > 0 : vertical < 0
+        if returnsToAppStrip,
            let selectedWindowID,
            let firstRow = visualRows.first,
            firstRow.contains(where: { $0.id == selectedWindowID }) {
@@ -777,7 +838,7 @@ final class OverviewViewModel {
         selectedWindowID = visible[targetIndex].id
     }
 
-    private func moveAppSelection(horizontal: Int, vertical: Int) {
+    private func moveAppSelection(horizontal: Int, vertical: Int, windowsAboveAppStrip: Bool) {
         let apps = recentAppWindows
         guard !apps.isEmpty else {
             selectedAppWindowID = nil
@@ -787,7 +848,8 @@ final class OverviewViewModel {
         let currentIndex = isAllWindowsAppSelected
             ? 0
             : (focusedAppKey.flatMap { key in apps.firstIndex { appKey(for: $0) == key } }.map { $0 + 1 } ?? 1)
-        if vertical > 0 {
+        let entersWindows = windowsAboveAppStrip ? vertical < 0 : vertical > 0
+        if entersWindows {
             guard let mostRecentWindow = orderedFilteredWindows.first else { return }
             appWindowIDBeforeEnteringWindows = selectedAppWindowID
             isAllWindowsAppSelected = false
@@ -795,7 +857,7 @@ final class OverviewViewModel {
             selectedWindowID = mostRecentWindow.id
             return
         }
-        if vertical < 0 { return }
+        if vertical != 0 { return }
         let targetIndex = min(max(currentIndex + horizontal, 0), apps.count)
         if targetIndex == 0 {
             selectAllWindowsApp()

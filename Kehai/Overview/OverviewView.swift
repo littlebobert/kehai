@@ -250,7 +250,12 @@ struct OverviewView: View {
                             },
                             dragExited: {
                                 model.dragHoverExited(windowID: window.id)
-                            }
+                            },
+                            quitApp: { model.quitApp(window) },
+                            canExcludeFromAI: model.canExcludeAppFromAI(window),
+                            canExcludeEntirely: model.canExcludeApp(window),
+                            excludeFromAI: { model.excludeAppFromAI(window) },
+                            excludeEntirely: { model.excludeApp(for: window) }
                         )
                     }
                 }
@@ -399,16 +404,20 @@ struct OverviewView: View {
             thumbnailCellHeight: thumbnailCellHeight,
             isHidden: model.isWindowHidden(window),
             canExcludeApp: model.canExcludeApp(window),
+            canExcludeFromAI: model.canExcludeAppFromAI(window),
             taskContext: model.taskContext(for: window.id),
             select: { model.activate(window); close() },
             hoverChanged: { isHovering in model.hoverWindowInSwitcherMode(isHovering ? window.id : nil) },
             dragEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
             dragExited: { model.dragHoverExited(windowID: window.id) },
+            closeWindow: { model.closeWindowFromMenu(window) },
             toggleHidden: { model.toggleHidden(window) },
             excludeApp: {
                 model.selectedWindowID = window.id
                 model.showActionChooserForSelectedWindow()
             },
+            excludeFromAI: { model.excludeAppFromAI(window) },
+            excludeEntirely: { model.excludeApp(for: window) },
             selectTab: { tab in Task { await model.activate(tab); close() } }
         )
         .frame(width: model.thumbnailCardWidth)
@@ -485,26 +494,46 @@ struct CompactSwitcherView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            if opensUp {
-                compactWindows
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.horizontal, 12)
-                    .padding(.top, 12)
-                appStrip
-                    .padding(.bottom, 2)
-            } else {
-                appStrip
-                    .padding(.top, 10)
-                compactWindows
-                    .padding(.top, 10)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
+        ZStack {
+            VStack(spacing: 0) {
+                if opensUp {
+                    compactWindows
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                    appStrip
+                        .padding(.bottom, 2)
+                } else {
+                    appStrip
+                        .padding(.top, 10)
+                    compactWindows
+                        .padding(.top, 10)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+
+            if let window = model.actionChooserWindow, let stage = model.actionChooserStage {
+                Color.black.opacity(0.18)
+                    .ignoresSafeArea()
+                    .onTapGesture { model.cancelActionChooser() }
+                WindowActionChooser(
+                    window: window,
+                    stage: stage,
+                    selectedIndex: model.actionChooserSelection,
+                    canExcludeApp: model.canExcludeApp(window),
+                    canExcludeFromAI: model.canExcludeAppFromAI(window),
+                    choose: { index in
+                        model.actionChooserSelection = index
+                        model.confirmActionChooserSelection()
+                    },
+                    cancel: model.cancelActionChooser
+                )
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 4)
         .background {
             if appearance.usesGlassyWindow && !reduceTransparency {
                 Rectangle().fill(.ultraThinMaterial)
@@ -570,6 +599,16 @@ struct CompactSwitcherView: View {
             )
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(L10n.string("Quit App")) { model.quitApp(window) }
+            Menu(L10n.string("Exclude App…")) {
+                Button(L10n.string("From AI Queries")) { model.excludeAppFromAI(window) }
+                    .disabled(!model.canExcludeAppFromAI(window))
+                Button(L10n.string("From Kehai Entirely")) { model.excludeApp(for: window) }
+                    .disabled(!model.canExcludeApp(window))
+            }
+            .disabled(!model.canExcludeAppFromAI(window) && !model.canExcludeApp(window))
+        }
         .onHover { hovering in
             guard hovering else { return }
             model.hoverAppInSwitcherMode(window.id)
@@ -675,6 +714,17 @@ struct CompactSwitcherView: View {
             }
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button(L10n.string("Close Window")) { model.closeWindowFromMenu(window) }
+            Button(L10n.string("Hide Window in Kehai")) { model.toggleHidden(window) }
+            Menu(L10n.string("Exclude App…")) {
+                Button(L10n.string("From AI Queries")) { model.excludeAppFromAI(window) }
+                    .disabled(!model.canExcludeAppFromAI(window))
+                Button(L10n.string("From Kehai Entirely")) { model.excludeApp(for: window) }
+                    .disabled(!model.canExcludeApp(window))
+            }
+            .disabled(!model.canExcludeAppFromAI(window) && !model.canExcludeApp(window))
+        }
         .onHover { hovering in model.hoverWindowInSwitcherMode(hovering ? window.id : nil) }
         .dragHoverCatcher(
             onEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
@@ -754,6 +804,11 @@ private struct RecentAppButton: View {
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
+    let quitApp: () -> Void
+    let canExcludeFromAI: Bool
+    let canExcludeEntirely: Bool
+    let excludeFromAI: () -> Void
+    let excludeEntirely: () -> Void
 
     private var appNameWidth: CGFloat {
         let attributes: [NSAttributedString.Key: Any] = [
@@ -807,6 +862,16 @@ private struct RecentAppButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .contextMenu {
+            Button(L10n.string("Quit App"), action: quitApp)
+            Menu(L10n.string("Exclude App…")) {
+                Button(L10n.string("From AI Queries"), action: excludeFromAI)
+                    .disabled(!canExcludeFromAI)
+                Button(L10n.string("From Kehai Entirely"), action: excludeEntirely)
+                    .disabled(!canExcludeEntirely)
+            }
+            .disabled(!canExcludeFromAI && !canExcludeEntirely)
+        }
         .onHover(perform: hoverChanged)
         .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
     }
@@ -821,16 +886,16 @@ private struct WindowActionChooser: View {
     let choose: (Int) -> Void
     let cancel: () -> Void
 
-    private var options: [(title: String, detail: String, isDestructive: Bool)] {
+    private var options: [(title: String, detail: String)] {
         switch stage {
         case .removal:
             return [
-                (L10n.string("Close Window"), L10n.format("Use %@’s normal close action. Unsaved-work prompts appear in the app.", window.appName), false),
-                (L10n.string("Hide Window in Kehai"), L10n.string("Hide only this window from the browser."), false)
-            ] + (canExcludeApp ? [(L10n.string("Exclude App…"), L10n.format("Choose whether to exclude every %@ window from AI or Kehai.", window.appName), false)] : [])
+                (L10n.string("Close Window"), L10n.format("Use %@’s normal close action. Unsaved-work prompts appear in the app.", window.appName)),
+                (L10n.string("Hide Window in Kehai"), L10n.string("Hide only this window from the browser."))
+            ] + (canExcludeApp ? [(L10n.string("Exclude App…"), L10n.format("Choose whether to exclude every %@ window from AI or Kehai.", window.appName))] : [])
         case .exclusion:
-            return (canExcludeFromAI ? [(L10n.string("From AI Only"), L10n.format("Keep %@ visible locally, but never send its data to AI.", window.appName), false)] : [])
-                + [(L10n.string("From Kehai Entirely"), L10n.format("Remove %@ and never capture or send it.", window.appName), true)]
+            return (canExcludeFromAI ? [(L10n.string("From AI Queries"), L10n.format("Keep %@ visible locally, but never send its data to AI. Change this later in Settings.", window.appName))] : [])
+                + [(L10n.string("From Kehai Entirely"), L10n.format("Remove %@ from Kehai entirely. Change this later in Settings.", window.appName))]
         }
     }
 
@@ -848,7 +913,6 @@ private struct WindowActionChooser: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(option.title)
                                     .fontWeight(.medium)
-                                    .foregroundStyle(option.isDestructive ? Color.red : Color.primary)
                                 Text(option.detail).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -885,13 +949,17 @@ private struct WindowCard: View {
     let thumbnailCellHeight: CGFloat
     let isHidden: Bool
     let canExcludeApp: Bool
+    let canExcludeFromAI: Bool
     let taskContext: String?
     let select: () -> Void
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
+    let closeWindow: () -> Void
     let toggleHidden: () -> Void
     let excludeApp: () -> Void
+    let excludeFromAI: () -> Void
+    let excludeEntirely: () -> Void
     let selectTab: (SafariTab) -> Void
 
     private var capturedWindowCornerRadius: CGFloat {
@@ -1022,6 +1090,17 @@ private struct WindowCard: View {
                 .padding(1)
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
+        .contextMenu {
+            Button(L10n.string("Close Window"), action: closeWindow)
+            Button(L10n.string("Hide Window in Kehai"), action: toggleHidden)
+            Menu(L10n.string("Exclude App…")) {
+                Button(L10n.string("From AI Queries"), action: excludeFromAI)
+                    .disabled(!canExcludeFromAI)
+                Button(L10n.string("From Kehai Entirely"), action: excludeEntirely)
+                    .disabled(!canExcludeApp)
+            }
+            .disabled(!canExcludeFromAI && !canExcludeApp)
+        }
         .onHover(perform: hoverChanged)
         .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
         .opacity(dusty ? 0.62 : 1)

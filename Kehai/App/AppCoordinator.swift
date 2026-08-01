@@ -387,7 +387,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             showSettings()
             return
         }
-        panelController.show()
+        if !panelController.isVisible {
+            panelController.show()
+            viewModel.selectAllWindowsApp()
+        }
         viewModel.cycleSelectionByApp(direction)
     }
 
