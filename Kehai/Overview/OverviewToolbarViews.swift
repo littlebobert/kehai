@@ -5,39 +5,43 @@ struct GroupingControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Button(L10n.string(model.taskGroups.isEmpty ? "Generate Groups" : "Regenerate Groups")) {
-                Task { await model.refreshAndRegenerateGroups() }
+            if model.viewMode == .grouped {
+                Button(L10n.string(model.taskGroups.isEmpty ? "Generate Groups" : "Regenerate Groups")) {
+                    Task { await model.refreshAndRegenerateGroups() }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .disabled(model.isLoading || model.isGrouping)
+                .help("Use AI with downsampled window screenshots to infer task groups · Command-R")
+                .frame(height: 24, alignment: .topLeading)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(model.isLoading || model.isGrouping)
-            .help("Use AI with downsampled window screenshots to infer task groups · Command-R")
-            .frame(height: 24, alignment: .topLeading)
 
-            HStack(spacing: 4) {
-                if let thumbnailStatus = model.thumbnailStatus {
-                    ProgressView().controlSize(.mini)
-                    Text(thumbnailStatus)
-                        .contentTransition(.numericText())
-                } else if let groupingStatus = model.groupingStatus {
-                    ProgressView().controlSize(.mini)
-                    Text(groupingStatus)
-                        .contentTransition(.numericText())
-                } else if model.hasGeneratedGroups,
-                          let generatedAt = model.groupsGeneratedAt {
-                    if Date().timeIntervalSince(generatedAt) < 60 {
-                        Text("Generated just now")
-                    } else {
-                        Text("Generated \(generatedAt, format: .relative(presentation: .named))")
+            if model.thumbnailStatus != nil || model.viewMode == .grouped {
+                HStack(spacing: 4) {
+                    if let thumbnailStatus = model.thumbnailStatus {
+                        ProgressView().controlSize(.mini)
+                        Text(thumbnailStatus)
+                            .contentTransition(.numericText())
+                    } else if let groupingStatus = model.groupingStatus {
+                        ProgressView().controlSize(.mini)
+                        Text(groupingStatus)
+                            .contentTransition(.numericText())
+                    } else if model.hasGeneratedGroups,
+                              let generatedAt = model.groupsGeneratedAt {
+                        if Date().timeIntervalSince(generatedAt) < 60 {
+                            Text("Generated just now")
+                        } else {
+                            Text("Generated \(generatedAt, format: .relative(presentation: .named))")
+                        }
                     }
                 }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .padding(.leading, 7)
+                .frame(height: 16, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
             }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .padding(.leading, 7)
-            .frame(height: 16, alignment: .leading)
-            .fixedSize(horizontal: true, vertical: false)
         }
     }
 }
