@@ -96,13 +96,17 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         guard let screen else { return }
 
         let visibleFrame = screen.visibleFrame
-        let minimumWidth: CGFloat = 576
-        let savedWidth = UserDefaults.standard.double(forKey: Self.compactContentWidthKey)
-        let defaultWidth = min(640, max(minimumWidth, CGFloat(model.recentAppWindows.count + 1) * 50 + 20))
-        let preferredWidth = savedWidth > 0 ? CGFloat(savedWidth) : defaultWidth
-        let width = min(max(preferredWidth, minimumWidth), visibleFrame.width)
+        let preferredMinimumWidth: CGFloat = 576
         let allWindowsIconHorizontalInset: CGFloat = 37
-        let opensRight = pointer.x + width - allWindowsIconHorizontalInset <= visibleFrame.maxX
+        let maximumRightWidth = visibleFrame.maxX - pointer.x + allWindowsIconHorizontalInset
+        let maximumLeftWidth = pointer.x - visibleFrame.minX + allWindowsIconHorizontalInset
+        let opensRight = maximumRightWidth >= maximumLeftWidth
+        let maximumAnchoredWidth = floor(opensRight ? maximumRightWidth : maximumLeftWidth)
+        let minimumWidth = min(preferredMinimumWidth, maximumAnchoredWidth)
+        let savedWidth = UserDefaults.standard.double(forKey: Self.compactContentWidthKey)
+        let defaultWidth = min(640, max(preferredMinimumWidth, CGFloat(model.recentAppWindows.count + 1) * 50 + 20))
+        let preferredWidth = savedWidth > 0 ? CGFloat(savedWidth) : defaultWidth
+        let width = min(max(preferredWidth, minimumWidth), maximumAnchoredWidth)
         let estimatedHeight: CGFloat = 260
         let height = min(estimatedHeight, visibleFrame.height)
         let topStripIconInset: CGFloat = 32
@@ -112,7 +116,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let iconCenterY = opensUp ? bottomStripIconInset : height - topStripIconInset
         let proposedOriginX = pointer.x - iconCenterX
         let proposedOriginY = pointer.y - iconCenterY
-        let originX = min(max(proposedOriginX, visibleFrame.minX), visibleFrame.maxX - width)
+        let originX = proposedOriginX
         let originY = min(max(proposedOriginY, visibleFrame.minY), visibleFrame.maxY - height)
 
         let panel = NSWindow(
@@ -130,10 +134,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let minimumFrameWidth = panel.frameRect(
             forContentRect: NSRect(origin: .zero, size: NSSize(width: minimumWidth, height: height))
         ).width
+        let maximumFrameWidth = panel.frameRect(
+            forContentRect: NSRect(origin: .zero, size: NSSize(width: maximumAnchoredWidth, height: height))
+        ).width
         panel.minSize = NSSize(width: minimumFrameWidth, height: fixedFrameHeight)
-        panel.maxSize = NSSize(width: .greatestFiniteMagnitude, height: fixedFrameHeight)
+        panel.maxSize = NSSize(width: maximumFrameWidth, height: fixedFrameHeight)
         panel.contentMinSize = NSSize(width: minimumWidth, height: height)
-        panel.contentMaxSize = NSSize(width: .greatestFiniteMagnitude, height: height)
+        panel.contentMaxSize = NSSize(width: maximumAnchoredWidth, height: height)
         let hostingView = NSHostingView(
             rootView: CompactSwitcherView(
                 model: model,
