@@ -36,14 +36,27 @@ struct KehaiApp: App {
             }
             CommandGroup(after: .toolbar) {
                 Divider()
+                Button("Show Full Browser") {
+                    appDelegate.coordinator.showFullBrowser()
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
+                .disabled(appDelegate.coordinator.browserPresentationState.isFullBrowserVisible)
+                Button("Show Mini Browser") {
+                    appDelegate.coordinator.showMiniBrowser()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .shift])
+                .disabled(appDelegate.coordinator.browserPresentationState.isMiniBrowserVisible)
+                Divider()
                 Button("Group by task") {
                     appDelegate.coordinator.setBrowserViewMode(.grouped)
                 }
                 .keyboardShortcut("1", modifiers: .command)
+                .disabled(!appDelegate.coordinator.canGroupByTask)
                 Button("Sort all by recent") {
                     appDelegate.coordinator.setBrowserViewMode(.recent)
                 }
                 .keyboardShortcut("2", modifiers: .command)
+                .disabled(!appDelegate.coordinator.canSortAllByRecent)
                 Divider()
                 Button("Next App") {
                     appDelegate.coordinator.cycleBrowserSelectionByApp(1)
@@ -57,11 +70,12 @@ struct KehaiApp: App {
                 Button("Refresh Windows") {
                     appDelegate.coordinator.refreshWindows()
                 }
-                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .keyboardShortcut("r", modifiers: .command)
                 Button("Regenerate Groups") {
                     appDelegate.coordinator.regenerateGroups()
                 }
-                .keyboardShortcut("r", modifiers: .command)
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(appDelegate.coordinator.canGroupByTask)
                 Button("Search") {
                     appDelegate.coordinator.focusBrowserSearch()
                 }

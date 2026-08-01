@@ -21,7 +21,7 @@ else
 fi
 
 cd "$ROOT"
-/opt/homebrew/bin/xcodegen generate
+/opt/homebrew/bin/xcodegen generate --quiet
 /bin/rm -rf "$DERIVED_DATA"
 /usr/bin/xcodebuild \
   -project Kehai.xcodeproj \

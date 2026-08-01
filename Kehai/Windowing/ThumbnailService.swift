@@ -14,8 +14,14 @@ struct CapturedThumbnail {
 @MainActor
 final class ThumbnailService {
     private let logger = Logger(subsystem: "com.justin.Kehai", category: "Thumbnails")
+    private var isTerminating = false
+
+    func prepareForTermination() {
+        isTerminating = true
+    }
 
     func image(for window: SCWindow, maximumSize: CGSize = CGSize(width: 640, height: 400)) async -> CapturedThumbnail? {
+        guard !isTerminating, !Task.isCancelled else { return nil }
         let scale = min(maximumSize.width / max(window.frame.width, 1), maximumSize.height / max(window.frame.height, 1), 1)
         let configuration = SCStreamConfiguration()
         configuration.width = max(1, Int(window.frame.width * scale))
@@ -24,10 +30,12 @@ final class ThumbnailService {
         configuration.ignoreShadowsSingleWindow = true
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let appName = window.owningApplication?.applicationName ?? "Unknown"
+        guard !isTerminating, !Task.isCancelled else { return nil }
         logger.notice("Thumbnail capture started size=\(configuration.width)x\(configuration.height)")
         do {
             // SCWindow isn't Sendable, so capture stays here; CPU post-process moves off-main.
             let source = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+            guard !isTerminating, !Task.isCancelled else { return nil }
             return await Task.detached(priority: .utility) {
                 let flattened = Self.flatten(source)
                 let analysis = Self.analyze(flattened)

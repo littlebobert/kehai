@@ -15,15 +15,18 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
     private let isShortcutSessionActive: () -> Bool
+    private let presentationChanged: (Bool, Bool) -> Void
 
     init(
         model: OverviewViewModel,
         appearance: AppearanceSettings,
-        isShortcutSessionActive: @escaping () -> Bool
+        isShortcutSessionActive: @escaping () -> Bool,
+        presentationChanged: @escaping (Bool, Bool) -> Void
     ) {
         self.model = model
         self.appearance = appearance
         self.isShortcutSessionActive = isShortcutSessionActive
+        self.presentationChanged = presentationChanged
         super.init()
         accessibilityDisplayOptionsObserver = NotificationCenter.default.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
@@ -38,7 +41,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    var isVisible: Bool { window?.isVisible == true || compactWindow?.isVisible == true }
+    var isVisible: Bool { isFullBrowserVisible || isMiniBrowserVisible }
+    var isFullBrowserVisible: Bool { window?.isVisible == true }
+    var isMiniBrowserVisible: Bool { compactWindow?.isVisible == true }
+
+    private func notifyPresentationChanged() {
+        presentationChanged(isFullBrowserVisible, isMiniBrowserVisible)
+    }
 
     private var minimumContentSize: NSSize {
         // One default-width thumbnail plus the browser's horizontal insets and scrollbar.
@@ -59,10 +68,21 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func showAndFocusSearch() {
+        closeCompactSwitcher()
         show()
         DispatchQueue.main.async { [weak self] in
             self?.model.searchFocusRequest += 1
         }
+    }
+
+    func showFullBrowser() {
+        closeCompactSwitcher()
+        show()
+    }
+
+    func showMiniBrowser() {
+        model.beginSwitcherMode()
+        showCompactSwitcher()
     }
 
     func beginSwitcherMode() {
@@ -96,21 +116,21 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         guard let screen else { return }
 
         let visibleFrame = screen.visibleFrame
-        let preferredMinimumWidth: CGFloat = 576
-        let allWindowsIconHorizontalInset: CGFloat = 37
+        let preferredMinimumWidth: CGFloat = 692
+        let allWindowsIconHorizontalInset: CGFloat = 42
         let maximumRightWidth = visibleFrame.maxX - pointer.x + allWindowsIconHorizontalInset
         let maximumLeftWidth = pointer.x - visibleFrame.minX + allWindowsIconHorizontalInset
         let opensRight = maximumRightWidth >= maximumLeftWidth
         let maximumAnchoredWidth = floor(opensRight ? maximumRightWidth : maximumLeftWidth)
         let minimumWidth = min(preferredMinimumWidth, maximumAnchoredWidth)
         let savedWidth = UserDefaults.standard.double(forKey: Self.compactContentWidthKey)
-        let defaultWidth = min(640, max(preferredMinimumWidth, CGFloat(model.recentAppWindows.count + 1) * 50 + 20))
+        let defaultWidth = min(768, max(preferredMinimumWidth, CGFloat(model.recentAppWindows.count + 1) * 59 + 20))
         let preferredWidth = savedWidth > 0 ? CGFloat(savedWidth) : defaultWidth
         let width = min(max(preferredWidth, minimumWidth), maximumAnchoredWidth)
-        let estimatedHeight: CGFloat = 260
+        let estimatedHeight: CGFloat = 276
         let height = min(estimatedHeight, visibleFrame.height)
-        let topStripIconInset: CGFloat = 32
-        let bottomStripIconInset: CGFloat = 50
+        let topStripIconInset: CGFloat = 38
+        let bottomStripIconInset: CGFloat = 60
         let opensUp = pointer.y - (height - topStripIconInset) < visibleFrame.minY
         let iconCenterX = opensRight ? allWindowsIconHorizontalInset : width - allWindowsIconHorizontalInset
         let iconCenterY = opensUp ? bottomStripIconInset : height - topStripIconInset
@@ -125,7 +145,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        panel.title = "Kehai Switcher"
+        panel.title = "Kehai mini"
         panel.titleVisibility = .visible
         panel.tabbingMode = .disallowed
         panel.isReleasedWhenClosed = false
@@ -164,11 +184,16 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         installMouseMonitor()
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        notifyPresentationChanged()
         Task { await model.performInitialRefreshIfNeeded() }
     }
 
     @objc private func openFullBrowserFromCompactZoom(_ sender: Any?) {
         showFullBrowserFromCompactSwitcher()
+    }
+
+    @objc private func openMiniBrowserFromFullZoom(_ sender: Any?) {
+        showMiniBrowser()
     }
 
     private func showFullBrowserFromCompactSwitcher() {
@@ -190,9 +215,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             removeKeyMonitor()
             removeMouseMonitor()
         }
+        notifyPresentationChanged()
     }
 
     func show(selectedGroupID: String? = nil) {
+        closeCompactSwitcher()
         if let window {
             // Drop leftover search / smart-search / group filters unless this open
             // explicitly targets a Dock menu group.
@@ -208,6 +235,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             NSApp.activate(ignoringOtherApps: true)
             window.makeKeyAndOrderFront(nil)
             window.makeFirstResponder(window.contentView)
+            notifyPresentationChanged()
             return
         }
 
@@ -234,6 +262,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
         window.delegate = self
         self.window = window
+        window.standardWindowButton(.zoomButton)?.target = self
+        window.standardWindowButton(.zoomButton)?.action = #selector(openMiniBrowserFromFullZoom(_:))
+        window.standardWindowButton(.zoomButton)?.toolTip = "Open Mini Browser"
         updateAppearance()
         installKeyMonitor()
         installMouseMonitor()
@@ -241,6 +272,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(window.contentView)
+        notifyPresentationChanged()
         Task { await model.performInitialRefreshIfNeeded() }
     }
 
@@ -298,6 +330,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             model.prepareForBrowserPresentation(selectedGroupID: nil)
             compactWindow = nil
         }
+        notifyPresentationChanged()
         removeKeyMonitor()
         removeMouseMonitor()
     }
@@ -429,7 +462,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "f" {
-                self.model.searchFocusRequest += 1
+                if event.window === self.compactWindow {
+                    self.showAndFocusSearch()
+                } else {
+                    self.model.searchFocusRequest += 1
+                }
                 return nil
             }
             if modifiers == .command, (event.keyCode == 36 || event.keyCode == 76) {
@@ -450,12 +487,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             if modifiers == [.command, .shift],
                event.charactersIgnoringModifiers?.lowercased() == "r" {
-                Task { await self.model.refreshWindows() }
+                guard self.model.viewMode == .grouped else { return nil }
+                Task { await self.model.refreshAndRegenerateGroups() }
                 return nil
             }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "r" {
-                Task { await self.model.refreshAndRegenerateGroups() }
+                Task { await self.model.refreshWindows() }
                 return nil
             }
             if modifiers.contains(.command),

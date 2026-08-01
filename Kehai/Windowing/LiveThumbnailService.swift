@@ -10,15 +10,20 @@ final class LiveThumbnailService {
     private var stream: SCStream?
     private var output: LiveStreamOutput?
     private var generation = 0
+    private var isTerminating = false
 
     func start(windowID: CGWindowID, maximumSize: CGSize, frame: @escaping @MainActor (NSImage) -> Void) async {
+        guard !isTerminating, !Task.isCancelled else { return }
         await stop()
+        guard !isTerminating, !Task.isCancelled else { return }
         generation += 1
         let currentGeneration = generation
 
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
-            guard currentGeneration == generation,
+            guard !isTerminating,
+                  !Task.isCancelled,
+                  currentGeneration == generation,
                   let window = content.windows.first(where: { $0.windowID == windowID }) else { return }
 
             let scale = min(
@@ -50,9 +55,14 @@ final class LiveThumbnailService {
                 type: .screen,
                 sampleHandlerQueue: DispatchQueue(label: "com.justin.Kehai.live-thumbnail", qos: .userInteractive)
             )
+            guard !isTerminating, !Task.isCancelled else { return }
             self.output = output
             self.stream = stream
             try await stream.startCapture()
+            guard !isTerminating, !Task.isCancelled else {
+                await stop()
+                return
+            }
             logger.notice("Live capture started")
         } catch {
             guard currentGeneration == generation else { return }
@@ -78,6 +88,7 @@ final class LiveThumbnailService {
     /// Best-effort synchronous teardown for app termination, where awaiting
     /// an async `stop()` would never get a chance to run before process exit.
     func prepareForTermination() {
+        isTerminating = true
         generation += 1
         guard let stream else {
             output = nil

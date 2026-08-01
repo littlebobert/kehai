@@ -145,6 +145,8 @@ final class OverviewViewModel {
     private var isPerformingInitialRefresh = false
     private var inventoryReconciliationTask: Task<Void, Never>?
     private var isReconcilingInventory = false
+    private var activeRefreshCount = 0
+    private var isTerminating = false
     private let catalog: WindowCatalog
     private let thumbnails: ThumbnailService
     private let safari: SafariTabService
@@ -351,7 +353,7 @@ final class OverviewViewModel {
         if let focusedAppKey {
             return [BrowserWindowSection(
                 id: "app-focus-\(focusedAppKey)",
-                title: focusedAppName,
+                title: nil,
                 windows: filteredWindows
             )]
         }
@@ -626,12 +628,30 @@ final class OverviewViewModel {
     /// Synchronously tears down any active capture so nothing outlives the
     /// process during app termination.
     func prepareForTermination() {
+        isTerminating = true
+        inventoryReconciliationTask?.cancel()
+        inventoryReconciliationTask = nil
+        dragDwellTask?.cancel()
+        dragDwellTask = nil
+        dragPasteboardPollTask?.cancel()
+        dragPasteboardPollTask = nil
         liveThumbnailTask?.cancel()
-        liveThumbnailTask = nil
         liveThumbnailWindowID = nil
         liveThumbnail = nil
         liveThumbnailEnabled = false
+        thumbnails.prepareForTermination()
         liveThumbnails.prepareForTermination()
+    }
+
+    func finishTermination() async {
+        if let liveThumbnailTask {
+            await liveThumbnailTask.value
+            self.liveThumbnailTask = nil
+        }
+        while activeRefreshCount > 0 {
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+        await liveThumbnails.stop()
     }
 
     private func scheduleSelectedLiveThumbnail() {
@@ -1278,6 +1298,7 @@ final class OverviewViewModel {
     }
 
     func refreshForForeground() async {
+        guard !isTerminating else { return }
         // Don't re-inventory mid-drag — SCK/AX snapshots are incomplete and wipe the grid.
         guard !shouldFreezeInventory else { return }
         guard hasPerformedInitialRefresh else {
@@ -1290,7 +1311,7 @@ final class OverviewViewModel {
     func scheduleBackgroundInventoryReconciliation() {
         // System drags make ScreenCaptureKit / Accessibility snapshots incomplete;
         // reconciling then looks like "errant filtering" of apps and windows.
-        guard !shouldFreezeInventory else { return }
+        guard !isTerminating, !shouldFreezeInventory else { return }
         inventoryReconciliationTask?.cancel()
         inventoryReconciliationTask = Task { [weak self] in
             guard let self, !self.shouldFreezeInventory else { return }
@@ -1299,6 +1320,9 @@ final class OverviewViewModel {
     }
 
     func refresh(generateInitialGroups: Bool = true, showsGlobalLoading: Bool = true) async {
+        guard !isTerminating else { return }
+        activeRefreshCount += 1
+        defer { activeRefreshCount -= 1 }
         guard !shouldFreezeInventory else {
             // Never leave the first-launch spinner up if a drag blocked refresh.
             if showsGlobalLoading, windows.isEmpty { isLoading = false }
@@ -1472,6 +1496,7 @@ final class OverviewViewModel {
     }
 
     private func refreshThumbnails(for pairs: [(WindowItem, SCWindow)]) async {
+        guard !isTerminating, !Task.isCancelled else { return }
         let prioritizedPairs = pairs.sorted { left, right in
             if left.0.id == selectedWindowID { return true }
             if right.0.id == selectedWindowID { return false }
@@ -1482,7 +1507,7 @@ final class OverviewViewModel {
         thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", 0, Int64(prioritizedPairs.count))
 
         for (offset, pair) in prioritizedPairs.enumerated() {
-            guard !Task.isCancelled else { break }
+            guard !isTerminating, !Task.isCancelled else { break }
             let (item, window) = pair
             guard windows.contains(where: { $0.id == item.id }) else {
                 refreshingThumbnailWindowIDs.remove(item.id)
@@ -1491,9 +1516,11 @@ final class OverviewViewModel {
             thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", Int64(offset + 1), Int64(prioritizedPairs.count))
             // Yield so key events / scrolling can run between captures.
             await Task.yield()
+            guard !isTerminating, !Task.isCancelled else { break }
             var capture = await thumbnails.image(for: window)
-            if capture == nil {
+            if capture == nil, !isTerminating, !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(250))
+                guard !isTerminating, !Task.isCancelled else { break }
                 capture = await thumbnails.image(for: window)
             }
             refreshingThumbnailWindowIDs.remove(item.id)

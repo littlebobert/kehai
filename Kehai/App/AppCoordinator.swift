@@ -1,5 +1,18 @@
 import AppKit
 import Carbon
+import Observation
+
+@MainActor
+@Observable
+final class BrowserPresentationState {
+    private(set) var isFullBrowserVisible = false
+    private(set) var isMiniBrowserVisible = false
+
+    func update(fullBrowserVisible: Bool, miniBrowserVisible: Bool) {
+        isFullBrowserVisible = fullBrowserVisible
+        isMiniBrowserVisible = miniBrowserVisible
+    }
+}
 
 @MainActor
 final class AppCoordinator: NSObject, NSMenuItemValidation {
@@ -13,6 +26,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let autoUpdates = AutoUpdateService()
     let appearanceSettings = AppearanceSettings()
     let idleGroupingSettings = IdleGroupingSettings()
+    let browserPresentationState = BrowserPresentationState()
     private lazy var activityMonitor = ActivityMonitor(store: history)
     private lazy var viewModel = OverviewViewModel(
         catalog: WindowCatalog(excludedApps: excludedAppStore),
@@ -38,7 +52,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private lazy var panelController = OverviewPanelController(
         model: viewModel,
         appearance: appearanceSettings,
-        isShortcutSessionActive: { [weak self] in self?.isShortcutSessionActive == true }
+        isShortcutSessionActive: { [weak self] in self?.isShortcutSessionActive == true },
+        presentationChanged: { [weak self] fullBrowserVisible, miniBrowserVisible in
+            self?.browserPresentationState.update(
+                fullBrowserVisible: fullBrowserVisible,
+                miniBrowserVisible: miniBrowserVisible
+            )
+        }
     )
     let shortcutSettings = ShortcutSettings()
     private lazy var onboardingController = OnboardingWindowController(
@@ -118,8 +138,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         }
     }
 
-    func stop() {
+    func prepareForTermination() {
         guard hasStartedServices else { return }
+        hasStartedServices = false
         hotKey.unregister()
         isShortcutSessionActive = false
         removeModifierMonitor()
@@ -129,6 +150,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         windowInventoryMonitor.stop()
         viewModel.prepareForTermination()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+    }
+
+    func finishTermination() async {
+        await viewModel.finishTermination()
     }
 
     private func beginSwitcherMode() {
@@ -256,6 +281,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         }
         return true
     }
+
+    var canGroupByTask: Bool { viewModel.viewMode != .grouped }
+    var canSortAllByRecent: Bool { viewModel.viewMode != .recent }
 
     private func reportBug() {
         permissionManager.refresh()
@@ -388,6 +416,24 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             return
         }
         panelController.showAndFocusSearch()
+    }
+
+    func showFullBrowser() {
+        permissionManager.refresh()
+        guard permissionManager.hasCorePermissions else {
+            showSettings()
+            return
+        }
+        panelController.showFullBrowser()
+    }
+
+    func showMiniBrowser() {
+        permissionManager.refresh()
+        guard permissionManager.hasCorePermissions else {
+            showSettings()
+            return
+        }
+        panelController.showMiniBrowser()
     }
 
     @objc private func quit() {

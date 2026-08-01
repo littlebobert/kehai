@@ -445,9 +445,9 @@ struct CompactSwitcherView: View {
     let opensUp: Bool
     let openBrowser: () -> Void
     let close: () -> Void
-    @State private var compactWidth: CGFloat = 568
+    @State private var compactWidth: CGFloat = 676
 
-    private let compactAppCellWidth: CGFloat = 46
+    private let compactAppCellWidth: CGFloat = 55
     private let compactAppSpacing: CGFloat = 2
     private let compactAppHorizontalPadding: CGFloat = 10
 
@@ -462,7 +462,7 @@ struct CompactSwitcherView: View {
         return opensRight ? recent : Array(recent.reversed())
     }
 
-    private let compactWindowWidth: CGFloat = 176
+    private let compactWindowWidth: CGFloat = 212
 
     private var appStripContentWidth: CGFloat {
         let itemCount = displayedApps.count + 1
@@ -488,7 +488,6 @@ struct CompactSwitcherView: View {
         VStack(spacing: 0) {
             if opensUp {
                 compactWindows
-                    .padding(.bottom, 4)
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
@@ -498,7 +497,7 @@ struct CompactSwitcherView: View {
                 appStrip
                     .padding(.top, 10)
                 compactWindows
-                    .padding(.top, 4)
+                    .padding(.top, 10)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
@@ -531,9 +530,8 @@ struct CompactSwitcherView: View {
             if !opensRight { allWindowsButton(itemIndex: displayedApps.count) }
         }
         .padding(.horizontal, compactAppHorizontalPadding)
-        .padding(.bottom, 5)
         .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
-        .frame(height: 62)
+        .frame(height: 60)
         .clipped()
     }
 
@@ -593,8 +591,8 @@ struct CompactSwitcherView: View {
             icon
                 .resizable()
                 .scaledToFit()
-                .padding(isAllWindows ? 4 : 0)
-                .frame(width: 30, height: 30)
+                .padding(isAllWindows ? 5 : 0)
+                .frame(width: 36, height: 36)
                 .padding(2)
                 .background(selected ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 10))
                 .overlay {
@@ -639,7 +637,7 @@ struct CompactSwitcherView: View {
     private var compactWindows: some View {
         if displayedWindows.isEmpty {
             Text("No open windows")
-                .font(.caption)
+                .font(.body)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity)
         } else {
@@ -688,7 +686,7 @@ struct CompactSwitcherView: View {
     private func compactThumbnail(_ window: WindowItem) -> some View {
         let liveThumbnail = model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil
         ZStack {
-            Color.black.opacity(0.06)
+            Color.clear
             if window.thumbnailIsUsable, let thumbnail = window.thumbnail {
                 Image(nsImage: thumbnail)
                     .resizable()
@@ -697,7 +695,7 @@ struct CompactSwitcherView: View {
                 Image(nsImage: icon)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 48, height: 48)
+                    .frame(width: 58, height: 58)
             }
             if let liveThumbnail {
                 Image(nsImage: liveThumbnail)
@@ -718,13 +716,13 @@ struct CompactSwitcherView: View {
                 Image(nsImage: icon)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 22, height: 22)
+                    .frame(width: 26, height: 26)
                     .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .padding(6)
             }
         }
-        .frame(height: 112)
+        .frame(height: 134)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
     }

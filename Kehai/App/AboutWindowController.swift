@@ -25,7 +25,7 @@ struct AboutView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .padding(.bottom, 1)
-            Text("Browse windows intelligently grouped by task.")
+            Text("A faster way to switch apps and find windows.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Link("Made in Japan", destination: URL(string: "https://littlebobert.github.io/kehai.html")!)
