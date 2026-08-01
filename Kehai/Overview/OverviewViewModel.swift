@@ -1143,14 +1143,25 @@ final class OverviewViewModel {
         }
         let processID = window.processID
         let bundleIdentifier = window.bundleIdentifier
+        let quittingAppKey = appKey(for: window)
+        let quittingAppIndex = switcherAppWindows?.firstIndex { appKey(for: $0) == quittingAppKey }
         windows.removeAll {
             $0.processID == processID
                 || (bundleIdentifier != nil && $0.bundleIdentifier == bundleIdentifier)
         }
+        switcherAppWindows?.removeAll { appKey(for: $0) == quittingAppKey }
         reconcileCachedGroups()
-        selectedAppWindowID = nil
         selectedWindowID = nil
         hoveredSwitcherWindowID = nil
+
+        if let switcherAppWindows, !switcherAppWindows.isEmpty {
+            let nextIndex = min(quittingAppIndex ?? 0, switcherAppWindows.count - 1)
+            focusApp(switcherAppWindows[nextIndex].id)
+        } else {
+            selectedAppWindowID = nil
+            focusedAppKey = nil
+            isAllWindowsAppSelected = true
+        }
         preserveSelectionOrSelectFirst()
         SafeDiagnosticLog.shared.record("switcher: quit app")
         return true
