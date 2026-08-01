@@ -443,17 +443,23 @@ struct CompactSwitcherView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let opensRight: Bool
     let opensUp: Bool
-    let stripWidth: CGFloat
-    let maximumVisibleWindows: Int
     let openBrowser: () -> Void
     let close: () -> Void
+    @State private var compactWidth: CGFloat = 568
 
     private let compactAppCellWidth: CGFloat = 46
     private let compactAppSpacing: CGFloat = 2
     private let compactAppHorizontalPadding: CGFloat = 10
 
+    private var maximumVisibleApps: Int {
+        let availableWidth = compactWidth - compactAppHorizontalPadding * 2
+        let totalCellCount = max(1, Int((availableWidth + compactAppSpacing) / (compactAppCellWidth + compactAppSpacing)))
+        return max(0, totalCellCount - 1)
+    }
+
     private var displayedApps: [WindowItem] {
-        opensRight ? model.recentAppWindows : Array(model.recentAppWindows.reversed())
+        let recent = Array(model.recentAppWindows.prefix(maximumVisibleApps))
+        return opensRight ? recent : Array(recent.reversed())
     }
 
     private let compactWindowWidth: CGFloat = 176
@@ -466,7 +472,11 @@ struct CompactSwitcherView: View {
     }
 
     private var appStripContentOffset: CGFloat {
-        opensRight ? 0 : stripWidth - appStripContentWidth
+        opensRight ? 0 : compactWidth - appStripContentWidth
+    }
+
+    private var maximumVisibleWindows: Int {
+        max(3, Int((compactWidth - 24 + 8) / (compactWindowWidth + 8)))
     }
 
     private var displayedWindows: [WindowItem] {
@@ -478,7 +488,7 @@ struct CompactSwitcherView: View {
         VStack(spacing: 0) {
             if opensUp {
                 compactWindows
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.horizontal, 12)
                     .padding(.top, 12)
@@ -488,7 +498,7 @@ struct CompactSwitcherView: View {
                 appStrip
                     .padding(.top, 10)
                 compactWindows
-                    .padding(.top, 8)
+                    .padding(.top, 4)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 12)
@@ -503,32 +513,28 @@ struct CompactSwitcherView: View {
                 Color(nsColor: .windowBackgroundColor)
             }
         }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { updateCompactWidth(proxy.size.width - 8) }
+                    .onChange(of: proxy.size.width) { _, width in updateCompactWidth(width - 8) }
+            }
+        }
     }
 
     private var appStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal) {
-                HStack(spacing: compactAppSpacing) {
-                    if opensRight { allWindowsButton(itemIndex: 0) }
-                    ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, window in
-                        compactAppButton(window, itemIndex: index + (opensRight ? 1 : 0))
-                    }
-                    if !opensRight { allWindowsButton(itemIndex: displayedApps.count) }
-                }
-                .padding(.horizontal, compactAppHorizontalPadding)
-                .padding(.bottom, 5)
-                .frame(minWidth: stripWidth, alignment: opensRight ? .leading : .trailing)
+        HStack(spacing: compactAppSpacing) {
+            if opensRight { allWindowsButton(itemIndex: 0) }
+            ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, window in
+                compactAppButton(window, itemIndex: index + (opensRight ? 1 : 0))
             }
-            .scrollIndicators(.hidden)
-            .onAppear {
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    proxy.scrollTo("compact-all-windows", anchor: opensRight ? .leading : .trailing)
-                }
-            }
+            if !opensRight { allWindowsButton(itemIndex: displayedApps.count) }
         }
+        .padding(.horizontal, compactAppHorizontalPadding)
+        .padding(.bottom, 5)
+        .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
         .frame(height: 62)
+        .clipped()
     }
 
     private func allWindowsButton(itemIndex: Int) -> some View {
@@ -582,7 +588,7 @@ struct CompactSwitcherView: View {
             + compactAppHorizontalPadding
             + CGFloat(itemIndex) * (compactAppCellWidth + compactAppSpacing)
             + compactAppCellWidth / 2
-        let alignment = compactLabelAlignment(title: title, itemCenterX: itemCenterX)
+        let labelOffset = compactLabelOffset(title: title, itemCenterX: itemCenterX)
         return VStack(spacing: 2) {
             icon
                 .resizable()
@@ -599,7 +605,8 @@ struct CompactSwitcherView: View {
                 .font(.caption2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .frame(width: compactAppCellWidth, alignment: alignment)
+                .offset(x: labelOffset)
+                .frame(width: compactAppCellWidth)
         }
         .frame(width: compactAppCellWidth)
         .contentShape(Rectangle())
@@ -608,16 +615,25 @@ struct CompactSwitcherView: View {
         }
     }
 
-    private func compactLabelAlignment(title: String, itemCenterX: CGFloat) -> Alignment {
+    private func compactLabelOffset(title: String, itemCenterX: CGFloat) -> CGFloat {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         ]
         let halfWidth = ceil((title as NSString).size(withAttributes: attributes).width) / 2
-        if itemCenterX - halfWidth < 0 { return .leading }
-        if itemCenterX + halfWidth > stripWidth { return .trailing }
-        return .center
+        let edgeInset: CGFloat = 8
+        let minimumCenter = edgeInset + halfWidth
+        let maximumCenter = compactWidth - edgeInset - halfWidth
+        return min(max(itemCenterX, minimumCenter), maximumCenter) - itemCenterX
     }
 
+    private func updateCompactWidth(_ width: CGFloat) {
+        guard width > 0, width != compactWidth else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            compactWidth = width
+        }
+    }
 
     @ViewBuilder
     private var compactWindows: some View {
@@ -644,14 +660,10 @@ struct CompactSwitcherView: View {
             close()
         } label: {
             VStack(alignment: .leading, spacing: 6) {
-                compactThumbnail(window)
                 Text(window.title)
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
-                Text(window.appName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                compactThumbnail(window)
             }
             .padding(8)
             .frame(width: compactWindowWidth, alignment: .leading)
@@ -701,8 +713,7 @@ struct CompactSwitcherView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                     .padding(6)
             }
-            if model.focusedAppKey == nil,
-               let icon = window.appIcon,
+            if let icon = window.appIcon,
                liveThumbnail != nil || (window.thumbnailIsUsable && window.thumbnail != nil) {
                 Image(nsImage: icon)
                     .resizable()
@@ -952,7 +963,6 @@ private struct WindowCard: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(window.title).font(.headline).lineLimit(1)
-                    Text(window.appName).foregroundStyle(.secondary).lineLimit(1)
                     if let taskContext {
                         Text(taskContext)
                             .font(.caption)
@@ -965,13 +975,14 @@ private struct WindowCard: View {
                 if !window.safariTabs.isEmpty { Text(L10n.format("%lld tabs", Int64(window.safariTabs.count))).font(.caption).foregroundStyle(.secondary).fixedSize() }
                 if isRefreshingThumbnail, liveThumbnail == nil {
                     ProgressView()
-                        .controlSize(.small)
+                        .controlSize(.mini)
                         .frame(width: 18, height: 18)
                         .transition(.opacity)
                 }
                 Button(action: toggleHidden) {
                     Image(systemName: isHidden ? "eye" : "eye.slash")
                         .foregroundStyle(.secondary)
+                        .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.plain)
                 .help(isHidden ? "Show this window again" : "Hide this window from Kehai")
@@ -979,11 +990,13 @@ private struct WindowCard: View {
                     Button(action: excludeApp) {
                         Image(systemName: "xmark.app")
                             .foregroundStyle(.secondary)
+                            .frame(width: 18, height: 18)
                     }
                     .buttonStyle(.plain)
                     .help("Exclude this app from AI or Kehai")
                 }
             }
+            .frame(minHeight: 18)
             if !window.safariTabs.isEmpty {
                 DisclosureGroup("Safari tabs") {
                     ForEach(window.safariTabs.prefix(30)) { tab in

@@ -35,7 +35,11 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             Task { await self?.activityMonitor.recordFocusedWindow(processID: processID) }
         }
     )
-    private lazy var panelController = OverviewPanelController(model: viewModel, appearance: appearanceSettings)
+    private lazy var panelController = OverviewPanelController(
+        model: viewModel,
+        appearance: appearanceSettings,
+        isShortcutSessionActive: { [weak self] in self?.isShortcutSessionActive == true }
+    )
     let shortcutSettings = ShortcutSettings()
     private lazy var onboardingController = OnboardingWindowController(
         permissionManager: permissionManager,

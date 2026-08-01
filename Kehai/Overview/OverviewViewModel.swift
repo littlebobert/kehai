@@ -1139,6 +1139,11 @@ final class OverviewViewModel {
     @discardableResult
     func quitSelectedAppInSwitcherMode() -> Bool {
         guard isSwitcherMode, let window = switcherTargetWindow(preferAppStrip: true) else { return false }
+        guard window.bundleIdentifier?.caseInsensitiveCompare("com.apple.finder") != .orderedSame,
+              window.appName.caseInsensitiveCompare("Finder") != .orderedSame else {
+            SafeDiagnosticLog.shared.record("switcher: ignored quit for Finder")
+            return false
+        }
         guard activator.quit(window) else {
             errorMessage = L10n.string("Kehai could not quit this app.")
             return false

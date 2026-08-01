@@ -4,18 +4,34 @@ import SwiftUI
 @MainActor
 final class OverviewPanelController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "KehaiBrowserWindow"
+    private static let compactContentWidthKey = "overview.compactContentWidth"
     private var window: NSWindow?
     private var compactWindow: NSWindow?
+    private var compactWindowFrameHeight: CGFloat?
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private var globalDragMonitor: Any?
+    private var accessibilityDisplayOptionsObserver: NSObjectProtocol?
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
+    private let isShortcutSessionActive: () -> Bool
 
-    init(model: OverviewViewModel, appearance: AppearanceSettings) {
+    init(
+        model: OverviewViewModel,
+        appearance: AppearanceSettings,
+        isShortcutSessionActive: @escaping () -> Bool
+    ) {
         self.model = model
         self.appearance = appearance
+        self.isShortcutSessionActive = isShortcutSessionActive
         super.init()
+        accessibilityDisplayOptionsObserver = NotificationCenter.default.addObserver(
+            forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.updateAppearance() }
+        }
         model.onDragRedirectActivated = { [weak self] in
             // After dwell-activate, hide Kehai so the raised window can receive the drop.
             self?.close()
@@ -80,21 +96,24 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         guard let screen else { return }
 
         let visibleFrame = screen.visibleFrame
-        let gap: CGFloat = 12
-        let estimatedWidth = min(640, max(220, CGFloat(model.recentAppWindows.count + 1) * 50 + 20))
-        let opensRight = pointer.x + gap + estimatedWidth <= visibleFrame.maxX
-        let availableWidth = opensRight
-            ? visibleFrame.maxX - pointer.x - gap
-            : pointer.x - visibleFrame.minX - gap
-        let width = min(estimatedWidth, max(220, availableWidth))
+        let minimumWidth: CGFloat = 576
+        let savedWidth = UserDefaults.standard.double(forKey: Self.compactContentWidthKey)
+        let defaultWidth = min(640, max(minimumWidth, CGFloat(model.recentAppWindows.count + 1) * 50 + 20))
+        let preferredWidth = savedWidth > 0 ? CGFloat(savedWidth) : defaultWidth
+        let width = min(max(preferredWidth, minimumWidth), visibleFrame.width)
+        let allWindowsIconHorizontalInset: CGFloat = 37
+        let opensRight = pointer.x + width - allWindowsIconHorizontalInset <= visibleFrame.maxX
         let estimatedHeight: CGFloat = 260
-        let opensUp = pointer.y - gap - estimatedHeight < visibleFrame.minY
-        let availableHeight = opensUp
-            ? visibleFrame.maxY - pointer.y - gap
-            : pointer.y - visibleFrame.minY - gap
-        let height = min(estimatedHeight, max(180, availableHeight))
-        let originX = opensRight ? pointer.x + gap : pointer.x - gap - width
-        let originY = opensUp ? pointer.y + gap : pointer.y - gap - height
+        let height = min(estimatedHeight, visibleFrame.height)
+        let topStripIconInset: CGFloat = 32
+        let bottomStripIconInset: CGFloat = 50
+        let opensUp = pointer.y - (height - topStripIconInset) < visibleFrame.minY
+        let iconCenterX = opensRight ? allWindowsIconHorizontalInset : width - allWindowsIconHorizontalInset
+        let iconCenterY = opensUp ? bottomStripIconInset : height - topStripIconInset
+        let proposedOriginX = pointer.x - iconCenterX
+        let proposedOriginY = pointer.y - iconCenterY
+        let originX = min(max(proposedOriginX, visibleFrame.minX), visibleFrame.maxX - width)
+        let originY = min(max(proposedOriginY, visibleFrame.minY), visibleFrame.maxY - height)
 
         let panel = NSWindow(
             contentRect: NSRect(x: originX, y: originY, width: width, height: height),
@@ -107,22 +126,30 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         panel.tabbingMode = .disallowed
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.managed, .participatesInCycle]
-        panel.contentMinSize = NSSize(width: width, height: height)
-        panel.contentMaxSize = NSSize(width: width, height: height)
-        panel.contentView = NSHostingView(
+        let fixedFrameHeight = panel.frame.height
+        let minimumFrameWidth = panel.frameRect(
+            forContentRect: NSRect(origin: .zero, size: NSSize(width: minimumWidth, height: height))
+        ).width
+        panel.minSize = NSSize(width: minimumFrameWidth, height: fixedFrameHeight)
+        panel.maxSize = NSSize(width: .greatestFiniteMagnitude, height: fixedFrameHeight)
+        panel.contentMinSize = NSSize(width: minimumWidth, height: height)
+        panel.contentMaxSize = NSSize(width: .greatestFiniteMagnitude, height: height)
+        let hostingView = NSHostingView(
             rootView: CompactSwitcherView(
                 model: model,
                 appearance: appearance,
                 opensRight: opensRight,
                 opensUp: opensUp,
-                stripWidth: width - 8,
-                maximumVisibleWindows: max(1, min(3, Int((width - 32 + 8) / (176 + 8)))),
                 openBrowser: { [weak self] in self?.showFullBrowserFromCompactSwitcher() },
                 close: { [weak self] in self?.dismissCompactSwitcherAfterActivation() }
             )
         )
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
         panel.delegate = self
         compactWindow = panel
+        compactWindowFrameHeight = fixedFrameHeight
+        updateAppearance()
         panel.standardWindowButton(.zoomButton)?.target = self
         panel.standardWindowButton(.zoomButton)?.action = #selector(openFullBrowserFromCompactZoom(_:))
         panel.standardWindowButton(.zoomButton)?.toolTip = "Open Full Browser"
@@ -151,6 +178,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         compactWindow?.orderOut(nil)
         compactWindow?.contentView = nil
         compactWindow = nil
+        compactWindowFrameHeight = nil
         if window?.isVisible != true {
             removeKeyMonitor()
             removeMouseMonitor()
@@ -216,18 +244,35 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func updateAppearance() {
-        guard let window else { return }
-        window.titlebarAppearsTransparent = false
-        window.titlebarSeparatorStyle = .automatic
-        window.isOpaque = true
-        window.backgroundColor = .windowBackgroundColor
+        let usesTransparentBacking = appearance.usesGlassyWindow
+            && !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
+        for browserWindow in [window, compactWindow].compactMap({ $0 }) {
+            browserWindow.titlebarAppearsTransparent = false
+            browserWindow.titlebarSeparatorStyle = .automatic
+            browserWindow.isOpaque = !usesTransparentBacking
+            browserWindow.backgroundColor = usesTransparentBacking
+                ? NSColor.windowBackgroundColor.withAlphaComponent(0.28)
+                : .windowBackgroundColor
+        }
     }
 
     func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
-        NSSize(
+        if sender === compactWindow {
+            return NSSize(
+                width: max(frameSize.width, sender.minSize.width),
+                height: compactWindowFrameHeight ?? sender.frame.height
+            )
+        }
+        return NSSize(
             width: max(frameSize.width, sender.minSize.width),
             height: max(frameSize.height, sender.minSize.height)
         )
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        guard notification.object as? NSWindow === compactWindow,
+              let width = compactWindow?.contentView?.bounds.width else { return }
+        UserDefaults.standard.set(width, forKey: Self.compactContentWidthKey)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -360,6 +405,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             // Switcher Q/W: allow optional Shift (users often still hold ⌘⇧ from the hotkey).
             // Swallow before AppKit menu Close (⌘W) can dismiss Kehai itself.
             if self.model.isSwitcherMode,
+               self.isShortcutSessionActive(),
                modifiers.contains(.command),
                !modifiers.contains(.control),
                !modifiers.contains(.option) {
