@@ -861,6 +861,7 @@ final class OverviewViewModel {
         switcherAppWindows = currentRecentAppWindows
         isSwitcherMode = true
         hoveredSwitcherWindowID = nil
+        selectAllWindowsApp()
     }
 
     /// Clears search / smart-search / optional group filter left over from a prior session.
@@ -1119,9 +1120,10 @@ final class OverviewViewModel {
                 isAllWindowsAppSelected = false
             }
         }
-        // Prefer the drag-hover target when finishing mid-drag (release keys while dragging).
-        let targetID = dragHoverWindowID ?? hoveredSwitcherWindowID
-        guard let targetID,
+        // Prefer pointer/drag targets, then the app selected by repeated shortcut-key presses.
+        let targetID = dragHoverWindowID ?? hoveredSwitcherWindowID ?? selectedAppWindowID
+        guard !isAllWindowsAppSelected,
+              let targetID,
               let window = windowForDragTarget(targetID) else {
             return false
         }

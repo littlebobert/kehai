@@ -126,6 +126,11 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     private func beginSwitcherMode() {
+        if viewModel.isSwitcherMode {
+            viewModel.cycleSelectionByApp(1)
+            return
+        }
+
         permissionManager.refresh()
         guard permissionManager.hasCorePermissions else {
             showSettings()
