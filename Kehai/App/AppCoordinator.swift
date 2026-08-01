@@ -53,6 +53,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         model: viewModel,
         appearance: appearanceSettings,
         isShortcutSessionActive: { [weak self] in self?.isShortcutSessionActive == true },
+        shortcutKeyCode: { [weak self] in UInt16(self?.shortcutSettings.keyCode ?? 0) },
+        shortcutModifierFlags: { [weak self] in self?.shortcutModifierFlags ?? [] },
         presentationChanged: { [weak self] fullBrowserVisible, miniBrowserVisible in
             self?.browserPresentationState.update(
                 fullBrowserVisible: fullBrowserVisible,

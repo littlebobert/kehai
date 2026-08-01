@@ -17,10 +17,14 @@ final class ShortcutSettings {
     }
     var registrationError: String?
 
+    var isDefault: Bool {
+        keyCode == UInt32(kVK_ANSI_K) && modifiers == UInt32(cmdKey | shiftKey)
+    }
+
     init() {
         let defaults = UserDefaults.standard
         keyCode = defaults.object(forKey: Keys.keyCode) == nil
-            ? UInt32(kVK_Space)
+            ? UInt32(kVK_ANSI_K)
             : UInt32(defaults.integer(forKey: Keys.keyCode))
         modifiers = defaults.object(forKey: Keys.modifiers) == nil
             ? UInt32(cmdKey | shiftKey)
@@ -33,6 +37,6 @@ final class ShortcutSettings {
     }
 
     func reset() {
-        update(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey | shiftKey))
+        update(keyCode: UInt32(kVK_ANSI_K), modifiers: UInt32(cmdKey | shiftKey))
     }
 }

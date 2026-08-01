@@ -13,7 +13,7 @@ final class GlobalHotKey {
     }
 
     @discardableResult
-    func register(keyCode: UInt32 = UInt32(kVK_Space), modifiers: UInt32 = UInt32(cmdKey | shiftKey)) -> OSStatus {
+    func register(keyCode: UInt32 = UInt32(kVK_ANSI_K), modifiers: UInt32 = UInt32(cmdKey | shiftKey)) -> OSStatus {
         unregister()
         var types = [
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),

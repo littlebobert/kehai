@@ -147,6 +147,8 @@ final class OverviewViewModel {
     private var isReconcilingInventory = false
     private var activeRefreshCount = 0
     private var isTerminating = false
+    private var thumbnailCapturedAt: [CGWindowID: Date] = [:]
+    private static let thumbnailStaleInterval: TimeInterval = 5 * 60
     private let catalog: WindowCatalog
     private let thumbnails: ThumbnailService
     private let safari: SafariTabService
@@ -1394,16 +1396,29 @@ final class OverviewViewModel {
             }
 
             let previousByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+            var thumbnailRefreshIDs = Set<CGWindowID>()
             for index in items.indices {
                 if let previous = previousByID[items[index].id] {
+                    let metadataChanged = previous.title != items[index].title
+                        || previous.frame != items[index].frame
+                        || previous.isOnScreen != items[index].isOnScreen
                     items[index].lastSeen = [previous.lastSeen, items[index].lastSeen].compactMap { $0 }.max()
                     items[index].thumbnail = previous.thumbnail
                     items[index].thumbnailIsUsable = previous.thumbnailIsUsable
                     items[index].thumbnailRevision = previous.thumbnailRevision
                     if previous.appIcon != nil { items[index].appIcon = previous.appIcon }
                     if !includeSafariTabs { items[index].safariTabs = previous.safariTabs }
-                } else if let activationDate = activityMonitor.recentActivationDate(for: items[index].processID) {
-                    items[index].lastSeen = activationDate
+                    let thumbnailIsStale = thumbnailCapturedAt[items[index].id]
+                        .map { Date().timeIntervalSince($0) >= Self.thumbnailStaleInterval }
+                        ?? false
+                    if metadataChanged || previous.thumbnail == nil || !previous.thumbnailIsUsable || thumbnailIsStale {
+                        thumbnailRefreshIDs.insert(items[index].id)
+                    }
+                } else {
+                    thumbnailRefreshIDs.insert(items[index].id)
+                    if let activationDate = activityMonitor.recentActivationDate(for: items[index].processID) {
+                        items[index].lastSeen = activationDate
+                    }
                 }
             }
 
@@ -1456,22 +1471,44 @@ final class OverviewViewModel {
                 SafeDiagnosticLog.shared.record("window-inventory: reconciled added=\(currentIDs.subtracting(previousIDs).count) removed=\(previousIDs.subtracting(currentIDs).count)")
             }
 
-            windows = items
-            hiddenWindowStore.reconcile(with: items)
-            appendNewAppsToSwitcherSnapshot()
-            reconcileCachedGroups()
-            preserveSelectionOrSelectFirst()
-            activityMonitor.update(windows: items)
+            let inventoryChanged = !inventoryIsEquivalent(windows, items)
+            if inventoryChanged {
+                windows = items
+                hiddenWindowStore.reconcile(with: items)
+                appendNewAppsToSwitcherSnapshot()
+                reconcileCachedGroups()
+                preserveSelectionOrSelectFirst()
+                activityMonitor.update(windows: items)
+            }
+            thumbnailCapturedAt = thumbnailCapturedAt.filter { currentIDs.contains($0.key) }
             if showsGlobalLoading { isLoading = false }
-            // Map returned pairs to the applied set (soft-merge may keep extras without SCWindow).
+            // Map only windows whose thumbnail is new, changed, missing, rejected, or stale.
             let appliedIDs = Set(items.map(\.id))
-            return pairs.filter { appliedIDs.contains($0.0.id) }
+            return pairs.filter {
+                appliedIDs.contains($0.0.id) && thumbnailRefreshIDs.contains($0.0.id)
+            }
         } catch {
             logger.error("Window inventory reconciliation failed")
             SafeDiagnosticLog.shared.record("window-inventory: reconciliation failed")
             errorMessage = error.localizedDescription
             if showsGlobalLoading { isLoading = false }
             return nil
+        }
+    }
+
+    private func inventoryIsEquivalent(_ lhs: [WindowItem], _ rhs: [WindowItem]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        return zip(lhs, rhs).allSatisfy { left, right in
+            left.id == right.id
+                && left.processID == right.processID
+                && left.appName == right.appName
+                && left.bundleIdentifier == right.bundleIdentifier
+                && left.title == right.title
+                && left.frame == right.frame
+                && left.isOnScreen == right.isOnScreen
+                && left.lastSeen == right.lastSeen
+                && left.thumbnailRevision == right.thumbnailRevision
+                && left.safariTabs == right.safariTabs
         }
     }
 
@@ -1496,7 +1533,7 @@ final class OverviewViewModel {
     }
 
     private func refreshThumbnails(for pairs: [(WindowItem, SCWindow)]) async {
-        guard !isTerminating, !Task.isCancelled else { return }
+        guard !isTerminating, !Task.isCancelled, !pairs.isEmpty else { return }
         let prioritizedPairs = pairs.sorted { left, right in
             if left.0.id == selectedWindowID { return true }
             if right.0.id == selectedWindowID { return false }
@@ -1506,6 +1543,7 @@ final class OverviewViewModel {
         refreshingThumbnailWindowIDs.formUnion(ids)
         thumbnailStatus = L10n.format("Analyzing %lld of %lld thumbnails…", 0, Int64(prioritizedPairs.count))
 
+        var capturesByID: [CGWindowID: CapturedThumbnail] = [:]
         for (offset, pair) in prioritizedPairs.enumerated() {
             guard !isTerminating, !Task.isCancelled else { break }
             let (item, window) = pair
@@ -1524,19 +1562,26 @@ final class OverviewViewModel {
                 capture = await thumbnails.image(for: window)
             }
             refreshingThumbnailWindowIDs.remove(item.id)
-            if let capture, let index = windows.firstIndex(where: { $0.id == item.id }) {
+            if let capture {
                 logger.notice("Thumbnail result accepted=\(capture.isUsable) variance=\(capture.luminanceVariance, format: .fixed(precision: 1)) edges=\(capture.edgeRatio, format: .fixed(precision: 4)) coverage=\(capture.detailCoverage, format: .fixed(precision: 3))")
-                var updatedWindows = windows
-                updatedWindows[index].thumbnail = capture.image
-                updatedWindows[index].thumbnailIsUsable = capture.isUsable
-                updatedWindows[index].thumbnailRevision += 1
-                windows = updatedWindows
-            } else if capture == nil {
+                capturesByID[item.id] = capture
+            } else {
                 logger.error("No thumbnail captured")
                 SafeDiagnosticLog.shared.record("thumbnail-pipeline: no capture returned")
             }
         }
 
+        if !capturesByID.isEmpty {
+            var updatedWindows = windows
+            for index in updatedWindows.indices {
+                guard let capture = capturesByID[updatedWindows[index].id] else { continue }
+                updatedWindows[index].thumbnail = capture.image
+                updatedWindows[index].thumbnailIsUsable = capture.isUsable
+                updatedWindows[index].thumbnailRevision += 1
+                thumbnailCapturedAt[updatedWindows[index].id] = Date()
+            }
+            windows = updatedWindows
+        }
         refreshingThumbnailWindowIDs.subtract(ids)
         let acceptedCount = windows.filter(\.thumbnailIsUsable).count
         logger.notice("Thumbnail refresh finished accepted=\(acceptedCount) total=\(pairs.count)")

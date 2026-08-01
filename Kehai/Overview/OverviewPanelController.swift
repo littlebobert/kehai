@@ -15,17 +15,23 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
     private let isShortcutSessionActive: () -> Bool
+    private let shortcutKeyCode: () -> UInt16
+    private let shortcutModifierFlags: () -> NSEvent.ModifierFlags
     private let presentationChanged: (Bool, Bool) -> Void
 
     init(
         model: OverviewViewModel,
         appearance: AppearanceSettings,
         isShortcutSessionActive: @escaping () -> Bool,
+        shortcutKeyCode: @escaping () -> UInt16,
+        shortcutModifierFlags: @escaping () -> NSEvent.ModifierFlags,
         presentationChanged: @escaping (Bool, Bool) -> Void
     ) {
         self.model = model
         self.appearance = appearance
         self.isShortcutSessionActive = isShortcutSessionActive
+        self.shortcutKeyCode = shortcutKeyCode
+        self.shortcutModifierFlags = shortcutModifierFlags
         self.presentationChanged = presentationChanged
         super.init()
         accessibilityDisplayOptionsObserver = NotificationCenter.default.addObserver(
@@ -442,6 +448,18 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 }
                 return nil
             }
+            if self.model.isSwitcherMode, self.isShortcutSessionActive() {
+                let configuredKeyCode = self.shortcutKeyCode()
+                let configuredModifiers = self.shortcutModifierFlags()
+                if event.keyCode == configuredKeyCode {
+                    let reverseModifiers = configuredModifiers.subtracting(.shift)
+                    if configuredModifiers.contains(.shift), modifiers == reverseModifiers {
+                        self.model.cycleSelectionByApp(-1)
+                        return nil
+                    }
+                }
+            }
+
             // Switcher Q/W: allow optional Shift (users often still hold ⌘⇧ from the hotkey).
             // Swallow before AppKit menu Close (⌘W) can dismiss Kehai itself.
             if self.model.isSwitcherMode,

@@ -44,8 +44,15 @@ struct SettingsView: View {
 
     private var generalSettings: some View {
         Form {
-            Section("Overview") {
-                LabeledContent("Keyboard shortcut") {
+            Section("Keyboard Shortcuts") {
+                HStack(alignment: .center, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Show Mini Browser")
+                        Text("Shows or dismisses Kehai from any app.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
                     ShortcutRecorder(
                         keyCode: shortcut.keyCode,
                         modifiers: shortcut.modifiers
@@ -53,25 +60,22 @@ struct SettingsView: View {
                         shortcut.update(keyCode: keyCode, modifiers: modifiers)
                         shortcutChanged()
                     }
-                    .frame(width: 180, height: 28)
-                }
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Shows or dismisses the Kehai overview from any app.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let registrationError = shortcut.registrationError {
-                            Label(registrationError, systemImage: "exclamationmark.triangle.fill")
-                                .font(.caption)
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    Spacer()
+                    .frame(width: 100, height: 28)
                     Button("Restore Default") {
                         shortcut.reset()
                         shortcutChanged()
                     }
+                    .disabled(shortcut.isDefault)
+                }
+
+                Text("While Kehai is open, press the shortcut key again to move forward through apps. Release Shift and press the key to move backward; release the remaining modifiers to activate the selection.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let registrationError = shortcut.registrationError {
+                    Label(registrationError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
             }
 
