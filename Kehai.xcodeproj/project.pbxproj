@@ -49,6 +49,7 @@
 		C10B2B6F66F7932503EE931C /* LiveThumbnailService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */; };
 		CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 373E32001D74645B747D9FE4 /* AutoUpdateService.swift */; };
 		CF3336DA77A547E3745C5E16 /* SmartSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F83DC4DA61575FD4312E376C /* SmartSearchService.swift */; };
+		D004D423F39AE4EE2D1EEB4C /* DockBadgeMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 598FF21B2EBC0162DC30A091 /* DockBadgeMonitor.swift */; };
 		D770EBBFC0F2F52F5FB5F36B /* KehaiApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 621EE2F9EC9738189063682A /* KehaiApp.swift */; };
 		F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B555A1137CC688518C03637 /* AppDelegate.swift */; };
 		FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57C5BE757B41B4FD3795131 /* PermissionView.swift */; };
@@ -84,6 +85,7 @@
 		40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		4AF36828CD74B41607115C48 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
 		584098EB25E73AD7A58C80FE /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
+		598FF21B2EBC0162DC30A091 /* DockBadgeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockBadgeMonitor.swift; sourceTree = "<group>"; };
 		5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCatalog.swift; sourceTree = "<group>"; };
 		5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupCache.swift; sourceTree = "<group>"; };
 		5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivator.swift; sourceTree = "<group>"; };
@@ -180,6 +182,7 @@
 		A3B20864E270E3CD719CB530 /* Windowing */ = {
 			isa = PBXGroup;
 			children = (
+				598FF21B2EBC0162DC30A091 /* DockBadgeMonitor.swift */,
 				3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */,
 				8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */,
 				865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */,
@@ -373,6 +376,7 @@
 				4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */,
 				CD74260A62D76A0EF78B6F23 /* AutoUpdateService.swift in Sources */,
 				3CCF6D5D2649D6A9AA5E50CF /* DiagnosticReportService.swift in Sources */,
+				D004D423F39AE4EE2D1EEB4C /* DockBadgeMonitor.swift in Sources */,
 				68D0F9034EB8164CA8976FDB /* DragHoverCatcher.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,

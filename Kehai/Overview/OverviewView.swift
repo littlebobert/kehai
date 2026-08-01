@@ -229,6 +229,7 @@ struct OverviewView: View {
                             iconPadding: appStripIconPadding,
                             stripWidth: appStripWidth,
                             itemCenterX: 4 + CGFloat(index + 1) * (appStripCellWidth + appStripSpacing) + appStripCellWidth / 2,
+                            badgeLabel: model.badgeLabel(for: window),
                             activate: {
                                 if model.isAppFocused(window.id) {
                                     model.activate(window)
@@ -560,7 +561,7 @@ struct CompactSwitcherView: View {
         }
         .padding(.horizontal, compactAppHorizontalPadding)
         .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
-        .frame(height: 60)
+        .frame(height: 66)
         .clipped()
     }
 
@@ -570,7 +571,8 @@ struct CompactSwitcherView: View {
                 icon: Image(systemName: "square.grid.2x2"),
                 title: "All Windows",
                 selected: model.isAllWindowsAppSelected,
-                itemIndex: itemIndex
+                itemIndex: itemIndex,
+                badgeLabel: nil
             )
         }
         .buttonStyle(.plain)
@@ -595,7 +597,8 @@ struct CompactSwitcherView: View {
                 icon: window.appIcon.map { Image(nsImage: $0) } ?? Image(systemName: "app"),
                 title: window.appName,
                 selected: selected,
-                itemIndex: itemIndex
+                itemIndex: itemIndex,
+                badgeLabel: model.badgeLabel(for: window)
             )
         }
         .buttonStyle(.plain)
@@ -619,7 +622,13 @@ struct CompactSwitcherView: View {
         )
     }
 
-    private func compactIconLabel(icon: Image, title: String, selected: Bool, itemIndex: Int) -> some View {
+    private func compactIconLabel(
+        icon: Image,
+        title: String,
+        selected: Bool,
+        itemIndex: Int,
+        badgeLabel: String?
+    ) -> some View {
         let isAllWindows = title == "All Windows"
         let itemCenterX = appStripContentOffset
             + compactAppHorizontalPadding
@@ -632,17 +641,28 @@ struct CompactSwitcherView: View {
                 .scaledToFit()
                 .padding(isAllWindows ? 5 : 0)
                 .frame(width: 36, height: 36)
+                .overlay(alignment: .topTrailing) {
+                    AppBadgeView(label: badgeLabel)
+                        .offset(x: 5, y: 4)
+                }
                 .padding(2)
-                .background(selected ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                .background {
+                    RoundedRectangle(cornerRadius: 11)
+                        .fill(selected ? Color.accentColor.opacity(0.16) : .clear)
+                        .padding(.horizontal, -5)
+                        .padding(.vertical, -4)
+                }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 11)
                         .strokeBorder(selected ? Color.accentColor.opacity(0.85) : .clear, lineWidth: 1.5)
+                        .padding(.horizontal, -5)
+                        .padding(.vertical, -4)
                 }
             Text(selected ? title : " ")
                 .font(.caption2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .offset(x: labelOffset)
+                .offset(x: labelOffset, y: 4)
                 .frame(width: compactAppCellWidth)
         }
         .frame(width: compactAppCellWidth)
@@ -800,6 +820,7 @@ private struct RecentAppButton: View {
     let iconPadding: CGFloat
     let stripWidth: CGFloat
     let itemCenterX: CGFloat
+    let badgeLabel: String?
     let activate: () -> Void
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
@@ -840,20 +861,27 @@ private struct RecentAppButton: View {
                     }
                 }
                 .frame(width: iconSize, height: iconSize)
+                .overlay(alignment: .topTrailing) {
+                    AppBadgeView(label: badgeLabel)
+                        .offset(x: 5, y: 4)
+                }
                 .padding(iconPadding)
                 .background {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 11)
                         .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
+                        .padding(-4)
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 11)
                         .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
+                        .padding(-4)
                 }
 
                 Text(isSelected && stripWidth > 0 ? window.appName : " ")
                     .font(.caption2)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+                    .offset(y: 2)
                     .frame(width: cellWidth, alignment: labelAlignment)
             }
             .padding(.vertical, 4)
@@ -874,6 +902,57 @@ private struct RecentAppButton: View {
         }
         .onHover(perform: hoverChanged)
         .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
+    }
+}
+
+private struct AppBadgeView: View {
+    let label: String?
+
+    private var displayText: String? {
+        guard let label = label?.trimmingCharacters(in: .whitespacesAndNewlines), !label.isEmpty else {
+            return nil
+        }
+        guard let count = Int(label) else { return nil }
+        return count > 99 ? "99+" : String(count)
+    }
+
+    private var numberedBadgeWidth: CGFloat {
+        switch displayText?.count {
+        case 1: 16
+        case 2: 20
+        default: 25
+        }
+    }
+
+    var body: some View {
+        if let label, !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            ZStack {
+                Capsule()
+                    .fill(.red)
+                    .frame(
+                        width: displayText == nil ? 16 : numberedBadgeWidth,
+                        height: 16
+                    )
+                if let displayText {
+                    Text(displayText)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .frame(width: numberedBadgeWidth, height: 16, alignment: .center)
+                } else {
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 3, height: 3)
+                }
+            }
+            .fixedSize()
+            .offset(
+                x: displayText == nil ? -2 : -2,
+                y: -5
+            )
+            .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+            .accessibilityLabel("Unread: \(label)")
+        }
     }
 }
 
@@ -1029,12 +1108,11 @@ private struct WindowCard: View {
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(window.title).font(.headline).lineLimit(1)
-                    if let taskContext {
-                        Text(taskContext)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
+                    Text(taskContext ?? " ")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .accessibilityHidden(taskContext == nil)
                 }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)

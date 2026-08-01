@@ -28,6 +28,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let idleGroupingSettings = IdleGroupingSettings()
     let browserPresentationState = BrowserPresentationState()
     private lazy var activityMonitor = ActivityMonitor(store: history)
+    private lazy var dockBadgeMonitor: DockBadgeMonitor = {
+        let monitor = DockBadgeMonitor()
+        monitor.changed = { [weak self] snapshot in
+            self?.viewModel.updateAppBadges(snapshot)
+        }
+        return monitor
+    }()
     private lazy var viewModel = OverviewViewModel(
         catalog: WindowCatalog(excludedApps: excludedAppStore),
         thumbnails: ThumbnailService(),
@@ -56,10 +63,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         shortcutKeyCode: { [weak self] in UInt16(self?.shortcutSettings.keyCode ?? 0) },
         shortcutModifierFlags: { [weak self] in self?.shortcutModifierFlags ?? [] },
         presentationChanged: { [weak self] fullBrowserVisible, miniBrowserVisible in
-            self?.browserPresentationState.update(
+            guard let self else { return }
+            self.browserPresentationState.update(
                 fullBrowserVisible: fullBrowserVisible,
                 miniBrowserVisible: miniBrowserVisible
             )
+            self.dockBadgeMonitor.setActive(fullBrowserVisible || miniBrowserVisible)
         }
     )
     let shortcutSettings = ShortcutSettings()

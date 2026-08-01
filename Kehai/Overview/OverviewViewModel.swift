@@ -64,6 +64,8 @@ final class OverviewViewModel {
     }
     var liveThumbnailWindowID: CGWindowID?
     var liveThumbnail: NSImage?
+    var appBadgeRevision = 0
+    private var appBadges = DockBadgeMonitor.Snapshot()
     var isSwitcherMode = false
     private var switcherAppWindows: [WindowItem]?
     private var hoveredSwitcherWindowID: CGWindowID?
@@ -211,6 +213,21 @@ final class OverviewViewModel {
               let focusedAppKey,
               let representative = recentAppWindows.first(where: { $0.id == windowID }) else { return false }
         return appKey(for: representative) == focusedAppKey
+    }
+
+    func updateAppBadges(_ snapshot: DockBadgeMonitor.Snapshot) {
+        guard appBadges != snapshot else { return }
+        appBadges = snapshot
+        appBadgeRevision += 1
+    }
+
+    func badgeLabel(for window: WindowItem) -> String? {
+        _ = appBadgeRevision
+        if let bundleIdentifier = window.bundleIdentifier,
+           let badge = appBadges.byBundleIdentifier[bundleIdentifier] {
+            return badge
+        }
+        return appBadges.byAppName[window.appName]
     }
 
     func taskContext(for windowID: CGWindowID) -> String? {
