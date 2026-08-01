@@ -892,6 +892,7 @@ final class OverviewViewModel {
         guard isSwitcherMode else { return }
         hoveredSwitcherWindowID = windowID
         if let windowID {
+            isAllWindowsAppSelected = false
             selectedAppWindowID = nil
             selectedWindowID = windowID
         }
@@ -957,8 +958,7 @@ final class OverviewViewModel {
         beginExternalDragSession()
         dragHoverWindowID = windowID
         if isAppStrip {
-            selectedWindowID = nil
-            selectedAppWindowID = windowID
+            focusApp(windowID)
         } else {
             selectedAppWindowID = nil
             selectedWindowID = windowID

@@ -5,6 +5,7 @@ struct OverviewView: View {
     @Bindable var model: OverviewViewModel
     @Bindable var appearance: AppearanceSettings
     let close: () -> Void
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var gridWidth: CGFloat = 0
     @State private var appStripWidth: CGFloat = 0
     @State private var frozenAppWindows: [WindowItem]?
@@ -26,7 +27,7 @@ struct OverviewView: View {
     var body: some View {
         ZStack {
             Group {
-                if appearance.usesGlassyWindow {
+                if appearance.usesGlassyWindow && !reduceTransparency {
                     Rectangle().fill(.ultraThinMaterial)
                 } else {
                     Color(nsColor: .windowBackgroundColor)
@@ -433,6 +434,288 @@ struct OverviewView: View {
             .padding(.top, 3)
             .padding(.bottom, 5)
         }
+    }
+}
+
+struct CompactSwitcherView: View {
+    @Bindable var model: OverviewViewModel
+    @Bindable var appearance: AppearanceSettings
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let opensRight: Bool
+    let opensUp: Bool
+    let stripWidth: CGFloat
+    let maximumVisibleWindows: Int
+    let openBrowser: () -> Void
+    let close: () -> Void
+
+    private let compactAppCellWidth: CGFloat = 46
+    private let compactAppSpacing: CGFloat = 2
+    private let compactAppHorizontalPadding: CGFloat = 10
+
+    private var displayedApps: [WindowItem] {
+        opensRight ? model.recentAppWindows : Array(model.recentAppWindows.reversed())
+    }
+
+    private let compactWindowWidth: CGFloat = 176
+
+    private var appStripContentWidth: CGFloat {
+        let itemCount = displayedApps.count + 1
+        return compactAppHorizontalPadding * 2
+            + CGFloat(itemCount) * compactAppCellWidth
+            + CGFloat(max(0, itemCount - 1)) * compactAppSpacing
+    }
+
+    private var appStripContentOffset: CGFloat {
+        opensRight ? 0 : stripWidth - appStripContentWidth
+    }
+
+    private var displayedWindows: [WindowItem] {
+        let recent = Array(model.filteredWindows.prefix(maximumVisibleWindows))
+        return opensRight ? recent : Array(recent.reversed())
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if opensUp {
+                compactWindows
+                    .padding(.bottom, 8)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 12)
+                appStrip
+                    .padding(.bottom, 2)
+            } else {
+                appStrip
+                    .padding(.top, 10)
+                compactWindows
+                    .padding(.top, 8)
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .background {
+            if appearance.usesGlassyWindow && !reduceTransparency {
+                Rectangle().fill(.ultraThinMaterial)
+            } else {
+                Color(nsColor: .windowBackgroundColor)
+            }
+        }
+    }
+
+    private var appStrip: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: compactAppSpacing) {
+                    if opensRight { allWindowsButton(itemIndex: 0) }
+                    ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, window in
+                        compactAppButton(window, itemIndex: index + (opensRight ? 1 : 0))
+                    }
+                    if !opensRight { allWindowsButton(itemIndex: displayedApps.count) }
+                }
+                .padding(.horizontal, compactAppHorizontalPadding)
+                .padding(.bottom, 5)
+                .frame(minWidth: stripWidth, alignment: opensRight ? .leading : .trailing)
+            }
+            .scrollIndicators(.hidden)
+            .onAppear {
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    proxy.scrollTo("compact-all-windows", anchor: opensRight ? .leading : .trailing)
+                }
+            }
+        }
+        .frame(height: 62)
+    }
+
+    private func allWindowsButton(itemIndex: Int) -> some View {
+        Button(action: openBrowser) {
+            compactIconLabel(
+                icon: Image(systemName: "square.grid.2x2"),
+                title: "All Windows",
+                selected: model.isAllWindowsAppSelected,
+                itemIndex: itemIndex
+            )
+        }
+        .buttonStyle(.plain)
+        .id("compact-all-windows")
+        .onHover { hovering in
+            guard hovering else { return }
+            model.selectAllWindowsApp()
+        }
+    }
+
+    private func compactAppButton(_ window: WindowItem, itemIndex: Int) -> some View {
+        let selected = model.isAppFocused(window.id) && !model.suppressSelectionHalo
+        return Button {
+            if model.isAppFocused(window.id) {
+                model.activate(window)
+                close()
+            } else {
+                model.focusApp(window.id)
+            }
+        } label: {
+            compactIconLabel(
+                icon: window.appIcon.map { Image(nsImage: $0) } ?? Image(systemName: "app"),
+                title: window.appName,
+                selected: selected,
+                itemIndex: itemIndex
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            guard hovering else { return }
+            model.hoverAppInSwitcherMode(window.id)
+        }
+        .dragHoverCatcher(
+            onEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: true) },
+            onExited: { model.dragHoverExited(windowID: window.id) }
+        )
+    }
+
+    private func compactIconLabel(icon: Image, title: String, selected: Bool, itemIndex: Int) -> some View {
+        let isAllWindows = title == "All Windows"
+        let itemCenterX = appStripContentOffset
+            + compactAppHorizontalPadding
+            + CGFloat(itemIndex) * (compactAppCellWidth + compactAppSpacing)
+            + compactAppCellWidth / 2
+        let alignment = compactLabelAlignment(title: title, itemCenterX: itemCenterX)
+        return VStack(spacing: 2) {
+            icon
+                .resizable()
+                .scaledToFit()
+                .padding(isAllWindows ? 4 : 0)
+                .frame(width: 30, height: 30)
+                .padding(2)
+                .background(selected ? Color.accentColor.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(selected ? Color.accentColor.opacity(0.85) : .clear, lineWidth: 1.5)
+                }
+            Text(selected ? title : " ")
+                .font(.caption2)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(width: compactAppCellWidth, alignment: alignment)
+        }
+        .frame(width: compactAppCellWidth)
+        .contentShape(Rectangle())
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+
+    private func compactLabelAlignment(title: String, itemCenterX: CGFloat) -> Alignment {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        ]
+        let halfWidth = ceil((title as NSString).size(withAttributes: attributes).width) / 2
+        if itemCenterX - halfWidth < 0 { return .leading }
+        if itemCenterX + halfWidth > stripWidth { return .trailing }
+        return .center
+    }
+
+
+    @ViewBuilder
+    private var compactWindows: some View {
+        if displayedWindows.isEmpty {
+            Text("No open windows")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity)
+        } else {
+            HStack(spacing: 8) {
+                ForEach(displayedWindows) { window in
+                    compactWindowButton(window)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: opensRight ? .leading : .trailing)
+            .animation(.easeInOut(duration: 0.07), value: model.focusedAppKey)
+        }
+    }
+
+    private func compactWindowButton(_ window: WindowItem) -> some View {
+        let selected = model.selectedWindowID == window.id && !model.suppressSelectionHalo
+        return Button {
+            model.activate(window)
+            close()
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                compactThumbnail(window)
+                Text(window.title)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                Text(window.appName)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(8)
+            .frame(width: compactWindowWidth, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(
+                        selected ? Color.accentColor.opacity(0.85) : Color(nsColor: .separatorColor).opacity(0.35),
+                        lineWidth: selected ? 2 : 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in model.hoverWindowInSwitcherMode(hovering ? window.id : nil) }
+        .dragHoverCatcher(
+            onEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
+            onExited: { model.dragHoverExited(windowID: window.id) }
+        )
+    }
+
+    @ViewBuilder
+    private func compactThumbnail(_ window: WindowItem) -> some View {
+        let liveThumbnail = model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil
+        ZStack {
+            Color.black.opacity(0.06)
+            if window.thumbnailIsUsable, let thumbnail = window.thumbnail {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .scaledToFit()
+            } else if let icon = window.appIcon {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 48, height: 48)
+            }
+            if let liveThumbnail {
+                Image(nsImage: liveThumbnail)
+                    .resizable()
+                    .scaledToFit()
+                    .transition(.opacity)
+                Text("Live")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.62), in: Capsule())
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(6)
+            }
+            if model.focusedAppKey == nil,
+               let icon = window.appIcon,
+               liveThumbnail != nil || (window.thumbnailIsUsable && window.thumbnail != nil) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
+                    .shadow(color: .black.opacity(0.28), radius: 2, y: 1)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(6)
+            }
+        }
+        .frame(height: 112)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
     }
 }
 

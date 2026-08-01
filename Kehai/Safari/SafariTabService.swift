@@ -29,12 +29,27 @@ actor SafariTabService {
         tell application "Safari"
             set rows to {}
             repeat with wi from 1 to count of windows
-                set currentIndex to index of current tab of window wi
+                try
+                    set currentIndex to index of current tab of window wi
+                on error
+                    set currentIndex to 0
+                end try
                 repeat with ti from 1 to count of tabs of window wi
                     set t to tab ti of window wi
-                    set end of rows to (wi as text) & tab & (ti as text) & tab & (name of t) & tab & (URL of t) & tab & ((ti = currentIndex) as text)
+                    try
+                        set tabTitle to name of t as text
+                    on error
+                        set tabTitle to ""
+                    end try
+                    try
+                        set tabURL to URL of t as text
+                    on error
+                        set tabURL to ""
+                    end try
+                    set end of rows to (wi as text) & tab & (ti as text) & tab & tabTitle & tab & tabURL & tab & ((ti = currentIndex) as text)
                 end repeat
             end repeat
+            if (count of rows) is 0 then return ""
             set AppleScript's text item delimiters to linefeed
             return rows as text
         end tell
@@ -67,10 +82,19 @@ actor SafariTabService {
 
     private func execute(_ source: String) throws -> String {
         var error: NSDictionary?
-        guard let script = NSAppleScript(source: source), let result = script.executeAndReturnError(&error).stringValue else {
-            if (error?[NSAppleScript.errorNumber] as? Int) == -1743 { throw SafariError.automationDenied(-1743) }
-            throw SafariError.invalidReply
+        guard let script = NSAppleScript(source: source) else { throw SafariError.invalidReply }
+        let result = script.executeAndReturnError(&error)
+        if let errorNumber = error?[NSAppleScript.errorNumber] as? Int {
+            if errorNumber == -1743 { throw SafariError.automationDenied(-1743) }
+            let message = error?[NSAppleScript.errorMessage] as? String
+            throw NSError(
+                domain: "SafariTabService.AppleScript",
+                code: errorNumber,
+                userInfo: [NSLocalizedDescriptionKey: message ?? L10n.string("Safari returned an unexpected response.")]
+            )
         }
-        return result
+        if let value = result.stringValue { return value }
+        if result.descriptorType == typeNull { return "" }
+        throw SafariError.invalidReply
     }
 }

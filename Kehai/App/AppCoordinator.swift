@@ -79,6 +79,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
     private var modifierMonitors: [Any] = []
+    private var isShortcutSessionActive = false
     private var hasStartedServices = false
     private lazy var installationLocationController = InstallationLocationWindowController { [weak self] in
         self?.startServices()
@@ -116,6 +117,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     func stop() {
         guard hasStartedServices else { return }
         hotKey.unregister()
+        isShortcutSessionActive = false
         removeModifierMonitor()
         idleTimer?.invalidate()
         idleTimer = nil
@@ -126,7 +128,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     private func beginSwitcherMode() {
-        if viewModel.isSwitcherMode {
+        if isShortcutSessionActive {
             viewModel.cycleSelectionByApp(1)
             return
         }
@@ -139,11 +141,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         if !NSApp.isActive, !panelController.isVisible {
             suppressNextActivationPresentation = true
         }
+        isShortcutSessionActive = true
         installModifierMonitor()
         panelController.beginSwitcherMode()
     }
 
     private func finishSwitcherMode() {
+        guard isShortcutSessionActive else { return }
+        isShortcutSessionActive = false
         removeModifierMonitor()
         panelController.finishSwitcherMode()
     }

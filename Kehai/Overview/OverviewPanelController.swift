@@ -5,6 +5,7 @@ import SwiftUI
 final class OverviewPanelController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "KehaiBrowserWindow"
     private var window: NSWindow?
+    private var compactWindow: NSWindow?
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private var globalDragMonitor: Any?
@@ -21,7 +22,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    var isVisible: Bool { window?.isVisible == true }
+    var isVisible: Bool { window?.isVisible == true || compactWindow?.isVisible == true }
 
     private var minimumContentSize: NSSize {
         // One default-width thumbnail plus the browser's horizontal insets and scrollbar.
@@ -49,19 +50,110 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func beginSwitcherMode() {
-        show()
         model.beginSwitcherMode()
+        showCompactSwitcher()
     }
 
     func finishSwitcherMode() {
         guard model.isSwitcherMode else { return }
         let wasDragging = model.isExternalDragActive
+        if model.isAllWindowsAppSelected, !wasDragging {
+            // Keep switcher interaction active while the compact panel is pinned.
+            return
+        }
         if model.finishSwitcherMode() {
             // Always close after a successful activate so a live drag can land on the target.
-            close()
+            closeCompactSwitcher()
         } else if wasDragging {
-            // Keys released mid-drag with no target — end switcher but keep the browser open.
+            // Keys released mid-drag with no target — end switcher but keep the compact view open.
             model.dragSessionEnded()
+        } else {
+            // Releasing on All Windows pins the mini UI; clicking All Windows opens the browser.
+        }
+    }
+
+    private func showCompactSwitcher() {
+        closeCompactSwitcher()
+        window?.orderOut(nil)
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) } ?? NSScreen.main
+        guard let screen else { return }
+
+        let visibleFrame = screen.visibleFrame
+        let gap: CGFloat = 12
+        let estimatedWidth = min(640, max(220, CGFloat(model.recentAppWindows.count + 1) * 50 + 20))
+        let opensRight = pointer.x + gap + estimatedWidth <= visibleFrame.maxX
+        let availableWidth = opensRight
+            ? visibleFrame.maxX - pointer.x - gap
+            : pointer.x - visibleFrame.minX - gap
+        let width = min(estimatedWidth, max(220, availableWidth))
+        let estimatedHeight: CGFloat = 260
+        let opensUp = pointer.y - gap - estimatedHeight < visibleFrame.minY
+        let availableHeight = opensUp
+            ? visibleFrame.maxY - pointer.y - gap
+            : pointer.y - visibleFrame.minY - gap
+        let height = min(estimatedHeight, max(180, availableHeight))
+        let originX = opensRight ? pointer.x + gap : pointer.x - gap - width
+        let originY = opensUp ? pointer.y + gap : pointer.y - gap - height
+
+        let panel = NSWindow(
+            contentRect: NSRect(x: originX, y: originY, width: width, height: height),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.title = "Kehai Switcher"
+        panel.titleVisibility = .visible
+        panel.tabbingMode = .disallowed
+        panel.isReleasedWhenClosed = false
+        panel.collectionBehavior = [.managed, .participatesInCycle]
+        panel.contentMinSize = NSSize(width: width, height: height)
+        panel.contentMaxSize = NSSize(width: width, height: height)
+        panel.contentView = NSHostingView(
+            rootView: CompactSwitcherView(
+                model: model,
+                appearance: appearance,
+                opensRight: opensRight,
+                opensUp: opensUp,
+                stripWidth: width - 8,
+                maximumVisibleWindows: max(1, min(3, Int((width - 32 + 8) / (176 + 8)))),
+                openBrowser: { [weak self] in self?.showFullBrowserFromCompactSwitcher() },
+                close: { [weak self] in self?.dismissCompactSwitcherAfterActivation() }
+            )
+        )
+        panel.delegate = self
+        compactWindow = panel
+        panel.standardWindowButton(.zoomButton)?.target = self
+        panel.standardWindowButton(.zoomButton)?.action = #selector(openFullBrowserFromCompactZoom(_:))
+        panel.standardWindowButton(.zoomButton)?.toolTip = "Open Full Browser"
+        installKeyMonitor()
+        installMouseMonitor()
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+        Task { await model.performInitialRefreshIfNeeded() }
+    }
+
+    @objc private func openFullBrowserFromCompactZoom(_ sender: Any?) {
+        showFullBrowserFromCompactSwitcher()
+    }
+
+    private func showFullBrowserFromCompactSwitcher() {
+        closeCompactSwitcher()
+        show()
+    }
+
+    private func dismissCompactSwitcherAfterActivation() {
+        model.prepareForBrowserPresentation(selectedGroupID: nil)
+        closeCompactSwitcher()
+    }
+
+    private func closeCompactSwitcher() {
+        compactWindow?.orderOut(nil)
+        compactWindow?.contentView = nil
+        compactWindow = nil
+        if window?.isVisible != true {
+            removeKeyMonitor()
+            removeMouseMonitor()
         }
     }
 
@@ -119,6 +211,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func close() {
         model.prepareForBrowserPresentation(selectedGroupID: nil)
+        closeCompactSwitcher()
         window?.close()
     }
 
@@ -149,6 +242,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         model.setLiveThumbnailEnabled(false)
         model.dragSessionEnded()
+        if notification.object as? NSWindow === compactWindow {
+            model.prepareForBrowserPresentation(selectedGroupID: nil)
+            compactWindow = nil
+        }
         removeKeyMonitor()
         removeMouseMonitor()
     }
@@ -170,7 +267,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 return event
             }
 
-            guard event.window === self.window else { return event }
+            guard event.window === self.window || event.window === self.compactWindow else { return event }
 
             if event.type == .scrollWheel,
                self.model.isSwitcherMode,
@@ -241,7 +338,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, event.window === self.window else { return event }
+            guard let self,
+                  event.window === self.window || event.window === self.compactWindow else { return event }
 
             let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
             if self.model.actionChooserStage != nil {
