@@ -316,7 +316,7 @@ struct OverviewView: View {
     }
 
     private func openSelectedWindow() {
-        if model.activateSelectedWindow() { close() }
+        if model.activateCurrentSelection() { close() }
     }
 
     private var taskFlowColumnCount: Int {
@@ -456,6 +456,7 @@ struct CompactSwitcherView: View {
     let openBrowser: () -> Void
     let close: () -> Void
     @State private var compactWidth: CGFloat = 676
+    @FocusState private var compactSearchIsFocused: Bool
     @State private var appStripPointerLocation: CGPoint?
     @State private var activeHoveredAppID: String?
     @State private var pendingHoveredAppID: String?
@@ -474,7 +475,7 @@ struct CompactSwitcherView: View {
     }
 
     private var displayedApps: [WindowItem] {
-        let recent = Array(model.recentAppWindows.prefix(maximumVisibleApps))
+        let recent = Array(model.filteredRecentAppWindows.prefix(maximumVisibleApps))
         return opensRight ? recent : Array(recent.reversed())
     }
 
@@ -508,13 +509,17 @@ struct CompactSwitcherView: View {
                         .frame(maxHeight: .infinity, alignment: .bottom)
                         .padding(.horizontal, 12)
                         .padding(.top, 12)
+                    compactQueryIndicator
+                        .padding(.bottom, 8)
                     appStrip
                         .padding(.bottom, 2)
                 } else {
+                    compactQueryIndicator
+                        .padding(.top, 6)
+                        .padding(.bottom, 8)
                     appStrip
-                        .padding(.top, 10)
                     compactWindows
-                        .padding(.top, 10)
+                        .padding(.top, 4)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 12)
@@ -555,6 +560,46 @@ struct CompactSwitcherView: View {
                     .onChange(of: proxy.size.width) { _, width in updateCompactWidth(width - 8) }
             }
         }
+        .onChange(of: model.compactSearchFocusRequest) {
+            compactSearchIsFocused = true
+            DispatchQueue.main.async {
+                model.applyPendingPinnedSwitcherSearchText()
+            }
+        }
+        .onChange(of: model.compactSearchBlurRequest) {
+            compactSearchIsFocused = false
+        }
+    }
+
+    private var compactQueryIndicator: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Start typing to filter windows, tabs, and apps", text: $model.query)
+                .textFieldStyle(.plain)
+                .focused($compactSearchIsFocused)
+                .onSubmit {
+                    if model.activateCurrentSelection() { close() }
+                }
+                .onChange(of: model.query) {
+                    if compactSearchIsFocused { model.updatePinnedSwitcherSearchSelection() }
+                }
+            Spacer(minLength: 0)
+            if !model.query.isEmpty {
+                Text("Esc to clear")
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(.caption)
+        .padding(.horizontal, 10)
+        .frame(height: 22)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+        .overlay {
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(compactSearchIsFocused ? Color.accentColor.opacity(0.65) : .clear, lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 12)
     }
 
     private var appStrip: some View {

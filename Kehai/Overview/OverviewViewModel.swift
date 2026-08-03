@@ -108,6 +108,10 @@ final class OverviewViewModel {
         !(NSPasteboard(name: .drag).pasteboardItems ?? []).isEmpty
     }
     var searchFocusRequest = 0
+    var searchBlurRequest = 0
+    var compactSearchFocusRequest = 0
+    var compactSearchBlurRequest = 0
+    private var pendingCompactSearchText = ""
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
     var actionChooserSelection = 0
@@ -276,6 +280,23 @@ final class OverviewViewModel {
     var recentAppWindows: [WindowItem] {
         if let switcherAppWindows { return switcherAppWindows }
         return currentRecentAppWindows
+    }
+
+    var filteredRecentAppWindows: [WindowItem] {
+        guard !query.isEmpty else { return recentAppWindows }
+        let matchingAppKeys = Set(displayWindows.compactMap { window in
+            let matches = window.title.localizedCaseInsensitiveContains(query)
+                || window.appName.localizedCaseInsensitiveContains(query)
+                || window.safariTabs.contains {
+                    $0.title.localizedCaseInsensitiveContains(query)
+                        || $0.url.localizedCaseInsensitiveContains(query)
+                }
+            return matches ? appKey(for: window) : nil
+        })
+        return recentAppWindows.filter {
+            matchingAppKeys.contains(appKey(for: $0))
+                || $0.appName.localizedCaseInsensitiveContains(query)
+        }
     }
 
     private func appendNewAppsToSwitcherSnapshot() {
@@ -786,7 +807,7 @@ final class OverviewViewModel {
 
     func cycleSelectionByApp(_ direction: Int) {
         guard direction != 0 else { return }
-        let representatives = recentAppWindows
+        let representatives = filteredRecentAppWindows
         guard !representatives.isEmpty else { return }
 
         let itemCount = representatives.count + 1
@@ -838,7 +859,7 @@ final class OverviewViewModel {
            let firstRow = visualRows.first,
            firstRow.contains(where: { $0.id == selectedWindowID }) {
             if let appWindowIDBeforeEnteringWindows,
-               recentAppWindows.contains(where: { $0.id == appWindowIDBeforeEnteringWindows }) {
+               filteredRecentAppWindows.contains(where: { $0.id == appWindowIDBeforeEnteringWindows }) {
                 focusApp(appWindowIDBeforeEnteringWindows)
             } else {
                 selectAllWindowsApp()
@@ -856,7 +877,7 @@ final class OverviewViewModel {
     }
 
     private func moveAppSelection(horizontal: Int, vertical: Int, windowsAboveAppStrip: Bool) {
-        let apps = recentAppWindows
+        let apps = filteredRecentAppWindows
         guard !apps.isEmpty else {
             selectedAppWindowID = nil
             isAllWindowsAppSelected = true
@@ -1014,6 +1035,55 @@ final class OverviewViewModel {
         selectedAppWindowID = nil
         hoveredSwitcherWindowID = nil
         isAllWindowsAppSelected = true
+    }
+
+    func queuePinnedSwitcherSearchText(_ text: String) {
+        pendingCompactSearchText.append(contentsOf: text)
+        compactSearchFocusRequest += 1
+    }
+
+    func applyPendingPinnedSwitcherSearchText() {
+        guard !pendingCompactSearchText.isEmpty else { return }
+        query.append(contentsOf: pendingCompactSearchText)
+        pendingCompactSearchText = ""
+        updatePinnedSwitcherSearchSelection()
+    }
+
+    func appendToPinnedSwitcherQuery(_ text: String) {
+        query.append(contentsOf: text)
+        updatePinnedSwitcherSearchSelection()
+    }
+
+    func deleteLastPinnedSwitcherQueryCharacter() {
+        guard !query.isEmpty else { return }
+        query.removeLast()
+        updatePinnedSwitcherSearchSelection()
+    }
+
+    func updatePinnedSwitcherSearchSelection() {
+        if query.isEmpty {
+            selectAllWindowsApp()
+        } else {
+            focusFirstPinnedSwitcherSearchResult()
+        }
+    }
+
+    private func focusFirstPinnedSwitcherSearchResult() {
+        hoveredSwitcherWindowID = nil
+        if let firstMatchingApp = filteredRecentAppWindows.first {
+            focusApp(firstMatchingApp.id)
+        } else {
+            focusedAppKey = nil
+            selectedAppWindowID = nil
+            isAllWindowsAppSelected = false
+            selectFirstFilteredWindow()
+        }
+    }
+
+    func clearPinnedSwitcherQuery() {
+        guard !query.isEmpty else { return }
+        query = ""
+        selectAllWindowsApp()
     }
 
     func clearAppFocus() {

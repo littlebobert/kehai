@@ -112,5 +112,8 @@ struct SearchControl: View {
         .onChange(of: model.searchFocusRequest) {
             isFocused = true
         }
+        .onChange(of: model.searchBlurRequest) {
+            isFocused = false
+        }
     }
 }

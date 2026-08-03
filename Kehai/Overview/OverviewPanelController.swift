@@ -9,6 +9,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var compactWindow: NSWindow?
     private var compactWindowFrameHeight: CGFloat?
     private var compactWindowsAboveAppStrip = false
+    private var isConstrainingCompactWindowFrame = false
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private var globalDragMonitor: Any?
@@ -156,10 +157,12 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
         let visibleFrame = screen.visibleFrame
         let preferredMinimumWidth: CGFloat = 692
+        let singleThumbnailWidth: CGFloat = 212
+        let thumbnailHorizontalPadding: CGFloat = 24
         let allWindowsIconHorizontalInset: CGFloat = 42
         let maximumRightWidth = visibleFrame.maxX - pointer.x + allWindowsIconHorizontalInset
         let maximumLeftWidth = pointer.x - visibleFrame.minX + allWindowsIconHorizontalInset
-        let opensRight = maximumRightWidth >= maximumLeftWidth
+        let opensRight = maximumRightWidth >= singleThumbnailWidth + thumbnailHorizontalPadding
         let maximumAnchoredWidth = floor(opensRight ? maximumRightWidth : maximumLeftWidth)
         let minimumWidth = min(preferredMinimumWidth, maximumAnchoredWidth)
         let savedWidth = UserDefaults.standard.double(forKey: Self.compactContentWidthKey)
@@ -176,7 +179,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let iconCenterY = opensUp ? bottomStripIconInset : height - topStripIconInset
         let proposedOriginX = pointer.x - iconCenterX
         let proposedOriginY = pointer.y - iconCenterY
-        let originX = proposedOriginX
+        let originX = min(max(proposedOriginX, visibleFrame.minX), visibleFrame.maxX - width)
         let originY = min(max(proposedOriginY, visibleFrame.minY), visibleFrame.maxY - height)
 
         let panel = NSWindow(
@@ -216,6 +219,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
         compactWindow = panel
         compactWindowFrameHeight = fixedFrameHeight
+        constrainCompactWindowToVisibleScreen(panel, screen: screen)
         updateAppearance()
         panel.standardWindowButton(.zoomButton)?.target = self
         panel.standardWindowButton(.zoomButton)?.action = #selector(openFullBrowserFromCompactZoom(_:))
@@ -348,10 +352,32 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
     }
 
+    func windowDidResize(_ notification: Notification) {
+        guard let resizedWindow = notification.object as? NSWindow,
+              resizedWindow === compactWindow else { return }
+        constrainCompactWindowToVisibleScreen(resizedWindow)
+    }
+
     func windowDidEndLiveResize(_ notification: Notification) {
         guard notification.object as? NSWindow === compactWindow,
-              let width = compactWindow?.contentView?.bounds.width else { return }
+              let compactWindow,
+              let width = compactWindow.contentView?.bounds.width else { return }
+        constrainCompactWindowToVisibleScreen(compactWindow)
         UserDefaults.standard.set(width, forKey: Self.compactContentWidthKey)
+    }
+
+    private func constrainCompactWindowToVisibleScreen(_ window: NSWindow, screen: NSScreen? = nil) {
+        guard !isConstrainingCompactWindowFrame,
+              let visibleFrame = (screen ?? window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        var frame = window.frame
+        frame.size.width = min(frame.width, visibleFrame.width)
+        frame.size.height = min(frame.height, visibleFrame.height)
+        frame.origin.x = min(max(frame.minX, visibleFrame.minX), visibleFrame.maxX - frame.width)
+        frame.origin.y = min(max(frame.minY, visibleFrame.minY), visibleFrame.maxY - frame.height)
+        guard frame != window.frame else { return }
+        isConstrainingCompactWindowFrame = true
+        window.setFrame(frame, display: true)
+        isConstrainingCompactWindowFrame = false
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -565,16 +591,33 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 return nil
             }
 
-            let editingText = self.window?.firstResponder is NSTextView
+            let editingText = event.window?.firstResponder is NSTextView
+            let isPinnedMiniBrowser = event.window === self.compactWindow
+                && self.model.isSwitcherMode
+                && !self.isShortcutSessionActive()
             if event.keyCode == 53 {
                 if editingText {
-                    self.window?.makeFirstResponder(self.window?.contentView)
+                    if isPinnedMiniBrowser {
+                        self.model.compactSearchBlurRequest += 1
+                        self.compactWindow?.makeFirstResponder(self.compactWindow?.contentView)
+                    } else {
+                        self.model.searchBlurRequest += 1
+                        self.window?.makeFirstResponder(self.window?.contentView)
+                    }
+                    return nil
+                }
+                if isPinnedMiniBrowser, !self.model.query.isEmpty {
+                    self.model.clearPinnedSwitcherQuery()
                     return nil
                 }
                 if self.model.focusedAppKey != nil {
                     withAnimation(.easeInOut(duration: 0.12)) {
                         self.model.clearAppFocus()
                     }
+                    return nil
+                }
+                if isPinnedMiniBrowser {
+                    self.closeCompactSwitcher()
                     return nil
                 }
             }
@@ -602,6 +645,27 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 if !self.model.showExclusionChooserForFocusedApp() {
                     self.model.showActionChooserForSelectedWindow()
                 }
+                return nil
+            }
+
+            if isPinnedMiniBrowser,
+               ![123, 124, 125, 126].contains(event.keyCode),
+               modifiers.isEmpty || modifiers == .shift,
+               let characters = event.characters,
+               !characters.isEmpty,
+               characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
+                self.model.queuePinnedSwitcherSearchText(characters)
+                return nil
+            }
+
+            if event.window === self.window,
+               ![123, 124, 125, 126].contains(event.keyCode),
+               modifiers.isEmpty || modifiers == .shift,
+               let characters = event.characters,
+               !characters.isEmpty,
+               characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
+                self.model.query.append(contentsOf: characters)
+                self.model.searchFocusRequest += 1
                 return nil
             }
 
