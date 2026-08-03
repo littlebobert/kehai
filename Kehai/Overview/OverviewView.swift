@@ -493,7 +493,7 @@ struct CompactSwitcherView: View {
     }
 
     private var maximumVisibleWindows: Int {
-        max(3, Int((compactWidth - 24 + 8) / (compactWindowWidth + 8)))
+        max(1, Int((compactWidth - 24 + 8) / (compactWindowWidth + 8)))
     }
 
     private var displayedWindows: [WindowItem] {

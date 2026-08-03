@@ -4,7 +4,6 @@ import SwiftUI
 @MainActor
 final class OverviewPanelController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "KehaiBrowserWindow"
-    private static let compactContentWidthKey = "overview.compactContentWidth"
     private var window: NSWindow?
     private var compactWindow: NSWindow?
     private var compactWindowFrameHeight: CGFloat?
@@ -156,23 +155,37 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         guard let screen else { return }
 
         let visibleFrame = screen.visibleFrame
-        let preferredMinimumWidth: CGFloat = 692
-        let singleThumbnailWidth: CGFloat = 212
-        let thumbnailHorizontalPadding: CGFloat = 24
-        let allWindowsIconHorizontalInset: CGFloat = 42
-        let maximumRightWidth = visibleFrame.maxX - pointer.x + allWindowsIconHorizontalInset
-        let maximumLeftWidth = pointer.x - visibleFrame.minX + allWindowsIconHorizontalInset
-        let opensRight = maximumRightWidth >= singleThumbnailWidth + thumbnailHorizontalPadding
-        let maximumAnchoredWidth = floor(opensRight ? maximumRightWidth : maximumLeftWidth)
-        let minimumWidth = min(preferredMinimumWidth, maximumAnchoredWidth)
-        let savedWidth = UserDefaults.standard.double(forKey: Self.compactContentWidthKey)
-        let defaultWidth = min(768, max(preferredMinimumWidth, CGFloat(model.recentAppWindows.count + 1) * 59 + 20))
-        let preferredWidth = savedWidth > 0 ? CGFloat(savedWidth) : defaultWidth
-        let width = min(max(preferredWidth, minimumWidth), maximumAnchoredWidth)
+        let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+        let threeThumbnailWidth: CGFloat = 676
+        let oneThumbnailMinimumWidth: CGFloat = 244
+        let allWindowsIconHorizontalInset: CGFloat = 41.5
+        let preferredWidth = threeThumbnailWidth
+        let referenceContentRect = NSRect(x: 0, y: 0, width: 1, height: 1)
+        let referenceFrameRect = NSWindow.frameRect(forContentRect: referenceContentRect, styleMask: styleMask)
+        let leftFrameInset = referenceContentRect.minX - referenceFrameRect.minX
+        let rightFrameInset = referenceFrameRect.maxX - referenceContentRect.maxX
+        let maximumRightWidth = visibleFrame.maxX
+            - (pointer.x - allWindowsIconHorizontalInset)
+            - rightFrameInset
+        let maximumLeftWidth = pointer.x
+            + allWindowsIconHorizontalInset
+            - visibleFrame.minX
+            - leftFrameInset
+        let opensRight: Bool
+        if maximumRightWidth >= preferredWidth {
+            opensRight = true
+        } else if maximumLeftWidth >= preferredWidth {
+            opensRight = false
+        } else {
+            opensRight = maximumRightWidth >= maximumLeftWidth
+        }
+        let maximumAnchoredWidth = floor(max(1, opensRight ? maximumRightWidth : maximumLeftWidth))
+        let minimumWidth = min(oneThumbnailMinimumWidth, maximumAnchoredWidth)
+        let width = min(preferredWidth, maximumAnchoredWidth)
         let estimatedHeight: CGFloat = 276
         let height = min(estimatedHeight, visibleFrame.height)
-        let topStripIconInset: CGFloat = 38
-        let bottomStripIconInset: CGFloat = 60
+        let topStripIconInset: CGFloat = 65.5
+        let bottomStripIconInset: CGFloat = 41
         let opensUp = pointer.y - (height - topStripIconInset) < visibleFrame.minY
         compactWindowsAboveAppStrip = opensUp
         let iconCenterX = opensRight ? allWindowsIconHorizontalInset : width - allWindowsIconHorizontalInset
@@ -184,7 +197,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
         let panel = NSWindow(
             contentRect: NSRect(x: originX, y: originY, width: width, height: height),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
@@ -355,15 +368,15 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     func windowDidResize(_ notification: Notification) {
         guard let resizedWindow = notification.object as? NSWindow,
               resizedWindow === compactWindow else { return }
-        constrainCompactWindowToVisibleScreen(resizedWindow)
+        if resizedWindow.inLiveResize {
+            constrainCompactWindowToVisibleScreen(resizedWindow)
+        }
     }
 
     func windowDidEndLiveResize(_ notification: Notification) {
         guard notification.object as? NSWindow === compactWindow,
-              let compactWindow,
-              let width = compactWindow.contentView?.bounds.width else { return }
+              let compactWindow else { return }
         constrainCompactWindowToVisibleScreen(compactWindow)
-        UserDefaults.standard.set(width, forKey: Self.compactContentWidthKey)
     }
 
     private func constrainCompactWindowToVisibleScreen(_ window: NSWindow, screen: NSScreen? = nil) {
