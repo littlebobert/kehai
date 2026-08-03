@@ -401,7 +401,7 @@ struct OverviewView: View {
             tint: tint,
             isSelected: model.selectedWindowID == window.id && !model.suppressSelectionHalo,
             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
-            isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.id),
+            isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.physicalWindowID),
             thumbnailCellHeight: thumbnailCellHeight,
             isHidden: model.isWindowHidden(window),
             canExcludeApp: model.canExcludeApp(window),
@@ -599,6 +599,8 @@ struct CompactSwitcherView: View {
                 .strokeBorder(compactSearchIsFocused ? Color.accentColor.opacity(0.65) : .clear, lineWidth: 1)
                 .allowsHitTesting(false)
         }
+        .frame(width: max(220, compactWidth / 3))
+        .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
         .padding(.horizontal, 12)
     }
 
@@ -756,14 +758,16 @@ struct CompactSwitcherView: View {
 
         let deltaX = location.x - previous.x
         let deltaY = location.y - previous.y
-        let isMovingTowardWindows = opensUp ? deltaY < 0 : deltaY > 0
-        let isPrimarilyVertical = abs(deltaY) > abs(deltaX) * 0.75
+        let directionalY = opensUp ? -deltaY : deltaY
+        let horizontalDistance = abs(deltaX)
+        let isClearlyMovingTowardWindows = directionalY >= horizontalDistance * 0.55
+        let isTraversingAppStrip = horizontalDistance > max(directionalY, 0) * 1.4
 
-        if isMovingTowardWindows, isPrimarilyVertical, let activeHoveredAppID {
-            pointerIntentLockedAppID = activeHoveredAppID
-            pointerIntentLockExpiresAt = Date().addingTimeInterval(0.18)
-        } else if abs(deltaX) > abs(deltaY) {
+        if isTraversingAppStrip {
             clearPointerIntentLock()
+        } else if isClearlyMovingTowardWindows, let activeHoveredAppID {
+            pointerIntentLockedAppID = activeHoveredAppID
+            pointerIntentLockExpiresAt = Date().addingTimeInterval(0.24)
         }
     }
 

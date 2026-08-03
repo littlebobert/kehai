@@ -62,7 +62,7 @@ final class WindowActivator {
             let application = AXUIElementCreateApplication(item.processID)
             let stillPresent: Bool = {
                 if let byID = self.matchingWindow(item, in: application),
-                   self.windowNumber(of: byID) == item.id {
+                   self.windowNumber(of: byID) == item.physicalWindowID {
                     return true
                 }
                 if let remainingWindow = self.matchingWindow(item, in: application),
@@ -112,7 +112,7 @@ final class WindowActivator {
 
     private func matchingWindow(_ item: WindowItem, in application: AXUIElement) -> AXUIElement? {
         guard let windows: [AXUIElement] = value(application, attribute: kAXWindowsAttribute) else { return nil }
-        if let byNumber = windows.first(where: { windowNumber(of: $0) == item.id }) {
+        if let byNumber = windows.first(where: { windowNumber(of: $0) == item.physicalWindowID }) {
             return byNumber
         }
         return windows.max { score($0, item) < score($1, item) }

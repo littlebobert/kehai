@@ -27,6 +27,8 @@ actor SafariTabService {
         guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Safari").first != nil else { return [] }
         let source = """
         tell application "Safari"
+            set fieldSeparator to ASCII character 31
+            set recordSeparator to ASCII character 30
             set rows to {}
             repeat with wi from 1 to count of windows
                 try
@@ -46,29 +48,56 @@ actor SafariTabService {
                     on error
                         set tabURL to ""
                     end try
-                    set end of rows to (wi as text) & tab & (ti as text) & tab & tabTitle & tab & tabURL & tab & ((ti = currentIndex) as text)
+                    set end of rows to (wi as text) & fieldSeparator & (ti as text) & fieldSeparator & tabTitle & fieldSeparator & tabURL & fieldSeparator & ((ti = currentIndex) as text)
                 end repeat
             end repeat
             if (count of rows) is 0 then return ""
-            set AppleScript's text item delimiters to linefeed
+            set AppleScript's text item delimiters to recordSeparator
             return rows as text
         end tell
         """
-        let output = try execute(source)
-        return output.split(separator: "\n").compactMap { line in
-            let fields = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
-            guard fields.count >= 5, let window = Int(fields[0]), let tab = Int(fields[1]) else { return nil }
-            return SafariTab(windowIndex: window, tabIndex: tab, title: fields[2], url: fields[3], isCurrent: fields[4].lowercased() == "true")
-        }
+        return Self.parseTabs(try execute(source))
     }
 
     func activate(_ target: SafariTab) throws {
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Safari").first != nil else {
+            throw SafariError.notRunning
+        }
+        if try activateAtRecordedPosition(target) { return }
+
         let tabs = try listTabs()
-        let match = tabs.first { $0.url == target.url && $0.title == target.title } ?? tabs.first { $0.url == target.url }
-        guard let match else { throw SafariError.invalidReply }
+        guard let match = Self.resolve(target, in: tabs) else { throw SafariError.invalidReply }
+        try activateWithoutValidation(match)
+    }
+
+    private func activateAtRecordedPosition(_ target: SafariTab) throws -> Bool {
+        guard target.windowIndex > 0, target.tabIndex > 0, !target.url.isEmpty else { return false }
+        let expectedURL = Self.appleScriptStringLiteral(target.url)
         let source = """
         tell application "Safari"
-            set current tab of window \(match.windowIndex) to tab \(match.tabIndex) of window \(match.windowIndex)
+            try
+                set targetWindow to window \(target.windowIndex)
+                set targetTab to tab \(target.tabIndex) of targetWindow
+                set actualURL to ""
+                try
+                    set actualURL to URL of targetTab as text
+                end try
+                if actualURL is \(expectedURL) then
+                    set current tab of targetWindow to targetTab
+                    activate
+                    return "true"
+                end if
+            end try
+            return "false"
+        end tell
+        """
+        return try execute(source).lowercased() == "true"
+    }
+
+    private func activateWithoutValidation(_ tab: SafariTab) throws {
+        let source = """
+        tell application "Safari"
+            set current tab of window \(tab.windowIndex) to tab \(tab.tabIndex) of window \(tab.windowIndex)
             activate
         end tell
         """
@@ -78,6 +107,31 @@ actor SafariTabService {
     static func resolve(_ target: SafariTab, in candidates: [SafariTab]) -> SafariTab? {
         candidates.first { $0.url == target.url && $0.title == target.title }
             ?? candidates.first { $0.url == target.url }
+    }
+
+    static func appleScriptStringLiteral(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\r", with: "\\r")
+            .replacingOccurrences(of: "\n", with: "\\n")
+        return "\"\(escaped)\""
+    }
+
+    static func parseTabs(_ output: String) -> [SafariTab] {
+        output.split(separator: Character("\u{001E}"), omittingEmptySubsequences: true).compactMap { record in
+            let fields = record.split(separator: Character("\u{001F}"), omittingEmptySubsequences: false).map(String.init)
+            guard fields.count == 5,
+                  let window = Int(fields[0]),
+                  let tab = Int(fields[1]) else { return nil }
+            return SafariTab(
+                windowIndex: window,
+                tabIndex: tab,
+                title: fields[2],
+                url: fields[3] == "missing value" ? "" : fields[3],
+                isCurrent: fields[4].lowercased() == "true"
+            )
+        }
     }
 
     private func execute(_ source: String) throws -> String {

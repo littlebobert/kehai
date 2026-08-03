@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct GroupingControl: View {
@@ -111,6 +112,13 @@ struct SearchControl: View {
         .frame(minWidth: 180, idealWidth: 300, maxWidth: 380)
         .onChange(of: model.searchFocusRequest) {
             isFocused = true
+            DispatchQueue.main.async {
+                model.applyPendingSearchText()
+                DispatchQueue.main.async {
+                    guard let editor = NSApp.keyWindow?.firstResponder as? NSTextView else { return }
+                    editor.setSelectedRange(NSRange(location: editor.string.utf16.count, length: 0))
+                }
+            }
         }
         .onChange(of: model.searchBlurRequest) {
             isFocused = false

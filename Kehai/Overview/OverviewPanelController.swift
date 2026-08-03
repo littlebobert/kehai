@@ -664,8 +664,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                let characters = event.characters,
                !characters.isEmpty,
                characters.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
-                self.model.query.append(contentsOf: characters)
-                self.model.searchFocusRequest += 1
+                self.model.queueSearchText(characters)
                 return nil
             }
 

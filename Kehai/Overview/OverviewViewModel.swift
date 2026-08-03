@@ -97,7 +97,7 @@ final class OverviewViewModel {
     /// Windows shown in the browser grid/app strip. Uses a drag-time snapshot so
     /// in-flight inventory mutations cannot empty the UI under the cursor.
     private var displayWindows: [WindowItem] {
-        dragDisplayWindows ?? windows
+        WindowItem.expandedSafariTabEntries(from: dragDisplayWindows ?? windows)
     }
 
     private var displayTaskGroups: [TaskGroup] {
@@ -111,6 +111,7 @@ final class OverviewViewModel {
     var searchBlurRequest = 0
     var compactSearchFocusRequest = 0
     var compactSearchBlurRequest = 0
+    private var pendingSearchText = ""
     private var pendingCompactSearchText = ""
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
@@ -236,8 +237,9 @@ final class OverviewViewModel {
 
     func taskContext(for windowID: CGWindowID) -> String? {
         guard focusedAppKey != nil else { return nil }
+        let physicalWindowID = displayWindows.first(where: { $0.id == windowID })?.physicalWindowID ?? windowID
         let names = displayTaskGroups
-            .filter { $0.windowIDs.contains(windowID) }
+            .filter { $0.windowIDs.contains(physicalWindowID) }
             .map(\.name)
         guard !names.isEmpty else { return nil }
         return names.prefix(2).joined(separator: " · ")
@@ -250,7 +252,7 @@ final class OverviewViewModel {
             displayTaskGroups.first(where: { $0.id == selectedID }).map { Set($0.windowIDs) }
         }
         let eligibleWindows = sourceWindows.filter { item in
-            let belongsToSelectedGroup = selectedWindowIDs?.contains(item.id) ?? true
+            let belongsToSelectedGroup = selectedWindowIDs?.contains(item.physicalWindowID) ?? true
             let includedByHiddenFilter = !excludeHiddenWindows || !hiddenWindowStore.isHidden(item)
             let belongsToFocusedApp = focusedAppKey.map { appKey(for: item) == $0 } ?? true
             return belongsToSelectedGroup && includedByHiddenFilter && belongsToFocusedApp
@@ -259,13 +261,9 @@ final class OverviewViewModel {
             let windowsByID = Dictionary(uniqueKeysWithValues: eligibleWindows.map { ($0.id, $0) })
             return smartSearchWindowIDs.compactMap { windowsByID[$0] }
         }
-        let matchingWindows = eligibleWindows.filter { item in
-            query.isEmpty
-                || item.title.localizedCaseInsensitiveContains(query)
-                || item.appName.localizedCaseInsensitiveContains(query)
-                || item.safariTabs.contains { $0.title.localizedCaseInsensitiveContains(query) || $0.url.localizedCaseInsensitiveContains(query) }
-        }
-        return WindowItem.orderedByRecency(matchingWindows)
+        guard !query.isEmpty else { return WindowItem.orderedByRecency(eligibleWindows) }
+        let matchingWindows = eligibleWindows.filter { $0.searchRank(for: query) != nil }
+        return WindowItem.orderedBySearchRelevance(matchingWindows, query: query)
     }
 
     func recordWindowFocus(windowID: CGWindowID, at date: Date) {
@@ -284,19 +282,19 @@ final class OverviewViewModel {
 
     var filteredRecentAppWindows: [WindowItem] {
         guard !query.isEmpty else { return recentAppWindows }
-        let matchingAppKeys = Set(displayWindows.compactMap { window in
-            let matches = window.title.localizedCaseInsensitiveContains(query)
-                || window.appName.localizedCaseInsensitiveContains(query)
-                || window.safariTabs.contains {
-                    $0.title.localizedCaseInsensitiveContains(query)
-                        || $0.url.localizedCaseInsensitiveContains(query)
-                }
-            return matches ? appKey(for: window) : nil
-        })
-        return recentAppWindows.filter {
-            matchingAppKeys.contains(appKey(for: $0))
-                || $0.appName.localizedCaseInsensitiveContains(query)
+        let bestRankByApp = displayWindows.reduce(into: [String: Int]()) { ranks, window in
+            guard let rank = window.searchRank(for: query) else { return }
+            let key = appKey(for: window)
+            ranks[key] = min(ranks[key] ?? .max, rank)
         }
+        let matchingApps = recentAppWindows.filter {
+            bestRankByApp[appKey(for: $0)] != nil || $0.searchRank(for: query) != nil
+        }
+        return matchingApps.enumerated().sorted { lhs, rhs in
+            let leftRank = min(bestRankByApp[appKey(for: lhs.element)] ?? .max, lhs.element.searchRank(for: query) ?? .max)
+            let rightRank = min(bestRankByApp[appKey(for: rhs.element)] ?? .max, rhs.element.searchRank(for: query) ?? .max)
+            return leftRank == rightRank ? lhs.offset < rhs.offset : leftRank < rightRank
+        }.map(\.element)
     }
 
     private func appendNewAppsToSwitcherSnapshot() {
@@ -318,14 +316,10 @@ final class OverviewViewModel {
             let windowsByID = Dictionary(uniqueKeysWithValues: eligibleWindows.map { ($0.id, $0) })
             contextualWindows = smartSearchWindowIDs.compactMap { windowsByID[$0] }
         } else if !query.isEmpty {
-            contextualWindows = WindowItem.orderedByRecency(eligibleWindows.filter { window in
-                window.title.localizedCaseInsensitiveContains(query)
-                    || window.appName.localizedCaseInsensitiveContains(query)
-                    || window.safariTabs.contains {
-                        $0.title.localizedCaseInsensitiveContains(query)
-                            || $0.url.localizedCaseInsensitiveContains(query)
-                    }
-            })
+            contextualWindows = WindowItem.orderedBySearchRelevance(
+                eligibleWindows.filter { $0.searchRank(for: query) != nil },
+                query: query
+            )
         } else {
             contextualWindows = WindowItem.orderedByRecency(eligibleWindows)
         }
@@ -343,7 +337,9 @@ final class OverviewViewModel {
         // or everything closed). Smart Search is window-scoped, so skip there.
         if smartSearchWindowIDs == nil {
             apps.append(contentsOf: windowlessRunningApps(excluding: apps))
-            apps = WindowItem.orderedByRecency(apps)
+            apps = query.isEmpty
+                ? WindowItem.orderedByRecency(apps)
+                : WindowItem.orderedBySearchRelevance(apps, query: query)
         }
         return apps
     }
@@ -628,10 +624,11 @@ final class OverviewViewModel {
     }
 
     private func closeWindow(_ window: WindowItem, keepKehaiActive: Bool = true) {
-        let started = activator.close(window, keepKehaiActive: keepKehaiActive) { [weak self] didClose in
+        let physicalWindow = windows.first(where: { $0.id == window.physicalWindowID }) ?? window
+        let started = activator.close(physicalWindow, keepKehaiActive: keepKehaiActive) { [weak self] didClose in
             guard let self else { return }
             if didClose {
-                self.windows.removeAll { $0.id == window.id }
+                self.windows.removeAll { $0.id == physicalWindow.id }
                 self.reconcileCachedGroups()
                 self.preserveSelectionOrSelectFirst()
             } else if keepKehaiActive {
@@ -750,7 +747,9 @@ final class OverviewViewModel {
               !liveThumbnailPausedForMenu,
               NSApp.isActive,
               let windowID = selectedWindowID,
-              windows.contains(where: { $0.id == windowID }) else { return }
+              let selectedWindow = orderedFilteredWindows.first(where: { $0.id == windowID }),
+              selectedWindow.safariTab?.isCurrent != false,
+              windows.contains(where: { $0.id == selectedWindow.physicalWindowID }) else { return }
 
         liveThumbnailTask = Task { [weak self] in
             do {
@@ -764,7 +763,7 @@ final class OverviewViewModel {
                   NSApp.isActive,
                   self.selectedWindowID == windowID else { return }
             await self.liveThumbnails.start(
-                windowID: windowID,
+                windowID: selectedWindow.physicalWindowID,
                 maximumSize: CGSize(width: 880, height: 550)
             ) { [weak self] image in
                 guard let self,
@@ -1035,6 +1034,17 @@ final class OverviewViewModel {
         selectedAppWindowID = nil
         hoveredSwitcherWindowID = nil
         isAllWindowsAppSelected = true
+    }
+
+    func queueSearchText(_ text: String) {
+        pendingSearchText.append(contentsOf: text)
+        searchFocusRequest += 1
+    }
+
+    func applyPendingSearchText() {
+        guard !pendingSearchText.isEmpty else { return }
+        query.append(contentsOf: pendingSearchText)
+        pendingSearchText = ""
     }
 
     func queuePinnedSwitcherSearchText(_ text: String) {
@@ -1808,7 +1818,13 @@ final class OverviewViewModel {
         isGrouping = false
     }
 
-    func activate(_ window: WindowItem) { activator.activate(window) }
+    func activate(_ window: WindowItem) {
+        if let tab = window.safariTab {
+            Task { await activate(tab) }
+        } else {
+            activator.activate(window)
+        }
+    }
 
     func activate(_ tab: SafariTab) async {
         do { try await safari.activate(tab) } catch { errorMessage = error.localizedDescription }
