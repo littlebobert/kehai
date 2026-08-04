@@ -18,9 +18,12 @@ struct WindowMatchCandidate: Sendable {
 final class WindowActivator {
     func activate(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
-        app.activate(options: [.activateAllWindows])
         // App-only strip entries (no open windows) just need the app frontmost.
-        guard !item.isAppPlaceholder else { return }
+        guard !item.isAppPlaceholder else {
+            app.activate(options: [.activateAllWindows])
+            return
+        }
+        app.activate(options: [])
         raiseWindow(item)
     }
 
