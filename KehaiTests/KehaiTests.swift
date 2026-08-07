@@ -128,4 +128,50 @@ final class KehaiTests: XCTestCase {
         XCTAssertNotNil(lastSeen[42])
         try? FileManager.default.removeItem(at: url)
     }
+
+    func testRecentTrailCollapsesOnlyConsecutiveDuplicateWindows() {
+        let events = [
+            ActivityEvent(windowID: 1, appName: "Editor", title: "First", date: Date(timeIntervalSince1970: 1)),
+            ActivityEvent(windowID: 2, appName: "Browser", title: "Page", date: Date(timeIntervalSince1970: 2)),
+            ActivityEvent(windowID: 2, appName: "Browser", title: "Page", date: Date(timeIntervalSince1970: 3)),
+            ActivityEvent(windowID: 1, appName: "Editor", title: "First", date: Date(timeIntervalSince1970: 4))
+        ]
+
+        let trail = ActivityEvent.recentTrail(
+            from: events,
+            availableWindows: [1: "Editor", 2: "Browser"]
+        )
+
+        XCTAssertEqual(trail.map(\.windowID), [1, 2, 1])
+    }
+
+    func testRecentTrailOmitsClosedOrMismatchedWindows() {
+        let events = [
+            ActivityEvent(windowID: 1, appName: "Old App", title: "Reused ID", date: Date(timeIntervalSince1970: 1)),
+            ActivityEvent(windowID: 2, appName: "Closed", title: "Gone", date: Date(timeIntervalSince1970: 2)),
+            ActivityEvent(windowID: 3, appName: "Editor", title: "Open", date: Date(timeIntervalSince1970: 3))
+        ]
+
+        let trail = ActivityEvent.recentTrail(
+            from: events,
+            availableWindows: [1: "New App", 3: "Editor"]
+        )
+
+        XCTAssertEqual(trail.map(\.windowID), [3])
+    }
+
+    func testRecentTrailOmitsStaleEvents() {
+        let events = [
+            ActivityEvent(windowID: 1, appName: "Editor", title: "Old", date: Date(timeIntervalSince1970: 10)),
+            ActivityEvent(windowID: 2, appName: "Browser", title: "Fresh", date: Date(timeIntervalSince1970: 20))
+        ]
+
+        let trail = ActivityEvent.recentTrail(
+            from: events,
+            availableWindows: [1: "Editor", 2: "Browser"],
+            since: Date(timeIntervalSince1970: 15)
+        )
+
+        XCTAssertEqual(trail.map(\.windowID), [2])
+    }
 }

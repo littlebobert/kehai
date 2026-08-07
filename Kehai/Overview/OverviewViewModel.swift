@@ -21,6 +21,11 @@ struct BrowserWindowSection: Identifiable {
     let windows: [WindowItem]
 }
 
+struct RecentTrailEntry: Identifiable {
+    let event: ActivityEvent
+    var id: String { "\(event.windowID)-\(event.date.timeIntervalSinceReferenceDate)" }
+}
+
 @MainActor
 @Observable
 final class OverviewViewModel {
@@ -28,6 +33,7 @@ final class OverviewViewModel {
 
     var windows: [WindowItem] = []
     var taskGroups: [TaskGroup] = []
+    private(set) var recentTrail: [RecentTrailEntry] = []
     var selectedTaskGroupID: String?
     var viewMode: BrowserViewMode {
         didSet {
@@ -981,8 +987,31 @@ final class OverviewViewModel {
         clearTransientFilters(selectedGroupID: nil)
         switcherAppWindows = currentRecentAppWindows
         isSwitcherMode = true
+        recentTrail = []
+        Task { await refreshRecentTrail() }
         hoveredSwitcherWindowID = nil
         selectAllWindowsApp()
+    }
+
+    func refreshRecentTrail() async {
+        guard isSwitcherMode else { return }
+        let availableWindows = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0.appName) })
+        let events = await history.recentEvents(limit: 100)
+        guard isSwitcherMode else { return }
+        recentTrail = ActivityEvent.recentTrail(
+            from: events,
+            availableWindows: availableWindows,
+            since: Date().addingTimeInterval(-30 * 60)
+        ).map(RecentTrailEntry.init)
+    }
+
+    @discardableResult
+    func activateTrailEntry(_ entry: RecentTrailEntry) -> Bool {
+        guard let window = windows.first(where: {
+            $0.id == entry.event.windowID && $0.appName == entry.event.appName
+        }) else { return false }
+        activate(window)
+        return true
     }
 
     /// Clears search / smart-search / optional group filter left over from a prior session.
@@ -1638,6 +1667,9 @@ final class OverviewViewModel {
                 reconcileCachedGroups()
                 preserveSelectionOrSelectFirst()
                 activityMonitor.update(windows: items)
+                if isSwitcherMode, recentTrail.isEmpty {
+                    Task { await refreshRecentTrail() }
+                }
             }
             thumbnailCapturedAt = thumbnailCapturedAt.filter { currentIDs.contains($0.key) }
             if showsGlobalLoading { isLoading = false }

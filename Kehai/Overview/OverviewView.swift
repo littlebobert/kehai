@@ -447,6 +447,27 @@ struct OverviewView: View {
     }
 }
 
+private struct RecentTrailButtonStyle: ButtonStyle {
+    @State private var isHovered = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(
+                        configuration.isPressed
+                            ? Color.accentColor.opacity(0.22)
+                            : isHovered ? Color.primary.opacity(0.09) : .clear
+                    )
+            }
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .contentShape(RoundedRectangle(cornerRadius: 4))
+            .onHover { isHovered = $0 }
+    }
+}
+
 struct CompactSwitcherView: View {
     @Bindable var model: OverviewViewModel
     @Bindable var appearance: AppearanceSettings
@@ -501,6 +522,20 @@ struct CompactSwitcherView: View {
         return opensRight ? recent : Array(recent.reversed())
     }
 
+    private var visibleTrailEntries: [RecentTrailEntry] {
+        let count: Int
+        if compactWidth >= 600 {
+            count = 3
+        } else if compactWidth >= 480 {
+            count = 2
+        } else if compactWidth >= 360 {
+            count = 1
+        } else {
+            count = 0
+        }
+        return Array(model.recentTrail.prefix(count))
+    }
+
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
@@ -509,12 +544,12 @@ struct CompactSwitcherView: View {
                         .frame(maxHeight: .infinity, alignment: .bottom)
                         .padding(.horizontal, 12)
                         .padding(.top, 12)
-                    compactQueryIndicator
+                    compactHeader
                         .padding(.bottom, 8)
                     appStrip
                         .padding(.bottom, 2)
                 } else {
-                    compactQueryIndicator
+                    compactHeader
                         .padding(.top, 6)
                         .padding(.bottom, 8)
                     appStrip
@@ -571,6 +606,16 @@ struct CompactSwitcherView: View {
         }
     }
 
+    private var compactHeader: some View {
+        VStack(spacing: 8) {
+            compactQueryIndicator
+                .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
+            compactTrail
+                .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
+        }
+        .padding(.horizontal, 12)
+    }
+
     private var compactQueryIndicator: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
@@ -600,8 +645,46 @@ struct CompactSwitcherView: View {
                 .allowsHitTesting(false)
         }
         .frame(width: max(220, compactWidth / 3))
-        .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
-        .padding(.horizontal, 12)
+    }
+
+    private var compactTrail: some View {
+        Group {
+            if visibleTrailEntries.isEmpty {
+                Color.clear
+            } else {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .foregroundStyle(.secondary)
+                        .help("Recently used windows")
+                    ForEach(Array(visibleTrailEntries.enumerated()), id: \.element.id) { index, entry in
+                        if index > 0 {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Button {
+                            if model.activateTrailEntry(entry) { close() }
+                        } label: {
+                            Text(trailLabel(for: entry.event))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: 169)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .buttonStyle(RecentTrailButtonStyle())
+                        .foregroundStyle(index == 0 ? .primary : .secondary)
+                        .help("\(entry.event.appName) — \(entry.event.title)")
+                    }
+                }
+                .font(.caption)
+            }
+        }
+        .frame(height: 20)
+    }
+
+    private func trailLabel(for event: ActivityEvent) -> String {
+        guard !event.title.isEmpty, event.title != event.appName else { return event.appName }
+        return "\(event.appName): \(event.title)"
     }
 
     private var appStrip: some View {

@@ -6,6 +6,26 @@ struct ActivityEvent: Codable, Sendable {
     let appName: String
     let title: String
     let date: Date
+
+    static func recentTrail(
+        from events: [ActivityEvent],
+        availableWindows: [UInt32: String],
+        since earliestDate: Date? = nil,
+        limit: Int = 3
+    ) -> [ActivityEvent] {
+        guard limit > 0 else { return [] }
+        var trail: [ActivityEvent] = []
+        var previousWindowID: UInt32?
+        for event in events.reversed() {
+            if let earliestDate, event.date < earliestDate { break }
+            guard availableWindows[event.windowID] == event.appName else { continue }
+            guard event.windowID != previousWindowID else { continue }
+            trail.append(event)
+            previousWindowID = event.windowID
+            if trail.count == limit { break }
+        }
+        return trail
+    }
 }
 
 actor ActivityStore {
