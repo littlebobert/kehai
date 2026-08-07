@@ -182,7 +182,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let maximumAnchoredWidth = floor(max(1, opensRight ? maximumRightWidth : maximumLeftWidth))
         let minimumWidth = min(oneThumbnailMinimumWidth, maximumAnchoredWidth)
         let width = min(preferredWidth, maximumAnchoredWidth)
-        let estimatedHeight: CGFloat = 298
+        let estimatedHeight: CGFloat = 276
         let height = min(estimatedHeight, visibleFrame.height)
         let topStripIconInset: CGFloat = 65.5
         let bottomStripIconInset: CGFloat = 41
