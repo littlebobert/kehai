@@ -490,36 +490,25 @@ struct CompactSwitcherView: View {
     private let compactAppHorizontalPadding: CGFloat = 10
 
     private var maximumVisibleApps: Int {
-        let availableWidth = compactWidth - compactAppHorizontalPadding * 2
+        let splitLayoutSpacing: CGFloat = opensRight ? 0 : 12
+        let availableWidth = compactWidth - compactAppHorizontalPadding * 2 - splitLayoutSpacing
         let totalCellCount = max(1, Int((availableWidth + compactAppSpacing) / (compactAppCellWidth + compactAppSpacing)))
         return max(0, totalCellCount - 1)
     }
 
     private var displayedApps: [WindowItem] {
-        let recent = Array(model.filteredRecentAppWindows.prefix(maximumVisibleApps))
-        return opensRight ? recent : Array(recent.reversed())
+        Array(model.filteredRecentAppWindows.prefix(maximumVisibleApps))
     }
 
     private let compactWindowWidth: CGFloat = 212
 
-    private var appStripContentWidth: CGFloat {
-        let itemCount = displayedApps.count + 1
-        return compactAppHorizontalPadding * 2
-            + CGFloat(itemCount) * compactAppCellWidth
-            + CGFloat(max(0, itemCount - 1)) * compactAppSpacing
-    }
-
-    private var appStripContentOffset: CGFloat {
-        opensRight ? 0 : compactWidth - appStripContentWidth
-    }
 
     private var maximumVisibleWindows: Int {
         max(1, Int((compactWidth - 24 + 8) / (compactWindowWidth + 8)))
     }
 
     private var displayedWindows: [WindowItem] {
-        let recent = Array(model.filteredWindows.prefix(maximumVisibleWindows))
-        return opensRight ? recent : Array(recent.reversed())
+        Array(model.filteredWindows.prefix(maximumVisibleWindows))
     }
 
     private var visibleTrailEntries: [RecentTrailEntry] {
@@ -609,9 +598,9 @@ struct CompactSwitcherView: View {
     private var compactHeader: some View {
         VStack(spacing: 8) {
             compactQueryIndicator
-                .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
             compactTrail
-                .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12)
     }
@@ -644,7 +633,7 @@ struct CompactSwitcherView: View {
                 .strokeBorder(compactSearchIsFocused ? Color.accentColor.opacity(0.65) : .clear, lineWidth: 1)
                 .allowsHitTesting(false)
         }
-        .frame(width: max(220, compactWidth / 3))
+        .frame(width: max(330, compactWidth / 2))
     }
 
     private var compactTrail: some View {
@@ -689,14 +678,19 @@ struct CompactSwitcherView: View {
 
     private var appStrip: some View {
         HStack(spacing: compactAppSpacing) {
-            if opensRight { allWindowsButton(itemIndex: 0) }
+            if opensRight {
+                allWindowsButton(itemIndex: 0)
+            }
             ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, window in
                 compactAppButton(window, itemIndex: index + (opensRight ? 1 : 0))
             }
-            if !opensRight { allWindowsButton(itemIndex: displayedApps.count) }
+            if !opensRight {
+                Spacer(minLength: 12)
+                allWindowsButton(itemIndex: displayedApps.count)
+            }
         }
         .padding(.horizontal, compactAppHorizontalPadding)
-        .frame(maxWidth: .infinity, alignment: opensRight ? .leading : .trailing)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 66)
         .clipped()
         .onContinuousHover(coordinateSpace: .local) { phase in
@@ -778,10 +772,11 @@ struct CompactSwitcherView: View {
         badgeLabel: String?
     ) -> some View {
         let isAllWindows = title == "All Windows"
-        let itemCenterX = appStripContentOffset
-            + compactAppHorizontalPadding
-            + CGFloat(itemIndex) * (compactAppCellWidth + compactAppSpacing)
-            + compactAppCellWidth / 2
+        let itemCenterX = !opensRight && isAllWindows
+            ? compactWidth - compactAppHorizontalPadding - compactAppCellWidth / 2
+            : compactAppHorizontalPadding
+                + CGFloat(itemIndex) * (compactAppCellWidth + compactAppSpacing)
+                + compactAppCellWidth / 2
         let labelOffset = compactLabelOffset(title: title, itemCenterX: itemCenterX)
         return VStack(spacing: 2) {
             icon
@@ -924,7 +919,7 @@ struct CompactSwitcherView: View {
                         compactWindowButton(window)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: opensRight ? .leading : .trailing)
+                .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: .leading)
                 .animation(.easeInOut(duration: 0.07), value: model.focusedAppKey)
             }
         }
