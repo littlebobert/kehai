@@ -136,6 +136,23 @@ struct SafariTab: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension WindowItem {
+    /// One window per app, preserving input order. Safari expands into every tab,
+    /// so prefer the visible tab as the app-strip representative instead of tab 1.
+    static func uniquedAppRepresentatives(from windows: [WindowItem]) -> [WindowItem] {
+        windows.reduce(into: [WindowItem]()) { result, window in
+            let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
+            if let index = result.firstIndex(where: {
+                ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey
+            }) {
+                if window.safariTab?.isCurrent == true, result[index].safariTab?.isCurrent != true {
+                    result[index] = window
+                }
+                return
+            }
+            result.append(window)
+        }
+    }
+
     static func expandedSafariTabEntries(from windows: [WindowItem]) -> [WindowItem] {
         windows.flatMap { window -> [WindowItem] in
             guard window.bundleIdentifier == "com.apple.Safari",

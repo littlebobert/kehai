@@ -106,6 +106,29 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(entries[1].safariTab, background)
     }
 
+    func testAppRepresentativePrefersCurrentSafariTab() {
+        let first = SafariTab(windowIndex: 1, tabIndex: 1, title: "First", url: "https://example.com/first", isCurrent: false)
+        let current = SafariTab(windowIndex: 1, tabIndex: 3, title: "Current", url: "https://example.com/current", isCurrent: true)
+        let window = WindowItem(
+            id: 42,
+            processID: 1,
+            appName: "Safari",
+            bundleIdentifier: "com.apple.Safari",
+            title: "Current",
+            frame: .zero,
+            isOnScreen: true,
+            safariTabs: [first, current]
+        )
+
+        let representatives = WindowItem.uniquedAppRepresentatives(
+            from: WindowItem.expandedSafariTabEntries(from: [window])
+        )
+
+        XCTAssertEqual(representatives.count, 1)
+        XCTAssertEqual(representatives[0].safariTab, current)
+        XCTAssertEqual(representatives[0].id, window.id)
+    }
+
     func testWindowMatchPrefersExactTitle() {
         let item = WindowItem(id: 1, processID: 1, appName: "Terminal", bundleIdentifier: nil, title: "Build", frame: CGRect(x: 10, y: 10, width: 500, height: 300), isOnScreen: true, lastSeen: Date())
         let exact = WindowMatchCandidate(title: "Build", frame: .zero).score(for: item)

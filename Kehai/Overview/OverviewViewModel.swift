@@ -326,13 +326,7 @@ final class OverviewViewModel {
         }
 
         // One representative per app that currently has an open window.
-        var apps = contextualWindows.reduce(into: [WindowItem]()) { result, window in
-            let appKey = window.bundleIdentifier ?? "pid:\(window.processID)"
-            guard !result.contains(where: {
-                ($0.bundleIdentifier ?? "pid:\($0.processID)") == appKey
-            }) else { return }
-            result.append(window)
-        }
+        var apps = WindowItem.uniquedAppRepresentatives(from: contextualWindows)
 
         // Command-Tab also shows running apps with no open windows (e.g. menu-bar-only
         // or everything closed). Smart Search is window-scoped, so skip there.
@@ -1821,7 +1815,10 @@ final class OverviewViewModel {
     }
 
     func activate(_ window: WindowItem) {
-        if let tab = window.safariTab {
+        // Background Safari tabs need AppleScript to become current. The visible
+        // tab (or a plain window) should just be raised — switching to tab 1 is
+        // slow when Safari is activated from the app strip.
+        if let tab = window.safariTab, !tab.isCurrent {
             Task { await activate(tab) }
         } else {
             activator.activate(window)
