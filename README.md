@@ -4,7 +4,7 @@ A faster way to switch apps and find windows.
 
 ## Download
 
-[Download Kehai 0.3.15 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.3.15/Kehai-0.3.15-mac.zip)
+[Download Kehai 0.3.16 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.3.16/Kehai-0.3.16-mac.zip)
 
 ## Build and run
 
