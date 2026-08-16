@@ -16,10 +16,10 @@ enum WindowInventoryPolicy {
         isProcessRunning: (pid_t) -> Bool = isProcessRunning
     ) -> Bool {
         let currentIDs = Set(current.map(\.id))
-        let protectedPreviousIDs = Set(previous.lazy
+        let protectedPreviousIDs = Set(previous
             .filter { $0.bundleIdentifier != "com.apple.Safari" && isProcessRunning($0.processID) }
             .map(\.id))
-        let protectedCurrentCount = current.lazy
+        let protectedCurrentCount = current
             .filter { $0.bundleIdentifier != "com.apple.Safari" }
             .count
         let removedCount = protectedPreviousIDs.subtracting(currentIDs).count
