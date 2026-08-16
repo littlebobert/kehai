@@ -341,8 +341,8 @@ if not en_notes or len(en_notes) != len(ja_notes):
     raise SystemExit("error: bilingual release-note counts do not match")
 page = page_path.read_text()
 page, download_count = re.subn(r'href="https://github\.com/littlebobert/kehai/releases/download/[^/]+/Kehai-[^"]+-mac\.zip"', f'href="{download_url}"', page, count=1)
-version_pattern = re.compile(r'<span class="kehai-version" data-label-en="\(version [^"]+\)" data-label-ja="（バージョン [^"]+）">\(version [^<]+\)</span>')
-page, version_count = version_pattern.subn(f'<span class="kehai-version" data-label-en="(version {version})" data-label-ja="（バージョン {version}）">(version {version})</span>', page, count=1)
+version_pattern = re.compile(r'<span class="(?P<class>kehai-version|download-version)" data-label-en="\(version [^"]+\)" data-label-ja="（バージョン [^"]+）">\(version [^<]+\)</span>')
+page, version_count = version_pattern.subn(lambda match: f'<span class="{match.group("class")}" data-label-en="(version {version})" data-label-ja="（バージョン {version}）">(version {version})</span>', page, count=1)
 if download_count != 1 or version_count != 1:
     raise SystemExit("error: landing-page download/version markers were not found exactly once")
 items = "\n".join(
