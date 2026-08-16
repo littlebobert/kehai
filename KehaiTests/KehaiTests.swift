@@ -129,6 +129,61 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(representatives[0].id, window.id)
     }
 
+    func testSparseGuardAllowsQuittingAnAppWithManyWindows() {
+        let terminals = (1...3).map { id in
+            WindowItem(
+                id: CGWindowID(id),
+                processID: 10,
+                appName: "Terminal",
+                bundleIdentifier: "com.apple.Terminal",
+                title: "Shell \(id)",
+                frame: .zero,
+                isOnScreen: true
+            )
+        }
+        let quickTime = (10...29).map { id in
+            WindowItem(
+                id: CGWindowID(id),
+                processID: 99,
+                appName: "QuickTime Player",
+                bundleIdentifier: "com.apple.QuickTimePlayerX",
+                title: "Movie \(id)",
+                frame: .zero,
+                isOnScreen: true
+            )
+        }
+
+        XCTAssertFalse(
+            WindowInventoryPolicy.isSparseSnapshot(
+                previous: terminals + quickTime,
+                current: terminals,
+                isProcessRunning: { $0 != 99 }
+            )
+        )
+    }
+
+    func testSparseGuardRejectsSuddenLossOfRunningAppWindows() {
+        let previous = (1...10).map { id in
+            WindowItem(
+                id: CGWindowID(id),
+                processID: 10,
+                appName: "Terminal",
+                bundleIdentifier: "com.apple.Terminal",
+                title: "Shell \(id)",
+                frame: .zero,
+                isOnScreen: true
+            )
+        }
+
+        XCTAssertTrue(
+            WindowInventoryPolicy.isSparseSnapshot(
+                previous: previous,
+                current: Array(previous.prefix(3)),
+                isProcessRunning: { _ in true }
+            )
+        )
+    }
+
     func testWindowMatchPrefersExactTitle() {
         let item = WindowItem(id: 1, processID: 1, appName: "Terminal", bundleIdentifier: nil, title: "Build", frame: CGRect(x: 10, y: 10, width: 500, height: 300), isOnScreen: true, lastSeen: Date())
         let exact = WindowMatchCandidate(title: "Build", frame: .zero).score(for: item)

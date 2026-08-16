@@ -19,6 +19,7 @@ final class WindowCatalog {
         let candidates = content.windows.filter { window in
             guard let app = window.owningApplication,
                   let runningApplication = NSRunningApplication(processIdentifier: app.processID),
+                  !runningApplication.isTerminated,
                   Self.isUserSwitchableApplication(runningApplication) else { return false }
             return app.processID != ownPID
                 && !excludedApps.contains(bundleIdentifier: app.bundleIdentifier)

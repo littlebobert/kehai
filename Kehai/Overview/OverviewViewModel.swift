@@ -298,13 +298,17 @@ final class OverviewViewModel {
         }.map(\.element)
     }
 
-    private func appendNewAppsToSwitcherSnapshot() {
-        guard var switcherAppWindows else { return }
-        var knownKeys = Set(switcherAppWindows.map(appKey(for:)))
-        let newApps = currentRecentAppWindows.filter { knownKeys.insert(appKey(for: $0)).inserted }
-        guard !newApps.isEmpty else { return }
-        switcherAppWindows.append(contentsOf: newApps)
-        self.switcherAppWindows = switcherAppWindows
+    private func syncSwitcherAppSnapshot() {
+        guard let switcherAppWindows else { return }
+        let liveApps = currentRecentAppWindows
+        let liveKeys = Set(liveApps.map(appKey(for:)))
+        var knownKeys = Set<String>()
+        var updated = switcherAppWindows.filter { liveKeys.contains(appKey(for: $0)) }
+        for app in updated { knownKeys.insert(appKey(for: app)) }
+        let newApps = liveApps.filter { knownKeys.insert(appKey(for: $0)).inserted }
+        updated.append(contentsOf: newApps)
+        guard updated.map(\.id) != switcherAppWindows.map(\.id) else { return }
+        self.switcherAppWindows = updated
     }
 
     private var currentRecentAppWindows: [WindowItem] {
@@ -1581,11 +1585,12 @@ final class OverviewViewModel {
             // mid-drag (or under load) otherwise looks like the UI is "filtering".
             // Safari is the exception: keeping every missing window while Safari is
             // still running leaves genuinely closed browser windows in the inventory.
+            items.removeAll { !WindowInventoryPolicy.isProcessRunning($0.processID) }
             if !includeSafariTabs {
                 let newIDs = Set(items.map(\.id))
                 for previous in windows where !newIDs.contains(previous.id) {
-                    let appStillRunning = NSRunningApplication(processIdentifier: previous.processID) != nil
-                    if appStillRunning, previous.bundleIdentifier != "com.apple.Safari" {
+                    if WindowInventoryPolicy.isProcessRunning(previous.processID),
+                       previous.bundleIdentifier != "com.apple.Safari" {
                         items.append(previous)
                     }
                 }
@@ -1596,19 +1601,9 @@ final class OverviewViewModel {
             let previousIDs = Set(windows.map(\.id))
             let currentIDs = Set(items.map(\.id))
             // Guard against sparse mid-drag / transient SCK snapshots replacing a healthy list.
-            // Missing Safari windows are authoritative, so only protected non-Safari
-            // removals participate in this safety check.
-            let protectedPreviousIDs = Set(windows.lazy
-                .filter { $0.bundleIdentifier != "com.apple.Safari" }
-                .map(\.id))
-            let protectedCurrentCount = items.lazy
-                .filter { $0.bundleIdentifier != "com.apple.Safari" }
-                .count
-            let removedCount = protectedPreviousIDs.subtracting(currentIDs).count
-            if !protectedPreviousIDs.isEmpty,
-               removedCount > 0,
-               protectedCurrentCount < protectedPreviousIDs.count,
-               Double(protectedCurrentCount) < Double(protectedPreviousIDs.count) * 0.6 {
+            // Missing Safari windows and windows from apps that have quit are authoritative.
+            if WindowInventoryPolicy.isSparseSnapshot(previous: windows, current: items) {
+                let removedCount = previousIDs.subtracting(currentIDs).count
                 logger.notice("Rejected sparse inventory snapshot (\(items.count) vs \(self.windows.count))")
                 SafeDiagnosticLog.shared.record(
                     "window-inventory: rejected sparse snapshot new=\(items.count) previous=\(windows.count) removed=\(removedCount)"
@@ -1630,7 +1625,7 @@ final class OverviewViewModel {
             if inventoryChanged {
                 windows = items
                 hiddenWindowStore.reconcile(with: items)
-                appendNewAppsToSwitcherSnapshot()
+                syncSwitcherAppSnapshot()
                 reconcileCachedGroups()
                 preserveSelectionOrSelectFirst()
                 activityMonitor.update(windows: items)
