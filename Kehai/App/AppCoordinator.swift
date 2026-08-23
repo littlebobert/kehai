@@ -21,6 +21,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private let history = ActivityStore()
     let openAIKeyStore = APIKeyStore.openAI()
     let anthropicKeyStore = APIKeyStore.anthropic()
+    let githubRepositoryStore = GitHubRepositoryStore()
+    let githubRefreshSettings = GitHubRefreshSettings()
     let excludedAppStore = ExcludedAppStore()
     let aiExcludedAppStore = AIExcludedAppStore()
     let autoUpdates = AutoUpdateService()
@@ -45,6 +47,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         anthropicKeyStore: anthropicKeyStore,
         excludedAppStore: excludedAppStore,
         aiExcludedAppStore: aiExcludedAppStore,
+        githubRepositoryStore: githubRepositoryStore,
         activator: WindowActivator(),
         activityMonitor: activityMonitor
     )
@@ -77,6 +80,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         safariService: safari,
         openAIKeyStore: openAIKeyStore,
         anthropicKeyStore: anthropicKeyStore,
+        githubRepositoryStore: githubRepositoryStore,
         proceed: { [weak self] in self?.panelController.show() }
     )
     private lazy var hotKey = GlobalHotKey(
@@ -101,16 +105,20 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         permissionManager: permissionManager,
         openAIKeyStore: openAIKeyStore,
         anthropicKeyStore: anthropicKeyStore,
+        githubRepositoryStore: githubRepositoryStore,
+        githubRefreshSettings: githubRefreshSettings,
         safariService: safari,
         shortcutChanged: { [weak self] in self?.registerHotKey() },
         appearanceChanged: { [weak self] in self?.refreshBrowserAppearance() },
         idleGroupingChanged: { [weak self] in self?.updateIdleGroupingMonitoring() },
+        githubRefreshIntervalChanged: { [weak self] in self?.updateGitHubRefreshMonitoring() },
         exclusionsChanged: { [weak self] in
             Task { await self?.viewModel.refresh() }
         }
     )
     private var activationObserver: NSObjectProtocol?
     private var idleTimer: Timer?
+    private var githubRefreshTimer: Timer?
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
     private var modifierMonitors: [Any] = []
@@ -139,6 +147,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         windowInventoryMonitor.start()
         registerHotKey()
         updateIdleGroupingMonitoring()
+        updateGitHubRefreshMonitoring()
+        if githubRepositoryStore.hasSavedTokens {
+            Task { await githubRepositoryStore.refreshAll() }
+        }
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -157,6 +169,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         removeModifierMonitor()
         idleTimer?.invalidate()
         idleTimer = nil
+        githubRefreshTimer?.invalidate()
+        githubRefreshTimer = nil
         activityMonitor.stop()
         windowInventoryMonitor.stop()
         viewModel.prepareForTermination()
@@ -360,6 +374,20 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             Task { @MainActor [weak self] in self?.checkIdleGrouping() }
         }
         checkIdleGrouping()
+    }
+
+    func updateGitHubRefreshMonitoring() {
+        githubRefreshTimer?.invalidate()
+        let timer = Timer(timeInterval: githubRefreshSettings.timeInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      self.githubRepositoryStore.hasSavedTokens,
+                      !self.githubRepositoryStore.isLoading else { return }
+                await self.githubRepositoryStore.refreshAll()
+            }
+        }
+        githubRefreshTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func checkIdleGrouping() {

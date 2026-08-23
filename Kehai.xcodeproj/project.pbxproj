@@ -36,6 +36,7 @@
 		80DEA98F26311C9CB6764E62 /* WindowActivator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */; };
 		8AAE6B09DA46E11CB87F19AD /* AppIconSource.png in Resources */ = {isa = PBXBuildFile; fileRef = FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */; };
 		933C2E5ACBFC18956952BAF2 /* WindowCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */; };
+		99C98054D2F387636D121099 /* GitHubRepositorySearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CDD4576255671D80C4CA18D /* GitHubRepositorySearchService.swift */; };
 		9BA0D129A644C4FA7DB8D682 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */; };
 		9EA0833562F7A2A9BD35948D /* WindowModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 803E5FC5B0B6141C5383120D /* WindowModel.swift */; };
 		9F033371CC4A42572498CB77 /* OverviewViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89DC2301EF59E8741F2CDDFE /* OverviewViewModel.swift */; };
@@ -88,6 +89,7 @@
 		584098EB25E73AD7A58C80FE /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
 		598FF21B2EBC0162DC30A091 /* DockBadgeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockBadgeMonitor.swift; sourceTree = "<group>"; };
 		5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCatalog.swift; sourceTree = "<group>"; };
+		5CDD4576255671D80C4CA18D /* GitHubRepositorySearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubRepositorySearchService.swift; sourceTree = "<group>"; };
 		5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupCache.swift; sourceTree = "<group>"; };
 		5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivator.swift; sourceTree = "<group>"; };
 		621EE2F9EC9738189063682A /* KehaiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiApp.swift; sourceTree = "<group>"; };
@@ -153,6 +155,7 @@
 			children = (
 				584098EB25E73AD7A58C80FE /* AIProvider.swift */,
 				40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */,
+				5CDD4576255671D80C4CA18D /* GitHubRepositorySearchService.swift */,
 				F83DC4DA61575FD4312E376C /* SmartSearchService.swift */,
 				5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */,
 				20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */,
@@ -382,6 +385,7 @@
 				D004D423F39AE4EE2D1EEB4C /* DockBadgeMonitor.swift in Sources */,
 				68D0F9034EB8164CA8976FDB /* DragHoverCatcher.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
+				99C98054D2F387636D121099 /* GitHubRepositorySearchService.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
 				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,
 				6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */,

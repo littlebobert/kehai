@@ -39,8 +39,9 @@ final class OverviewViewModel {
     }
     var selectedWindowID: CGWindowID? {
         didSet {
-            if selectedWindowID != nil, selectedAppWindowID != nil {
+            if selectedWindowID != nil {
                 selectedAppWindowID = nil
+                selectedRepositoryID = nil
             }
             guard selectedWindowID != oldValue, liveThumbnailEnabled else { return }
             scheduleSelectedLiveThumbnail()
@@ -48,8 +49,19 @@ final class OverviewViewModel {
     }
     var selectedAppWindowID: CGWindowID? {
         didSet {
-            if selectedAppWindowID != nil, selectedWindowID != nil {
+            if selectedAppWindowID != nil {
                 selectedWindowID = nil
+                selectedRepositoryID = nil
+            }
+        }
+    }
+    var selectedRepositoryID: Int64? {
+        didSet {
+            if selectedRepositoryID != nil {
+                selectedWindowID = nil
+                selectedAppWindowID = nil
+                focusedAppKey = nil
+                isAllWindowsAppSelected = false
             }
         }
     }
@@ -168,6 +180,7 @@ final class OverviewViewModel {
     private let anthropicKeyStore: APIKeyStore
     private let excludedAppStore: ExcludedAppStore
     private let aiExcludedAppStore: AIExcludedAppStore
+    let githubRepositoryStore: GitHubRepositoryStore
     private let activator: WindowActivator
     private let activityMonitor: ActivityMonitor
     private let liveThumbnails = LiveThumbnailService()
@@ -185,7 +198,7 @@ final class OverviewViewModel {
     private static let minimumThumbnailCardWidth: CGFloat = 200
     private static let maximumThumbnailCardWidth: CGFloat = 440
 
-    init(catalog: WindowCatalog, thumbnails: ThumbnailService, safari: SafariTabService, history: ActivityStore, grouping: TaskGroupingService, openAIKeyStore: APIKeyStore, anthropicKeyStore: APIKeyStore, excludedAppStore: ExcludedAppStore, aiExcludedAppStore: AIExcludedAppStore, activator: WindowActivator, activityMonitor: ActivityMonitor) {
+    init(catalog: WindowCatalog, thumbnails: ThumbnailService, safari: SafariTabService, history: ActivityStore, grouping: TaskGroupingService, openAIKeyStore: APIKeyStore, anthropicKeyStore: APIKeyStore, excludedAppStore: ExcludedAppStore, aiExcludedAppStore: AIExcludedAppStore, githubRepositoryStore: GitHubRepositoryStore, activator: WindowActivator, activityMonitor: ActivityMonitor) {
         let defaults = UserDefaults.standard
         let savedWidth = defaults.double(forKey: Self.thumbnailCardWidthKey)
         thumbnailCardWidth = savedWidth > 0 ? CGFloat(savedWidth) : Self.defaultThumbnailCardWidth
@@ -199,6 +212,7 @@ final class OverviewViewModel {
         self.anthropicKeyStore = anthropicKeyStore
         self.excludedAppStore = excludedAppStore
         self.aiExcludedAppStore = aiExcludedAppStore
+        self.githubRepositoryStore = githubRepositoryStore
         self.activator = activator
         self.activityMonitor = activityMonitor
         hasGeneratedGroups = taskGroupCache.hasCache
@@ -279,6 +293,12 @@ final class OverviewViewModel {
     var recentAppWindows: [WindowItem] {
         if let switcherAppWindows { return switcherAppWindows }
         return currentRecentAppWindows
+    }
+
+    var filteredGitHubRepositories: [GitHubRepository] {
+        guard githubRepositoryStore.hasSavedTokens else { return [] }
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return githubRepositoryStore.search(trimmedQuery)
     }
 
     var filteredRecentAppWindows: [WindowItem] {
@@ -398,6 +418,9 @@ final class OverviewViewModel {
         if smartSearchWindowIDs != nil {
             return [BrowserWindowSection(id: "smart-search", title: L10n.string("Smart Results"), windows: filteredWindows)]
         }
+        if !query.isEmpty {
+            return [BrowserWindowSection(id: "search-windows", title: L10n.string("Windows"), windows: filteredWindows)]
+        }
         guard viewMode == .grouped, !displayTaskGroups.isEmpty else {
             return [BrowserWindowSection(id: "recent", title: nil, windows: filteredWindows)]
         }
@@ -424,7 +447,7 @@ final class OverviewViewModel {
     }
 
     var usesTaskSectionLayout: Bool {
-        focusedAppKey == nil && viewMode == .grouped && smartSearchWindowIDs == nil && !displayTaskGroups.isEmpty
+        focusedAppKey == nil && query.isEmpty && viewMode == .grouped && smartSearchWindowIDs == nil && !displayTaskGroups.isEmpty
     }
 
     var orderedFilteredWindows: [WindowItem] {
@@ -476,16 +499,21 @@ final class OverviewViewModel {
     }
 
     func selectFirstFilteredWindow() {
-        selectedWindowID = orderedFilteredWindows.first?.id
+        if let window = orderedFilteredWindows.first {
+            selectedWindowID = window.id
+        } else {
+            selectedRepositoryID = filteredGitHubRepositories.first?.id
+        }
     }
 
     private func preserveSelectionOrSelectFirst() {
+        let selectableApps = query.isEmpty ? recentAppWindows : filteredRecentAppWindows
         if let focusedAppKey,
-           !recentAppWindows.contains(where: { appKey(for: $0) == focusedAppKey }) {
+           !selectableApps.contains(where: { appKey(for: $0) == focusedAppKey }) {
             self.focusedAppKey = nil
         }
         if let selectedAppWindowID {
-            if recentAppWindows.contains(where: { $0.id == selectedAppWindowID }) {
+            if selectableApps.contains(where: { $0.id == selectedAppWindowID }) {
                 return
             }
             self.selectedAppWindowID = nil
@@ -494,6 +522,11 @@ final class OverviewViewModel {
            orderedFilteredWindows.contains(where: { $0.id == selectedWindowID }) {
             return
         }
+        if let selectedRepositoryID,
+           filteredGitHubRepositories.contains(where: { $0.id == selectedRepositoryID }) {
+            return
+        }
+        selectedRepositoryID = nil
         selectFirstFilteredWindow()
     }
 
@@ -832,6 +865,10 @@ final class OverviewViewModel {
         columnCount: Int,
         windowsAboveAppStrip: Bool = false
     ) {
+        if selectedRepositoryID != nil {
+            moveRepositorySelection(horizontal: horizontal, vertical: vertical)
+            return
+        }
         if selectedAppWindowID != nil || isAllWindowsAppSelected {
             moveAppSelection(
                 horizontal: horizontal,
@@ -844,6 +881,9 @@ final class OverviewViewModel {
         let visible = orderedFilteredWindows
         guard !visible.isEmpty else {
             selectedWindowID = nil
+            if vertical > 0, let repository = filteredGitHubRepositories.first {
+                selectedRepositoryID = repository.id
+            }
             return
         }
         if selectedWindowID == nil || !visible.contains(where: { $0.id == selectedWindowID }) {
@@ -874,6 +914,29 @@ final class OverviewViewModel {
         selectedWindowID = visible[targetIndex].id
     }
 
+    private func moveRepositorySelection(horizontal: Int, vertical: Int) {
+        let visibleLimit = isSwitcherMode ? 3 : 12
+        let repositories = Array(filteredGitHubRepositories.prefix(visibleLimit))
+        guard !repositories.isEmpty else {
+            selectedRepositoryID = nil
+            preserveSelectionOrSelectFirst()
+            return
+        }
+        if vertical < 0 {
+            if let window = orderedFilteredWindows.last {
+                selectedWindowID = window.id
+            } else if let app = filteredRecentAppWindows.first {
+                focusApp(app.id)
+            }
+            return
+        }
+        guard vertical == 0,
+              let selectedRepositoryID,
+              let currentIndex = repositories.firstIndex(where: { $0.id == selectedRepositoryID }) else { return }
+        let targetIndex = min(max(currentIndex + horizontal, 0), repositories.count - 1)
+        self.selectedRepositoryID = repositories[targetIndex].id
+    }
+
     private func moveAppSelection(horizontal: Int, vertical: Int, windowsAboveAppStrip: Bool) {
         let apps = filteredRecentAppWindows
         guard !apps.isEmpty else {
@@ -886,11 +949,14 @@ final class OverviewViewModel {
             : (focusedAppKey.flatMap { key in apps.firstIndex { appKey(for: $0) == key } }.map { $0 + 1 } ?? 1)
         let entersWindows = windowsAboveAppStrip ? vertical < 0 : vertical > 0
         if entersWindows {
-            guard let mostRecentWindow = orderedFilteredWindows.first else { return }
             appWindowIDBeforeEnteringWindows = selectedAppWindowID
-            isAllWindowsAppSelected = false
-            selectedAppWindowID = nil
-            selectedWindowID = mostRecentWindow.id
+            if let mostRecentWindow = orderedFilteredWindows.first {
+                isAllWindowsAppSelected = false
+                selectedAppWindowID = nil
+                selectedWindowID = mostRecentWindow.id
+            } else if let repository = filteredGitHubRepositories.first {
+                selectedRepositoryID = repository.id
+            }
             return
         }
         if vertical != 0 { return }
@@ -910,7 +976,12 @@ final class OverviewViewModel {
             return false
         }
         let targetRowIndex = rowIndex + direction
-        guard rows.indices.contains(targetRowIndex) else { return true }
+        guard rows.indices.contains(targetRowIndex) else {
+            if direction > 0, let repository = filteredGitHubRepositories.first {
+                selectedRepositoryID = repository.id
+            }
+            return true
+        }
         let targetRow = rows[targetRowIndex]
         self.selectedWindowID = targetRow[min(columnIndex, targetRow.count - 1)].id
         return true
@@ -966,6 +1037,10 @@ final class OverviewViewModel {
 
     @discardableResult
     func activateCurrentSelection() -> Bool {
+        if let selectedRepositoryID,
+           let repository = filteredGitHubRepositories.first(where: { $0.id == selectedRepositoryID }) {
+            return NSWorkspace.shared.open(repository.htmlURL)
+        }
         if let focusedAppKey,
            let window = recentAppWindows.first(where: { appKey(for: $0) == focusedAppKey }) {
             activate(window)
@@ -1006,6 +1081,7 @@ final class OverviewViewModel {
         appWindowIDBeforeEnteringWindows = nil
         clearTransientFilters(selectedGroupID: selectedGroupID)
         selectedAppWindowID = nil
+        selectedRepositoryID = nil
         preserveSelectionOrSelectFirst()
     }
 
@@ -1017,6 +1093,16 @@ final class OverviewViewModel {
             selectedAppWindowID = nil
             selectedWindowID = windowID
         }
+    }
+
+    func selectRepository(_ repositoryID: Int64) {
+        guard filteredGitHubRepositories.contains(where: { $0.id == repositoryID }) else { return }
+        selectedRepositoryID = repositoryID
+    }
+
+    @discardableResult
+    func activate(_ repository: GitHubRepository) -> Bool {
+        NSWorkspace.shared.open(repository.htmlURL)
     }
 
     func focusApp(_ windowID: CGWindowID) {
@@ -1032,6 +1118,7 @@ final class OverviewViewModel {
         focusedAppKey = nil
         selectedWindowID = nil
         selectedAppWindowID = nil
+        selectedRepositoryID = nil
         hoveredSwitcherWindowID = nil
         isAllWindowsAppSelected = true
     }
@@ -1048,8 +1135,8 @@ final class OverviewViewModel {
     }
 
     func queuePinnedSwitcherSearchText(_ text: String) {
-        pendingCompactSearchText.append(contentsOf: text)
-        compactSearchFocusRequest += 1
+        query.append(contentsOf: text)
+        updatePinnedSwitcherSearchSelection()
     }
 
     func applyPendingPinnedSwitcherSearchText() {

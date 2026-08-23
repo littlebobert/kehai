@@ -3,13 +3,14 @@ import SwiftUI
 
 @MainActor
 final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
-    private static let contentSize = NSSize(width: 640, height: 680)
+    private static let contentSize = NSSize(width: 660, height: 680)
 
     init(
         permissionManager: PermissionManager,
         safariService: SafariTabService,
         openAIKeyStore: APIKeyStore,
         anthropicKeyStore: APIKeyStore,
+        githubRepositoryStore: GitHubRepositoryStore,
         proceed: @escaping () -> Void
     ) {
         let size = Self.contentSize
@@ -30,6 +31,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
                 safariService: safariService,
                 openAIKeyStore: openAIKeyStore,
                 anthropicKeyStore: anthropicKeyStore,
+                githubRepositoryStore: githubRepositoryStore,
                 close: { [weak window] in
                     window?.close()
                     proceed()

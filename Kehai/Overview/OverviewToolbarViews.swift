@@ -81,7 +81,12 @@ struct SearchControl: View {
     @FocusState private var isFocused: Bool
 
     private var searchPrompt: String {
-        L10n.string(safariAutomationGranted
+        if model.githubRepositoryStore.hasSavedTokens {
+            return L10n.string(safariAutomationGranted
+                ? "Search apps, windows, Safari tabs, and GitHub repos"
+                : "Search apps, windows, and GitHub repos")
+        }
+        return L10n.string(safariAutomationGranted
             ? "Search windows, Safari tabs, and apps"
             : "Search windows and apps")
     }

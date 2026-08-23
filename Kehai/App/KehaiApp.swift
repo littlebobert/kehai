@@ -15,10 +15,13 @@ struct KehaiApp: App {
                 permissionManager: appDelegate.coordinator.permissionManager,
                 openAIKeyStore: appDelegate.coordinator.openAIKeyStore,
                 anthropicKeyStore: appDelegate.coordinator.anthropicKeyStore,
+                githubRepositoryStore: appDelegate.coordinator.githubRepositoryStore,
+                githubRefreshSettings: appDelegate.coordinator.githubRefreshSettings,
                 safariService: appDelegate.coordinator.safari,
                 shortcutChanged: appDelegate.coordinator.registerHotKey,
                 appearanceChanged: appDelegate.coordinator.refreshBrowserAppearance,
                 idleGroupingChanged: appDelegate.coordinator.updateIdleGroupingMonitoring,
+                githubRefreshIntervalChanged: appDelegate.coordinator.updateGitHubRefreshMonitoring,
                 exclusionsChanged: appDelegate.coordinator.refreshBrowser
             )
         }

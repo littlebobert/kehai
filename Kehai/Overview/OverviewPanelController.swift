@@ -182,7 +182,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let maximumAnchoredWidth = floor(max(1, opensRight ? maximumRightWidth : maximumLeftWidth))
         let minimumWidth = min(oneThumbnailMinimumWidth, maximumAnchoredWidth)
         let width = min(preferredWidth, maximumAnchoredWidth)
-        let estimatedHeight: CGFloat = 276
+        let estimatedHeight: CGFloat = model.githubRepositoryStore.hasSavedTokens ? 388 : 292
         let height = min(estimatedHeight, visibleFrame.height)
         let topStripIconInset: CGFloat = 65.5
         let bottomStripIconInset: CGFloat = 41
@@ -551,6 +551,20 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                     return nil
                 }
             }
+            if event.window === self.compactWindow,
+               modifiers == .command,
+               event.charactersIgnoringModifiers?.lowercased() == "a",
+               !self.model.query.isEmpty {
+                self.model.compactSearchFocusRequest += 1
+                DispatchQueue.main.async { [weak self] in
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self,
+                              let editor = self.compactWindow?.firstResponder as? NSTextView else { return }
+                        editor.setSelectedRange(NSRange(location: 0, length: editor.string.utf16.count))
+                    }
+                }
+                return nil
+            }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "f" {
                 if event.window === self.compactWindow {
@@ -654,6 +668,14 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 return nil
             }
 
+            if isPinnedMiniBrowser,
+               modifiers.isEmpty,
+               event.keyCode == 51,
+               !self.model.query.isEmpty {
+                self.model.deleteLastPinnedSwitcherQueryCharacter()
+                return nil
+            }
+
             if modifiers.isEmpty, event.keyCode == 51 {
                 if !self.model.showExclusionChooserForFocusedApp() {
                     self.model.showActionChooserForSelectedWindow()
@@ -694,6 +716,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 return nil
             }
 
+            let windowsAboveAppStrip = event.window === self.compactWindow
+                && self.compactWindowsAboveAppStrip
+
             switch event.keyCode {
             case 123:
                 self.model.moveSelection(horizontal: -1, columnCount: self.model.keyboardColumnCount)
@@ -703,13 +728,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 self.model.moveSelection(
                     vertical: 1,
                     columnCount: self.model.keyboardColumnCount,
-                    windowsAboveAppStrip: event.window === self.compactWindow && self.compactWindowsAboveAppStrip
+                    windowsAboveAppStrip: windowsAboveAppStrip
                 )
             case 126:
                 self.model.moveSelection(
                     vertical: -1,
                     columnCount: self.model.keyboardColumnCount,
-                    windowsAboveAppStrip: event.window === self.compactWindow && self.compactWindowsAboveAppStrip
+                    windowsAboveAppStrip: windowsAboveAppStrip
                 )
             default:
                 return event

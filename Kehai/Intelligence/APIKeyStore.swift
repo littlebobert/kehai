@@ -24,6 +24,11 @@ final class APIKeyStore {
     var hasUnsavedChanges: Bool { apiKey.trimmingCharacters(in: .whitespacesAndNewlines) != savedAPIKey }
     var canSave: Bool { hasKey && hasUnsavedChanges }
 
+    func discardUnsavedChanges() {
+        apiKey = savedAPIKey
+        saveError = nil
+    }
+
     func save() {
         let value = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
@@ -82,4 +87,5 @@ typealias AnthropicKeyStore = APIKeyStore
 extension APIKeyStore {
     static func openAI() -> APIKeyStore { APIKeyStore(service: "com.justin.Kehai.openai") }
     static func anthropic() -> APIKeyStore { APIKeyStore(service: "com.justin.Kehai.anthropic") }
+    static func github() -> APIKeyStore { APIKeyStore(service: "com.justin.Kehai.github") }
 }

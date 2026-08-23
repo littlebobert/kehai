@@ -38,7 +38,7 @@ struct OverviewView: View {
             VStack(spacing: 3) {
                 searchHeader
 
-                recentAppsStrip
+                appsSection
                     .padding(.horizontal, 30)
 
                 controlBar
@@ -50,62 +50,22 @@ struct OverviewView: View {
                         .padding(.horizontal, 30)
                 }
 
-                if model.isLoading {
-                    VStack(spacing: 12) {
-                        Spacer()
-                        ProgressView().controlSize(.large)
-                        Text("Loading window thumbnails…")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    ScrollViewReader { scrollProxy in
-                        ScrollView {
-                            Group {
-                                if model.usesTaskSectionLayout {
-                                    LazyVStack(alignment: .leading, spacing: 20) {
-                                        ForEach(taskFlowRows) { row in
-                                            HStack(alignment: .top, spacing: gridSpacing) {
-                                                ForEach(row.segments) { segment in
-                                                    taskSegment(segment)
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    LazyVStack(alignment: .leading, spacing: 8) {
-                                        ForEach(model.windowSections) { section in
-                                            windowSection(section.title, windows: section.windows)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 30)
-                            .padding(.top, 10)
-                            .padding(.bottom, 30)
-                            .animation(.easeInOut(duration: 0.14), value: model.viewMode)
-                            .animation(.easeInOut(duration: 0.12), value: model.focusedAppKey)
+                VStack(spacing: 0) {
+                    if model.isLoading {
+                        VStack(spacing: 12) {
+                            Spacer()
+                            ProgressView().controlSize(.large)
+                            Text("Loading window thumbnails…")
+                                .foregroundStyle(.secondary)
+                            Spacer()
                         }
-                        .scrollIndicators(.automatic)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear
-                                    .onAppear { updateGridWidth(proxy.size.width) }
-                                    .onChange(of: proxy.size.width) { _, width in updateGridWidth(width) }
-                            }
-                        }
-                        .onChange(of: model.selectedWindowID) { _, selectedWindowID in
-                            guard !model.isSwitcherMode, let selectedWindowID else { return }
-                            var transaction = Transaction()
-                            transaction.disablesAnimations = true
-                            withTransaction(transaction) {
-                                scrollProxy.scrollTo(selectedWindowID, anchor: .center)
-                            }
-                        }
+                    } else {
+                        windowScrollArea
                     }
+                    repositorySection
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.top, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -142,6 +102,50 @@ struct OverviewView: View {
         }
     }
 
+    private var windowScrollArea: some View {
+        ScrollViewReader { scrollProxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 20) {
+                    if model.usesTaskSectionLayout {
+                        ForEach(taskFlowRows) { row in
+                            HStack(alignment: .top, spacing: gridSpacing) {
+                                ForEach(row.segments) { segment in
+                                    taskSegment(segment)
+                                }
+                            }
+                        }
+                    } else {
+                        ForEach(model.windowSections) { section in
+                            windowSection(section.title, windows: section.windows)
+                        }
+                    }
+                }
+                .padding(.horizontal, 30)
+                .padding(.top, 10)
+                .padding(.bottom, 24)
+                .animation(.easeInOut(duration: 0.14), value: model.viewMode)
+                .animation(.easeInOut(duration: 0.12), value: model.focusedAppKey)
+            }
+            .scrollIndicators(.automatic)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { updateGridWidth(proxy.size.width) }
+                        .onChange(of: proxy.size.width) { _, width in updateGridWidth(width) }
+                }
+            }
+            .onChange(of: model.selectedWindowID) { _, selectedWindowID in
+                guard !model.isSwitcherMode, let selectedWindowID else { return }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    scrollProxy.scrollTo(selectedWindowID, anchor: .center)
+                }
+            }
+        }
+    }
+
     private var searchHeader: some View {
         HStack {
             SearchControl(model: model, submit: openSelectedWindow)
@@ -152,10 +156,21 @@ struct OverviewView: View {
         .padding(.top, 5)
     }
 
+    private var appsSection: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if !model.query.isEmpty {
+                Text("Apps")
+                    .font(.title2.bold())
+            }
+            recentAppsStrip
+        }
+    }
+
     /// Reserve one stable row while icon and label sizes adapt to the app count.
     private var recentAppsRowHeight: CGFloat { 88 }
     private var displayedAppWindows: [WindowItem] {
-        model.isSwitcherMode ? model.recentAppWindows : (frozenAppWindows ?? model.recentAppWindows)
+        if !model.query.isEmpty { return model.filteredRecentAppWindows }
+        return model.isSwitcherMode ? model.recentAppWindows : (frozenAppWindows ?? model.recentAppWindows)
     }
     private var appStripItemCount: Int { displayedAppWindows.count + 1 }
     private var appStripSpacing: CGFloat {
@@ -427,6 +442,80 @@ struct OverviewView: View {
     }
 
     @ViewBuilder
+    private var repositorySection: some View {
+        let repositories = model.filteredGitHubRepositories
+        if model.githubRepositoryStore.hasSavedTokens {
+            Divider()
+            ScrollViewReader { scrollProxy in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("GitHub Repositories")
+                            .font(.headline)
+                        if model.githubRepositoryStore.isLoading {
+                            ProgressView().controlSize(.small)
+                        }
+                        Spacer()
+                        if model.query.isEmpty, !repositories.isEmpty {
+                            Text("Recently updated")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    if repositories.isEmpty {
+                        Text(model.githubRepositoryStore.isLoading
+                            ? "Loading repositories…"
+                            : model.query.isEmpty ? "No repositories available" : "No matching repositories")
+                            .foregroundStyle(.secondary)
+                            .frame(height: 72, alignment: .topLeading)
+                    } else {
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 12) {
+                                ForEach(repositories.prefix(12)) { repository in
+                                    RepositoryResultCard(
+                                        repository: repository,
+                                        isSelected: model.selectedRepositoryID == repository.id,
+                                        compact: false,
+                                        activate: {
+                                            _ = model.activate(repository)
+                                            close()
+                                        }
+                                    )
+                                    .frame(width: model.thumbnailCardWidth)
+                                    .id("repository-\(repository.id)")
+                                }
+                            }
+                        }
+                        .scrollIndicators(.automatic)
+                        .frame(height: 96)
+                    }
+                    if let error = model.githubRepositoryStore.errorMessage, repositories.isEmpty {
+                        Text(error).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 30)
+                .padding(.top, 9)
+                .padding(.bottom, 10)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(.black.opacity(0.16))
+                        .frame(height: 1)
+                        .blur(radius: 5)
+                        .offset(y: -4)
+                        .allowsHitTesting(false)
+                }
+                .onChange(of: model.selectedRepositoryID) { _, repositoryID in
+                    guard let repositoryID else { return }
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        scrollProxy.scrollTo("repository-\(repositoryID)", anchor: .center)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func windowSection(_ title: String?, windows: [WindowItem], dusty: Bool = false) -> some View {
         if !windows.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
@@ -443,6 +532,12 @@ struct OverviewView: View {
             }
             .padding(.top, 3)
             .padding(.bottom, 5)
+        } else if let title, !model.query.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.title2.bold())
+                Text("No matching windows").foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 5)
         }
     }
 }
@@ -500,6 +595,7 @@ struct CompactSwitcherView: View {
                         .frame(maxHeight: .infinity, alignment: .bottom)
                         .padding(.horizontal, 12)
                         .padding(.top, 12)
+                    compactRepositoryShelf
                     compactHeader
                         .padding(.bottom, 8)
                     appStrip
@@ -513,7 +609,8 @@ struct CompactSwitcherView: View {
                         .padding(.top, 4)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, 12)
-                        .padding(.bottom, 12)
+                    compactRepositoryShelf
+                        .padding(.bottom, 8)
                 }
             }
             .padding(.horizontal, 4)
@@ -572,7 +669,7 @@ struct CompactSwitcherView: View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Start typing to filter windows, tabs, and apps", text: $model.query)
+            TextField("Search windows, apps, and GitHub repositories", text: $model.query)
                 .textFieldStyle(.plain)
                 .focused($compactSearchIsFocused)
                 .onSubmit {
@@ -830,6 +927,54 @@ struct CompactSwitcherView: View {
         }
     }
 
+    @ViewBuilder
+    private var compactRepositoryShelf: some View {
+        if model.githubRepositoryStore.hasSavedTokens {
+            VStack(alignment: .leading, spacing: 5) {
+                compactSectionLabel("GitHub Repositories")
+                if model.githubRepositoryStore.isLoading, model.filteredGitHubRepositories.isEmpty {
+                    HStack(spacing: 7) {
+                        ProgressView().controlSize(.small)
+                        Text("Loading repositories…").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(height: 60)
+                } else if model.filteredGitHubRepositories.isEmpty {
+                    Text(model.query.isEmpty ? "No repositories available" : "No matching repositories")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(height: 60)
+                } else {
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 7) {
+                            ForEach(model.filteredGitHubRepositories.prefix(12)) { repository in
+                                RepositoryResultCard(
+                                    repository: repository,
+                                    isSelected: model.selectedRepositoryID == repository.id,
+                                    compact: true,
+                                    activate: {
+                                        _ = model.activate(repository)
+                                        close()
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    .scrollIndicators(.never)
+                    .frame(height: 60)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+        }
+    }
+
+
+    private func compactSectionLabel(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+    }
+
     private var compactWindows: some View {
         Group {
             if displayedWindows.isEmpty {
@@ -937,6 +1082,66 @@ struct CompactSwitcherView: View {
         .frame(height: 134)
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
+    }
+}
+
+private struct RepositoryResultCard: View {
+    let repository: GitHubRepository
+    let isSelected: Bool
+    let compact: Bool
+    let activate: () -> Void
+
+    var body: some View {
+        Button(action: activate) {
+            HStack(alignment: .top, spacing: compact ? 7 : 10) {
+                Image(systemName: "chevron.left.forwardslash.chevron.right")
+                    .font(compact ? .caption : .title3)
+                    .foregroundStyle(.secondary)
+                    .frame(width: compact ? 20 : 28, height: compact ? 28 : 36)
+                VStack(alignment: .leading, spacing: compact ? 0 : 2) {
+                    Text(repository.ownerLogin)
+                        .font(compact ? .caption2 : .caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Text(repository.name)
+                        .font(compact ? .caption.weight(.semibold) : .headline)
+                        .lineLimit(1)
+                    if !compact, let description = repository.description, !description.isEmpty {
+                        Text(description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    HStack(spacing: 5) {
+                        if repository.isPrivate { repoBadge("Private") }
+                        if repository.isFork { repoBadge("Fork") }
+                        if repository.isArchived { repoBadge("Archived") }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(compact ? 7 : 12)
+            .frame(width: compact ? 200 : nil, height: compact ? 60 : 96, alignment: .leading)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: compact ? 9 : 12))
+            .overlay {
+                RoundedRectangle(cornerRadius: compact ? 9 : 12)
+                    .strokeBorder(
+                        isSelected ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor).opacity(0.35),
+                        lineWidth: isSelected ? 2 : 1
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .help("Open \(repository.fullName) on GitHub")
+    }
+
+    private func repoBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(.quaternary, in: Capsule())
     }
 }
 

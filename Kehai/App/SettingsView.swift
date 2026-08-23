@@ -11,10 +11,13 @@ struct SettingsView: View {
     @Bindable var permissionManager: PermissionManager
     @Bindable var openAIKeyStore: APIKeyStore
     @Bindable var anthropicKeyStore: APIKeyStore
+    @Bindable var githubRepositoryStore: GitHubRepositoryStore
+    @Bindable var githubRefreshSettings: GitHubRefreshSettings
     let safariService: SafariTabService
     let shortcutChanged: () -> Void
     let appearanceChanged: () -> Void
     let idleGroupingChanged: () -> Void
+    let githubRefreshIntervalChanged: () -> Void
     let exclusionsChanged: () -> Void
     @State private var selectedProvider = AIProvider.current
 
@@ -26,12 +29,14 @@ struct SettingsView: View {
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
             aiSettings
                 .tabItem { Label("AI", systemImage: "sparkles") }
+            integrationsSettings
+                .tabItem { Label("Integrations", systemImage: "point.3.connected.trianglepath.dotted") }
             permissionsSettings
                 .tabItem { Label("Permissions", systemImage: "lock.shield") }
             privacySettings
                 .tabItem { Label("Exclusions", systemImage: "hand.raised") }
         }
-        .frame(width: 560, height: 460)
+        .frame(width: 620, height: 500)
         .onAppear { selectedProvider = AIProvider.current }
     }
 
@@ -183,6 +188,45 @@ struct SettingsView: View {
                 if let saveError = activeKeyStore.saveError {
                     Text(saveError).font(.caption).foregroundStyle(.red)
                 }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func refreshIntervalLabel(_ minutes: Int) -> String {
+        minutes >= 60
+            ? L10n.format(minutes == 60 ? "%lld hour" : "%lld hours", Int64(minutes / 60))
+            : L10n.format("%lld minutes", Int64(minutes))
+    }
+
+    private var integrationsSettings: some View {
+        Form {
+            Section("GitHub Repository Search") {
+                Text("Connect one or more GitHub accounts to include their repositories in Kehai search.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Refresh repositories")
+                    Spacer()
+                    Picker("Refresh interval", selection: Binding(
+                        get: { githubRefreshSettings.intervalMinutes },
+                        set: { minutes in
+                            githubRefreshSettings.intervalMinutes = minutes
+                            githubRefreshIntervalChanged()
+                        }
+                    )) {
+                        ForEach(GitHubRefreshSettings.availableIntervals, id: \.self) { minutes in
+                            Text(refreshIntervalLabel(minutes)).tag(minutes)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                Text("Also refreshes at launch, after adding a token, and when refreshed manually.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                GitHubConnectionView(store: githubRepositoryStore)
             }
         }
         .formStyle(.grouped)

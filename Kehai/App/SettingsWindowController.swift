@@ -12,14 +12,17 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         permissionManager: PermissionManager,
         openAIKeyStore: APIKeyStore,
         anthropicKeyStore: APIKeyStore,
+        githubRepositoryStore: GitHubRepositoryStore,
+        githubRefreshSettings: GitHubRefreshSettings,
         safariService: SafariTabService,
         shortcutChanged: @escaping () -> Void,
         appearanceChanged: @escaping () -> Void,
         idleGroupingChanged: @escaping () -> Void,
+        githubRefreshIntervalChanged: @escaping () -> Void,
         exclusionsChanged: @escaping () -> Void
     ) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 500),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -27,6 +30,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.title = L10n.string("Kehai Settings")
         window.titlebarSeparatorStyle = .none
         window.isReleasedWhenClosed = false
+        window.contentMinSize = NSSize(width: 620, height: 500)
         window.contentView = NSHostingView(rootView: SettingsView(
             shortcut: shortcut,
             appearance: appearance,
@@ -36,10 +40,13 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             permissionManager: permissionManager,
             openAIKeyStore: openAIKeyStore,
             anthropicKeyStore: anthropicKeyStore,
+            githubRepositoryStore: githubRepositoryStore,
+            githubRefreshSettings: githubRefreshSettings,
             safariService: safariService,
             shortcutChanged: shortcutChanged,
             appearanceChanged: appearanceChanged,
             idleGroupingChanged: idleGroupingChanged,
+            githubRefreshIntervalChanged: githubRefreshIntervalChanged,
             exclusionsChanged: exclusionsChanged
         ))
         super.init(window: window)

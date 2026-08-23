@@ -1,6 +1,6 @@
 # Kehai
 
-A faster way to switch apps and find windows.
+A faster way to switch apps, find windows, and open GitHub repositories.
 
 ## Download
 
@@ -18,7 +18,7 @@ A faster way to switch apps and find windows.
 - **Accessibility** — opens the selected window.
 - **Automation → Safari** *(optional)* — shows and activates individual Safari tabs.
 
-An OpenAI or Anthropic API key is required to generate task groups.
+An OpenAI or Anthropic API key is required to generate task groups. GitHub repository search is optional and uses a personal access token stored in the macOS Keychain.
 
 ## Known limitations
 

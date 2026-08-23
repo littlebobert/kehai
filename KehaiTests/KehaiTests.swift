@@ -1,6 +1,30 @@
 import XCTest
 @testable import Kehai
 
+private final class GitHubURLProtocolStub: URLProtocol {
+    nonisolated(unsafe) static var handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let handler = Self.handler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        do {
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
 final class KehaiTests: XCTestCase {
     func testDustyAfterThreeDays() {
         let item = WindowItem(id: 1, processID: 1, appName: "Terminal", bundleIdentifier: "com.apple.Terminal", title: "Shell", frame: .zero, isOnScreen: true, lastSeen: Date().addingTimeInterval(-4 * 86_400))
@@ -205,6 +229,225 @@ final class KehaiTests: XCTestCase {
         let lastSeen = await restored.lastSeen()
         XCTAssertNotNil(lastSeen[42])
         try? FileManager.default.removeItem(at: url)
+    }
+
+    @MainActor
+    func testGitHubRefreshSettingsDefaultToThirtyMinutesAndPersistChanges() {
+        let suiteName = "KehaiTests.GitHubRefresh.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = GitHubRefreshSettings(defaults: defaults)
+        XCTAssertEqual(settings.intervalMinutes, 30)
+        XCTAssertEqual(settings.timeInterval, 30 * 60)
+
+        settings.intervalMinutes = 60
+        XCTAssertEqual(GitHubRefreshSettings(defaults: defaults).intervalMinutes, 60)
+    }
+
+    func testGitHubRepositoryDecodingMapsNestedAndSnakeCaseFields() throws {
+        let repository = try JSONDecoder().decode(GitHubRepository.self, from: githubRepositoryJSON(
+            id: 9,
+            name: "Kehai",
+            owner: "octocat",
+            description: "Window switcher",
+            pushedAt: "2026-08-20T12:30:00Z",
+            isPrivate: true,
+            isFork: true,
+            isArchived: true
+        ))
+
+        XCTAssertEqual(repository.id, 9)
+        XCTAssertEqual(repository.name, "Kehai")
+        XCTAssertEqual(repository.fullName, "octocat/Kehai")
+        XCTAssertEqual(repository.ownerLogin, "octocat")
+        XCTAssertEqual(repository.description, "Window switcher")
+        XCTAssertEqual(repository.htmlURL, URL(string: "https://github.com/octocat/Kehai"))
+        XCTAssertTrue(repository.isPrivate)
+        XCTAssertTrue(repository.isFork)
+        XCTAssertTrue(repository.isArchived)
+        XCTAssertNotNil(repository.pushedAt)
+    }
+
+    func testGitHubServiceValidatesUserAndFollowsRepositoryPagination() async throws {
+        let session = githubStubSession()
+        let service = GitHubRepositorySearchService(
+            session: session,
+            baseURL: URL(string: "https://api.github.test")!
+        )
+        nonisolated(unsafe) var repositoryPage = 0
+
+        GitHubURLProtocolStub.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer secret-token")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/vnd.github+json")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "X-GitHub-Api-Version"), "2022-11-28")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "Kehai")
+
+            if request.url?.path == "/user" {
+                return (self.githubResponse(url: request.url!), Data(#"{"login":"octocat"}"#.utf8))
+            }
+
+            repositoryPage += 1
+            if repositoryPage == 1 {
+                XCTAssertEqual(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "per_page" })?.value, "100")
+                let next = "<https://api.github.test/user/repos?page=2>; rel=\"next\", <https://api.github.test/user/repos?page=2>; rel=\"last\""
+                return (self.githubResponse(url: request.url!, headers: ["Link": next]), self.githubRepositoryArrayJSON(ids: [1]))
+            }
+            XCTAssertEqual(request.url?.query, "page=2")
+            return (self.githubResponse(url: request.url!), self.githubRepositoryArrayJSON(ids: [2]))
+        }
+        defer { GitHubURLProtocolStub.handler = nil }
+
+        let account = try await service.loadAuthenticatedRepositories(token: " secret-token ")
+
+        XCTAssertEqual(account.username, "octocat")
+        XCTAssertEqual(account.repositories.map(\.id), [1, 2])
+        XCTAssertEqual(repositoryPage, 2)
+    }
+
+    func testGitHubServiceRejectsCrossOriginPagination() async throws {
+        let service = GitHubRepositorySearchService(
+            session: githubStubSession(),
+            baseURL: URL(string: "https://api.github.test")!
+        )
+
+        GitHubURLProtocolStub.handler = { request in
+            if request.url?.path == "/user" {
+                return (self.githubResponse(url: request.url!), Data(#"{"login":"octocat"}"#.utf8))
+            }
+            let next = "<https://attacker.example/repos?page=2>; rel=\"next\""
+            return (self.githubResponse(url: request.url!, headers: ["Link": next]), self.githubRepositoryArrayJSON(ids: [1]))
+        }
+        defer { GitHubURLProtocolStub.handler = nil }
+
+        do {
+            _ = try await service.loadAuthenticatedRepositories(token: "secret-token")
+            XCTFail("Expected an invalid response for cross-origin pagination")
+        } catch GitHubRepositoryServiceError.invalidResponse {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testGitHubServiceMapsAuthenticationAndRateLimitErrors() async throws {
+        let service = GitHubRepositorySearchService(
+            session: githubStubSession(),
+            baseURL: URL(string: "https://api.github.test")!
+        )
+
+        GitHubURLProtocolStub.handler = { request in
+            (self.githubResponse(url: request.url!, statusCode: 401), Data(#"{"message":"Bad credentials"}"#.utf8))
+        }
+        do {
+            _ = try await service.loadAuthenticatedRepositories(token: "invalid")
+            XCTFail("Expected invalid credentials")
+        } catch GitHubRepositoryServiceError.invalidCredentials {
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        GitHubURLProtocolStub.handler = { request in
+            let headers = ["X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "2000000000"]
+            return (self.githubResponse(url: request.url!, statusCode: 403, headers: headers), Data(#"{"message":"API rate limit exceeded"}"#.utf8))
+        }
+        defer { GitHubURLProtocolStub.handler = nil }
+
+        do {
+            _ = try await service.loadAuthenticatedRepositories(token: "valid")
+            XCTFail("Expected rate limit error")
+        } catch GitHubRepositoryServiceError.rateLimited(let resetAt) {
+            XCTAssertEqual(resetAt, Date(timeIntervalSince1970: 2_000_000_000))
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testGitHubRankingPrefersExactNameThenNameMatchThenDescription() throws {
+        let repositories = try [
+            githubRepository(id: 1, name: "Kehai", owner: "other", description: nil, pushedAt: "2024-01-01T00:00:00Z"),
+            githubRepository(id: 2, name: "KehaiKit", owner: "other", description: nil, pushedAt: "2026-01-01T00:00:00Z"),
+            githubRepository(id: 3, name: "Utilities", owner: "other", description: "Tools for Kehai", pushedAt: "2026-01-01T00:00:00Z"),
+            githubRepository(id: 4, name: "Unrelated", owner: "other", description: nil, pushedAt: "2026-01-01T00:00:00Z")
+        ]
+
+        let ranked = GitHubRepositorySearchService().search(repositories, query: "kehai")
+
+        XCTAssertEqual(ranked.map(\.id), [1, 2, 3])
+    }
+
+    func testGitHubRankingUsesPushDateAsStableTieBreak() throws {
+        let repositories = try [
+            githubRepository(id: 1, name: "OlderTools", owner: "octocat", description: nil, pushedAt: "2024-01-01T00:00:00Z"),
+            githubRepository(id: 2, name: "NewerTools", owner: "octocat", description: nil, pushedAt: "2026-01-01T00:00:00Z")
+        ]
+
+        XCTAssertEqual(
+            GitHubRepositorySearchService().search(repositories, query: "octocat").map(\.id),
+            [2, 1]
+        )
+    }
+
+    private func githubStubSession() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [GitHubURLProtocolStub.self]
+        return URLSession(configuration: configuration)
+    }
+
+    private func githubResponse(
+        url: URL,
+        statusCode: Int = 200,
+        headers: [String: String] = [:]
+    ) -> HTTPURLResponse {
+        HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: "HTTP/1.1", headerFields: headers)!
+    }
+
+    private func githubRepository(
+        id: Int64,
+        name: String,
+        owner: String,
+        description: String?,
+        pushedAt: String?
+    ) throws -> GitHubRepository {
+        try JSONDecoder().decode(GitHubRepository.self, from: githubRepositoryJSON(
+            id: id,
+            name: name,
+            owner: owner,
+            description: description,
+            pushedAt: pushedAt
+        ))
+    }
+
+    private func githubRepositoryArrayJSON(ids: [Int64]) -> Data {
+        let objects = ids.map { String(data: githubRepositoryJSON(id: $0), encoding: .utf8)! }
+        return Data("[\(objects.joined(separator: ","))]".utf8)
+    }
+
+    private func githubRepositoryJSON(
+        id: Int64,
+        name: String = "repo",
+        owner: String = "octocat",
+        description: String? = nil,
+        pushedAt: String? = nil,
+        isPrivate: Bool = false,
+        isFork: Bool = false,
+        isArchived: Bool = false
+    ) -> Data {
+        let descriptionJSON = description.map { "\"\($0)\"" } ?? "null"
+        let pushedAtJSON = pushedAt.map { "\"\($0)\"" } ?? "null"
+        return Data("""
+        {
+          "id": \(id),
+          "name": "\(name)",
+          "full_name": "\(owner)/\(name)",
+          "owner": { "login": "\(owner)" },
+          "description": \(descriptionJSON),
+          "html_url": "https://github.com/\(owner)/\(name)",
+          "private": \(isPrivate),
+          "fork": \(isFork),
+          "archived": \(isArchived),
+          "pushed_at": \(pushedAtJSON)
+        }
+        """.utf8)
     }
 
 }
