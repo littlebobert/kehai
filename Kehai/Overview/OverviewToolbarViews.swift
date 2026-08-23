@@ -1,6 +1,38 @@
 import AppKit
 import SwiftUI
 
+private struct RetrofitCheckboxToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            configuration.isOn.toggle()
+        } label: {
+            HStack(spacing: 7) {
+                ZStack {
+                    Rectangle()
+                        .fill(.black)
+                        .offset(x: 1, y: 1)
+                    Rectangle()
+                        .fill(Color(white: 0.90))
+                    if configuration.isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .black))
+                            .foregroundStyle(.black)
+                    }
+                }
+                .frame(width: 16, height: 16)
+                .overlay {
+                    Rectangle().strokeBorder(.black, lineWidth: 1.5)
+                }
+                configuration.label
+                    .foregroundStyle(.black)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(configuration.isOn ? "On" : "Off")
+    }
+}
+
 struct GroupingControl: View {
     @Bindable var model: OverviewViewModel
 
@@ -49,28 +81,50 @@ struct GroupingControl: View {
 
 struct ViewModeControl: View {
     @Bindable var model: OverviewViewModel
+    let classicTheme: Bool
 
-    var body: some View {
-        Toggle("Group by task", isOn: Binding(
+    private var isGrouped: Binding<Bool> {
+        Binding(
             get: { model.viewMode == .grouped },
             set: { model.setViewMode($0 ? .grouped : .recent) }
-        ))
-        .toggleStyle(.checkbox)
-        .controlSize(.regular)
-        .padding(.top, 3)
-        .help("Group by task: Command-1 · Sort all by recent: Command-2")
+        )
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if classicTheme {
+            Toggle("Group by task", isOn: isGrouped)
+                .toggleStyle(RetrofitCheckboxToggleStyle())
+                .padding(.top, 3)
+                .help("Group by task: Command-1 · Sort all by recent: Command-2")
+        } else {
+            Toggle("Group by task", isOn: isGrouped)
+                .toggleStyle(.checkbox)
+                .controlSize(.regular)
+                .padding(.top, 3)
+                .help("Group by task: Command-1 · Sort all by recent: Command-2")
+        }
     }
 }
 
 struct HiddenWindowsControl: View {
     @Bindable var model: OverviewViewModel
+    let classicTheme: Bool
 
+    @ViewBuilder
     var body: some View {
-        Toggle("Exclude hidden windows", isOn: $model.excludeHiddenWindows)
-            .toggleStyle(.checkbox)
-            .controlSize(.regular)
-            .padding(.top, 3)
-            .help("Hide windows you have marked as hidden")
+        if classicTheme {
+            Toggle("Exclude hidden windows", isOn: $model.excludeHiddenWindows)
+                .toggleStyle(RetrofitCheckboxToggleStyle())
+                .padding(.top, 3)
+                .help("Hide windows you have marked as hidden")
+        } else {
+            Toggle("Exclude hidden windows", isOn: $model.excludeHiddenWindows)
+                .toggleStyle(.checkbox)
+                .controlSize(.regular)
+                .padding(.top, 3)
+                .help("Hide windows you have marked as hidden")
+        }
     }
 }
 
@@ -99,7 +153,7 @@ struct SearchControl: View {
                 .textFieldStyle(.plain)
                 .foregroundStyle(.black)
                 .padding(.horizontal, 7)
-                .frame(height: 24)
+                .frame(height: 30)
                 .background {
                     ZStack {
                         Rectangle().fill(.black).offset(x: 2, y: 2)
@@ -138,22 +192,7 @@ struct SearchControl: View {
             .foregroundStyle(classicTheme ? Color.black : Color.secondary)
             .lineLimit(1)
             .padding(.leading, classicTheme ? 0 : 7)
-            .padding(.horizontal, classicTheme ? 6 : 0)
-            .padding(.vertical, classicTheme ? 2 : 0)
-            .frame(height: classicTheme ? 20 : 16, alignment: .leading)
-            .background {
-                if classicTheme {
-                    ZStack {
-                        Rectangle().fill(.black).offset(x: 1, y: 1)
-                        Rectangle().fill(Color(white: 0.90))
-                    }
-                }
-            }
-            .overlay {
-                if classicTheme {
-                    Rectangle().strokeBorder(.black, lineWidth: 1)
-                }
-            }
+            .frame(height: 16, alignment: .leading)
         }
         .frame(minWidth: 180, idealWidth: 450, maxWidth: 520)
         .onChange(of: model.searchFocusRequest) {

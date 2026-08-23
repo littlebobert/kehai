@@ -141,9 +141,6 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.segmented)
 
-                Text("Choose the system appearance or the Retrofit look from littlebobert.github.io.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
 
                 if appearance.browserTheme == .system {
                     Toggle("Use glassy background", isOn: Binding(

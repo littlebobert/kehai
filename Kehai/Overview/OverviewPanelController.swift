@@ -185,9 +185,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let usesRetrofit = appearance.browserTheme == .classicMac
         let estimatedHeight: CGFloat
         if model.githubRepositoryStore.hasSavedTokens {
-            estimatedHeight = usesRetrofit ? 400 : 388
+            estimatedHeight = usesRetrofit ? 408 : 388
         } else {
-            estimatedHeight = usesRetrofit ? 304 : 292
+            estimatedHeight = usesRetrofit ? 312 : 292
         }
         let height = min(estimatedHeight, visibleFrame.height)
         let topStripIconInset: CGFloat = 65.5
