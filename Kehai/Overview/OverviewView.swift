@@ -213,7 +213,8 @@ struct OverviewView: View {
     }
 
     private var recentAppsStrip: some View {
-        Group {
+        let allWindowsFocused = model.hoveredRepositoryID == nil && model.isAllWindowsAppSelected
+        return Group {
             if displayedAppWindows.isEmpty, !model.query.isEmpty {
                 HStack(spacing: 6) {
                     if model.isSmartSearching { ProgressView().controlSize(.mini) }
@@ -240,33 +241,33 @@ struct OverviewView: View {
                                         ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
                                     } else {
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(model.isAllWindowsAppSelected ? Color.accentColor.opacity(0.12) : .clear)
+                                            .fill(allWindowsFocused ? Color.accentColor.opacity(0.12) : .clear)
                                     }
                                 }
                                 .overlay {
                                     if appearance.browserTheme == .classicMac {
                                         Rectangle()
                                             .strokeBorder(
-                                                model.isAllWindowsAppSelected
+                                                allWindowsFocused
                                                     ? Color(red: 0.25, green: 0.35, blue: 0.65)
                                                     : .black,
                                                 lineWidth: 2
                                             )
                                     }
                                 }
-                            Text(model.isAllWindowsAppSelected && appStripWidth > 0 ? "All Windows" : " ")
+                            Text(allWindowsFocused && appStripWidth > 0 ? "All Windows" : " ")
                                 .font(.caption2)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
-                                .padding(.horizontal, appearance.browserTheme == .classicMac && model.isAllWindowsAppSelected ? 5 : 0)
-                                .padding(.vertical, appearance.browserTheme == .classicMac && model.isAllWindowsAppSelected ? 2 : 0)
+                                .padding(.horizontal, appearance.browserTheme == .classicMac && allWindowsFocused ? 5 : 0)
+                                .padding(.vertical, appearance.browserTheme == .classicMac && allWindowsFocused ? 2 : 0)
                                 .background {
-                                    if appearance.browserTheme == .classicMac, model.isAllWindowsAppSelected {
+                                    if appearance.browserTheme == .classicMac, allWindowsFocused {
                                         ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
                                     }
                                 }
                                 .overlay {
-                                    if appearance.browserTheme == .classicMac, model.isAllWindowsAppSelected {
+                                    if appearance.browserTheme == .classicMac, allWindowsFocused {
                                         Rectangle().strokeBorder(.black, lineWidth: 1)
                                     }
                                 }
@@ -288,7 +289,7 @@ struct OverviewView: View {
                     ForEach(Array(displayedAppWindows.enumerated()), id: \.element.id) { index, window in
                         RecentAppButton(
                             window: window,
-                            isSelected: model.isAppFocused(window.id) && !model.suppressSelectionHalo,
+                            isSelected: model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo,
                             cellWidth: appStripCellWidth,
                             iconSize: appStripIconSize,
                             iconPadding: appStripIconPadding,
@@ -479,7 +480,7 @@ struct OverviewView: View {
             dusty: dusty,
             tint: tint,
             classicTheme: appearance.browserTheme == .classicMac,
-            isSelected: model.selectedWindowID == window.id && !model.suppressSelectionHalo,
+            isSelected: model.hoveredRepositoryID == nil && model.selectedWindowID == window.id && !model.suppressSelectionHalo,
             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
             isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.physicalWindowID),
             thumbnailCellHeight: thumbnailCellHeight,
@@ -581,7 +582,8 @@ struct OverviewView: View {
                                 ForEach(repositories) { repository in
                                     RepositoryResultCard(
                                         repository: repository,
-                                        isSelected: model.selectedRepositoryID == repository.id,
+                                        isSelected: model.hoveredRepositoryID.map { $0 == repository.id }
+                                            ?? (model.selectedRepositoryID == repository.id),
                                         compact: false,
                                         classicTheme: appearance.browserTheme == .classicMac,
                                         activate: {
@@ -591,6 +593,13 @@ struct OverviewView: View {
                                         openPullRequests: {
                                             _ = model.openPullRequests(for: repository)
                                             close()
+                                        },
+                                        hoverChanged: { hovering in
+                                            if hovering {
+                                                model.setHoveredRepository(repository.id)
+                                            } else if model.hoveredRepositoryID == repository.id {
+                                                model.setHoveredRepository(nil)
+                                            }
                                         }
                                     )
                                     .frame(width: model.thumbnailCardWidth)
@@ -865,7 +874,7 @@ struct CompactSwitcherView: View {
             compactIconLabel(
                 icon: Image(systemName: "square.grid.2x2"),
                 title: "All Windows",
-                selected: model.isAllWindowsAppSelected,
+                selected: model.hoveredRepositoryID == nil && model.isAllWindowsAppSelected,
                 itemIndex: itemIndex,
                 badgeLabel: nil
             )
@@ -880,7 +889,7 @@ struct CompactSwitcherView: View {
     }
 
     private func compactAppButton(_ window: WindowItem, itemIndex: Int) -> some View {
-        let selected = model.isAppFocused(window.id) && !model.suppressSelectionHalo
+        let selected = model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo
         return Button {
             if model.isAppFocused(window.id) {
                 model.activate(window)
@@ -1130,7 +1139,8 @@ struct CompactSwitcherView: View {
                                 ForEach(model.filteredGitHubRepositories) { repository in
                                     RepositoryResultCard(
                                         repository: repository,
-                                        isSelected: model.selectedRepositoryID == repository.id,
+                                        isSelected: model.hoveredRepositoryID.map { $0 == repository.id }
+                                            ?? (model.selectedRepositoryID == repository.id),
                                         compact: true,
                                         classicTheme: appearance.browserTheme == .classicMac,
                                         activate: {
@@ -1140,6 +1150,13 @@ struct CompactSwitcherView: View {
                                         openPullRequests: {
                                             _ = model.openPullRequests(for: repository)
                                             close()
+                                        },
+                                        hoverChanged: { hovering in
+                                            if hovering {
+                                                model.setHoveredRepository(repository.id)
+                                            } else if model.hoveredRepositoryID == repository.id {
+                                                model.setHoveredRepository(nil)
+                                            }
                                         }
                                     )
                                     .id("compact-repository-\(repository.id)")
@@ -1206,7 +1223,7 @@ struct CompactSwitcherView: View {
     }
 
     private func compactWindowButton(_ window: WindowItem) -> some View {
-        let selected = model.selectedWindowID == window.id && !model.suppressSelectionHalo
+        let selected = model.hoveredRepositoryID == nil && model.selectedWindowID == window.id && !model.suppressSelectionHalo
         return Button {
             model.activate(window)
             close()
@@ -1312,6 +1329,7 @@ private struct RepositoryResultCard: View {
     let classicTheme: Bool
     let activate: () -> Void
     let openPullRequests: () -> Void
+    let hoverChanged: (Bool) -> Void
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -1406,6 +1424,8 @@ private struct RepositoryResultCard: View {
             .animation(.easeOut(duration: 0.1), value: isHoveringPullRequests)
             .padding(compact ? 6 : 10)
         }
+        .onHover(perform: hoverChanged)
+        .animation(.easeOut(duration: 0.1), value: isSelected)
     }
 
     @ViewBuilder

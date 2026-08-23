@@ -55,6 +55,7 @@ final class OverviewViewModel {
             }
         }
     }
+    var hoveredRepositoryID: Int64?
     var selectedRepositoryID: Int64? {
         didSet {
             if selectedRepositoryID != nil {
@@ -1080,6 +1081,7 @@ final class OverviewViewModel {
         isAllWindowsAppSelected = false
         smartSearchWindowIDs = nil
         smartSearchStatus = nil
+        hoveredRepositoryID = nil
         isSmartSearching = false
         if !query.isEmpty {
             query = ""
@@ -1108,6 +1110,10 @@ final class OverviewViewModel {
             selectedAppWindowID = nil
             selectedWindowID = windowID
         }
+    }
+
+    func setHoveredRepository(_ repositoryID: Int64?) {
+        hoveredRepositoryID = repositoryID
     }
 
     func selectRepository(_ repositoryID: Int64) {
@@ -1141,6 +1147,7 @@ final class OverviewViewModel {
         selectedWindowID = nil
         selectedAppWindowID = nil
         selectedRepositoryID = nil
+        hoveredRepositoryID = nil
         hoveredSwitcherWindowID = nil
         isAllWindowsAppSelected = true
     }
