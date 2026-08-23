@@ -725,6 +725,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             case 124:
                 self.model.moveSelection(horizontal: 1, columnCount: self.model.keyboardColumnCount)
             case 125:
+                if event.window === self.compactWindow,
+                   self.model.moveCompactWindowSelectionToRepositories() {
+                    break
+                }
                 self.model.moveSelection(
                     vertical: 1,
                     columnCount: self.model.keyboardColumnCount,

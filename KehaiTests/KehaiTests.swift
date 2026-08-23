@@ -261,6 +261,7 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(repository.name, "Kehai")
         XCTAssertEqual(repository.fullName, "octocat/Kehai")
         XCTAssertEqual(repository.ownerLogin, "octocat")
+        XCTAssertEqual(repository.ownerAvatarURL, URL(string: "https://avatars.example/octocat.png"))
         XCTAssertEqual(repository.description, "Window switcher")
         XCTAssertEqual(repository.htmlURL, URL(string: "https://github.com/octocat/Kehai"))
         XCTAssertTrue(repository.isPrivate)
@@ -439,7 +440,10 @@ final class KehaiTests: XCTestCase {
           "id": \(id),
           "name": "\(name)",
           "full_name": "\(owner)/\(name)",
-          "owner": { "login": "\(owner)" },
+          "owner": {
+            "login": "\(owner)",
+            "avatar_url": "https://avatars.example/\(owner).png"
+          },
           "description": \(descriptionJSON),
           "html_url": "https://github.com/\(owner)/\(name)",
           "private": \(isPrivate),

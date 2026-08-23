@@ -68,6 +68,7 @@ final class OverviewViewModel {
     private(set) var focusedAppKey: String?
     private(set) var isAllWindowsAppSelected = false
     private var appWindowIDBeforeEnteringWindows: CGWindowID?
+    private var windowIDBeforeEnteringRepositories: CGWindowID?
 
     private struct WindowSelectionSnapshot {
         let id: CGWindowID
@@ -914,6 +915,15 @@ final class OverviewViewModel {
         selectedWindowID = visible[targetIndex].id
     }
 
+    @discardableResult
+    func moveCompactWindowSelectionToRepositories() -> Bool {
+        guard let selectedWindowID,
+              let repository = filteredGitHubRepositories.first else { return false }
+        windowIDBeforeEnteringRepositories = selectedWindowID
+        selectedRepositoryID = repository.id
+        return true
+    }
+
     private func moveRepositorySelection(horizontal: Int, vertical: Int) {
         let visibleLimit = isSwitcherMode ? 3 : 12
         let repositories = Array(filteredGitHubRepositories.prefix(visibleLimit))
@@ -923,11 +933,15 @@ final class OverviewViewModel {
             return
         }
         if vertical < 0 {
-            if let window = orderedFilteredWindows.last {
+            if let previousWindowID = windowIDBeforeEnteringRepositories,
+               orderedFilteredWindows.contains(where: { $0.id == previousWindowID }) {
+                selectedWindowID = previousWindowID
+            } else if let window = orderedFilteredWindows.first {
                 selectedWindowID = window.id
             } else if let app = filteredRecentAppWindows.first {
                 focusApp(app.id)
             }
+            windowIDBeforeEnteringRepositories = nil
             return
         }
         guard vertical == 0,
@@ -978,6 +992,7 @@ final class OverviewViewModel {
         let targetRowIndex = rowIndex + direction
         guard rows.indices.contains(targetRowIndex) else {
             if direction > 0, let repository = filteredGitHubRepositories.first {
+                windowIDBeforeEnteringRepositories = selectedWindowID
                 selectedRepositoryID = repository.id
             }
             return true
@@ -1079,6 +1094,7 @@ final class OverviewViewModel {
         switcherAppWindows = nil
         hoveredSwitcherWindowID = nil
         appWindowIDBeforeEnteringWindows = nil
+        windowIDBeforeEnteringRepositories = nil
         clearTransientFilters(selectedGroupID: selectedGroupID)
         selectedAppWindowID = nil
         selectedRepositoryID = nil

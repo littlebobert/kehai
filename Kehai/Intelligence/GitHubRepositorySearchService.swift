@@ -6,6 +6,7 @@ struct GitHubRepository: Decodable, Identifiable, Sendable {
     let name: String
     let fullName: String
     let ownerLogin: String
+    let ownerAvatarURL: URL?
     let description: String?
     let htmlURL: URL
     let isPrivate: Bool
@@ -23,6 +24,12 @@ struct GitHubRepository: Decodable, Identifiable, Sendable {
 
     private struct Owner: Decodable {
         let login: String
+        let avatarURL: URL?
+
+        private enum CodingKeys: String, CodingKey {
+            case login
+            case avatarURL = "avatar_url"
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -30,7 +37,9 @@ struct GitHubRepository: Decodable, Identifiable, Sendable {
         id = try container.decode(Int64.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
         fullName = try container.decode(String.self, forKey: .fullName)
-        ownerLogin = try container.decode(Owner.self, forKey: .owner).login
+        let owner = try container.decode(Owner.self, forKey: .owner)
+        ownerLogin = owner.login
+        ownerAvatarURL = owner.avatarURL
         description = try container.decodeIfPresent(String.self, forKey: .description)
         htmlURL = try container.decode(URL.self, forKey: .htmlURL)
         isPrivate = try container.decode(Bool.self, forKey: .isPrivate)

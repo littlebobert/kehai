@@ -478,6 +478,10 @@ struct OverviewView: View {
                                         activate: {
                                             _ = model.activate(repository)
                                             close()
+                                        },
+                                        openPullRequests: {
+                                            _ = NSWorkspace.shared.open(repository.htmlURL.appending(path: "pulls"))
+                                            close()
                                         }
                                     )
                                     .frame(width: model.thumbnailCardWidth)
@@ -485,7 +489,7 @@ struct OverviewView: View {
                                 }
                             }
                         }
-                        .scrollIndicators(.automatic)
+                        .scrollIndicators(.never)
                         .frame(height: 96)
                     }
                     if let error = model.githubRepositoryStore.errorMessage, repositories.isEmpty {
@@ -930,6 +934,10 @@ struct CompactSwitcherView: View {
     @ViewBuilder
     private var compactRepositoryShelf: some View {
         if model.githubRepositoryStore.hasSavedTokens {
+            Divider()
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
             VStack(alignment: .leading, spacing: 5) {
                 compactSectionLabel("GitHub Repositories")
                 if model.githubRepositoryStore.isLoading, model.filteredGitHubRepositories.isEmpty {
@@ -937,12 +945,12 @@ struct CompactSwitcherView: View {
                         ProgressView().controlSize(.small)
                         Text("Loading repositories…").font(.caption).foregroundStyle(.secondary)
                     }
-                    .frame(height: 60)
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                 } else if model.filteredGitHubRepositories.isEmpty {
                     Text(model.query.isEmpty ? "No repositories available" : "No matching repositories")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .frame(height: 60)
+                        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                 } else {
                     ScrollView(.horizontal) {
                         LazyHStack(spacing: 7) {
@@ -954,6 +962,10 @@ struct CompactSwitcherView: View {
                                     activate: {
                                         _ = model.activate(repository)
                                         close()
+                                    },
+                                    openPullRequests: {
+                                        _ = NSWorkspace.shared.open(repository.htmlURL.appending(path: "pulls"))
+                                        close()
                                     }
                                 )
                             }
@@ -964,7 +976,7 @@ struct CompactSwitcherView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 5)
+            .padding(.bottom, 5)
         }
     }
 
@@ -1011,9 +1023,9 @@ struct CompactSwitcherView: View {
             }
             .padding(8)
             .frame(width: compactWindowWidth, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
             .overlay {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 6)
                     .strokeBorder(
                         selected ? Color.accentColor.opacity(0.85) : Color(nsColor: .separatorColor).opacity(0.35),
                         lineWidth: selected ? 2 : 1
@@ -1080,59 +1092,127 @@ struct CompactSwitcherView: View {
             }
         }
         .frame(height: 134)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
         .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
     }
 }
 
 private struct RepositoryResultCard: View {
+    @State private var isHoveringPullRequests = false
+
     let repository: GitHubRepository
     let isSelected: Bool
     let compact: Bool
     let activate: () -> Void
+    let openPullRequests: () -> Void
 
     var body: some View {
-        Button(action: activate) {
-            HStack(alignment: .top, spacing: compact ? 7 : 10) {
-                Image(systemName: "chevron.left.forwardslash.chevron.right")
-                    .font(compact ? .caption : .title3)
-                    .foregroundStyle(.secondary)
-                    .frame(width: compact ? 20 : 28, height: compact ? 28 : 36)
-                VStack(alignment: .leading, spacing: compact ? 0 : 2) {
-                    Text(repository.ownerLogin)
-                        .font(compact ? .caption2 : .caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text(repository.name)
-                        .font(compact ? .caption.weight(.semibold) : .headline)
-                        .lineLimit(1)
-                    if !compact, let description = repository.description, !description.isEmpty {
-                        Text(description)
-                            .font(.caption)
+        ZStack(alignment: .bottomTrailing) {
+            Button(action: activate) {
+                HStack(alignment: .top, spacing: compact ? 7 : 10) {
+                    ownerAvatar
+                    VStack(alignment: .leading, spacing: compact ? 0 : 2) {
+                        Text(repository.ownerLogin)
+                            .font(compact ? .caption2 : .caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
+                            .lineLimit(1)
+                        Text(repository.name)
+                            .font(compact ? .caption.weight(.semibold) : .headline)
+                            .lineLimit(1)
+                        if !compact, let description = repository.description, !description.isEmpty {
+                            Text(description)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        HStack(spacing: 5) {
+                            if repository.isFork { repoBadge("Fork") }
+                            if repository.isArchived { repoBadge("Archived") }
+                            if let pushedAt = repository.pushedAt {
+                                HStack(spacing: 2) {
+                                    Text("Pushed")
+                                    Text(relativePushTime(pushedAt))
+                                }
+                                .font(.system(size: compact ? 9 : 10))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            }
+                        }
                     }
-                    HStack(spacing: 5) {
-                        if repository.isPrivate { repoBadge("Private") }
-                        if repository.isFork { repoBadge("Fork") }
-                        if repository.isArchived { repoBadge("Archived") }
-                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(.trailing, compact ? 30 : 38)
+                .padding(compact ? 7 : 12)
+                .frame(width: compact ? 200 : nil, height: compact ? 60 : 96, alignment: .leading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: compact ? 4.5 : 6))
+                .overlay {
+                    RoundedRectangle(cornerRadius: compact ? 4.5 : 6)
+                        .strokeBorder(
+                            isSelected ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor).opacity(0.35),
+                            lineWidth: isSelected ? 2 : 1
+                        )
+                }
             }
-            .padding(compact ? 7 : 12)
-            .frame(width: compact ? 200 : nil, height: compact ? 60 : 96, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: compact ? 9 : 12))
-            .overlay {
-                RoundedRectangle(cornerRadius: compact ? 9 : 12)
-                    .strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor).opacity(0.35),
-                        lineWidth: isSelected ? 2 : 1
-                    )
+            .buttonStyle(.plain)
+            .help("Open \(repository.fullName) on GitHub")
+
+            Button(action: openPullRequests) {
+                Text("PRs")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(isHoveringPullRequests ? Color.accentColor : Color.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background {
+                        Capsule()
+                            .fill(isHoveringPullRequests ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12))
+                    }
+            }
+            .buttonStyle(.plain)
+            .help("Open pull requests for \(repository.fullName)")
+            .onHover { isHoveringPullRequests = $0 }
+            .animation(.easeOut(duration: 0.1), value: isHoveringPullRequests)
+            .padding(compact ? 6 : 10)
+        }
+    }
+
+    @ViewBuilder
+    private var ownerAvatar: some View {
+        let size: CGFloat = compact ? 30 : 38
+        AsyncImage(url: repository.ownerAvatarURL) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().scaledToFill()
+            case .empty:
+                ZStack {
+                    Color(nsColor: .controlBackgroundColor)
+                    ProgressView().controlSize(.mini)
+                }
+            case .failure:
+                avatarFallback
+            @unknown default:
+                avatarFallback
             }
         }
-        .buttonStyle(.plain)
-        .help("Open \(repository.fullName) on GitHub")
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: compact ? 4 : 6))
+    }
+
+    private var avatarFallback: some View {
+        Image(systemName: "person.crop.square")
+            .resizable()
+            .scaledToFit()
+            .padding(5)
+            .foregroundStyle(.secondary)
+            .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func relativePushTime(_ date: Date) -> String {
+        let secondsAgo = Date().timeIntervalSince(date)
+        if secondsAgo >= 0, secondsAgo < 60 { return "<1 min ago" }
+        if secondsAgo < 0, secondsAgo > -60 { return "in <1 min" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 
     private func repoBadge(_ text: String) -> some View {
@@ -1389,7 +1469,7 @@ private struct WindowCard: View {
     let selectTab: (SafariTab) -> Void
 
     private var capturedWindowCornerRadius: CGFloat {
-        min(8, max(4, thumbnailCellHeight * 0.025))
+        min(4, max(2, thumbnailCellHeight * 0.0125))
     }
 
     var body: some View {
@@ -1446,7 +1526,7 @@ private struct WindowCard: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: thumbnailCellHeight)
                 .clipped()
-                .contentShape(RoundedRectangle(cornerRadius: 10))
+                .contentShape(RoundedRectangle(cornerRadius: 5))
                 .animation(.easeInOut(duration: 0.18), value: window.thumbnailRevision)
                 .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
             }
@@ -1499,15 +1579,15 @@ private struct WindowCard: View {
         .padding(12)
         .background {
             if let tint {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(tint.opacity(0.20))
             } else {
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: 8)
                     .fill(.regularMaterial)
             }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 15)
+            RoundedRectangle(cornerRadius: 7.5)
                 .strokeBorder(
                     isSelected ? Color.accentColor.opacity(0.85) : (tint?.opacity(0.42) ?? .clear),
                     lineWidth: isSelected ? 2 : 1
