@@ -128,16 +128,36 @@ struct SettingsView: View {
     private var appearanceSettings: some View {
         Form {
             Section("Browser Window") {
-                Toggle("Use glassy background", isOn: Binding(
-                    get: { appearance.usesGlassyWindow },
+                Picker("Theme", selection: Binding(
+                    get: { appearance.browserTheme },
                     set: {
-                        appearance.usesGlassyWindow = $0
+                        appearance.browserTheme = $0
                         appearanceChanged()
                     }
-                ))
-                Text("Adds translucent macOS material behind Kehai while keeping window cards readable.")
+                )) {
+                    ForEach(BrowserTheme.allCases) { theme in
+                        Text(theme.displayName).tag(theme)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text("Choose the system appearance or the Retrofit look from littlebobert.github.io.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if appearance.browserTheme == .system {
+                    Toggle("Use glassy background", isOn: Binding(
+                        get: { appearance.usesGlassyWindow },
+                        set: {
+                            appearance.usesGlassyWindow = $0
+                            appearanceChanged()
+                        }
+                    ))
+
+                    Text("Adds translucent macOS material behind Kehai while keeping window cards readable.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

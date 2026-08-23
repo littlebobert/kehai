@@ -182,7 +182,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let maximumAnchoredWidth = floor(max(1, opensRight ? maximumRightWidth : maximumLeftWidth))
         let minimumWidth = min(oneThumbnailMinimumWidth, maximumAnchoredWidth)
         let width = min(preferredWidth, maximumAnchoredWidth)
-        let estimatedHeight: CGFloat = model.githubRepositoryStore.hasSavedTokens ? 388 : 292
+        let usesRetrofit = appearance.browserTheme == .classicMac
+        let estimatedHeight: CGFloat
+        if model.githubRepositoryStore.hasSavedTokens {
+            estimatedHeight = usesRetrofit ? 400 : 388
+        } else {
+            estimatedHeight = usesRetrofit ? 304 : 292
+        }
         let height = min(estimatedHeight, visibleFrame.height)
         let topStripIconInset: CGFloat = 65.5
         let bottomStripIconInset: CGFloat = 41
@@ -340,7 +346,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func updateAppearance() {
-        let usesTransparentBacking = appearance.usesGlassyWindow
+        let usesTransparentBacking = appearance.browserTheme == .system
+            && appearance.usesGlassyWindow
             && !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
         for browserWindow in [window, compactWindow].compactMap({ $0 }) {
             browserWindow.titlebarAppearsTransparent = false

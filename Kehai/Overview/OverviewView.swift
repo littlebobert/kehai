@@ -1,6 +1,22 @@
 import AppKit
 import SwiftUI
 
+
+private struct ClassicMacCardBackground: View {
+    let cornerRadius: CGFloat
+    let shadowOffset: CGFloat
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(.black)
+                .offset(x: shadowOffset, y: shadowOffset)
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(Color(white: 0.93))
+        }
+    }
+}
+
 struct OverviewView: View {
     @Bindable var model: OverviewViewModel
     @Bindable var appearance: AppearanceSettings
@@ -27,7 +43,9 @@ struct OverviewView: View {
     var body: some View {
         ZStack {
             Group {
-                if appearance.usesGlassyWindow && !reduceTransparency {
+                if appearance.browserTheme == .classicMac {
+                    Color(white: 0.88)
+                } else if appearance.usesGlassyWindow && !reduceTransparency {
                     Rectangle().fill(.ultraThinMaterial)
                 } else {
                     Color(nsColor: .windowBackgroundColor)
@@ -92,6 +110,7 @@ struct OverviewView: View {
             model.keyboardColumnCount = gridColumnCount
         }
         .animation(.easeInOut(duration: 0.16), value: model.thumbnailCardWidth)
+        .preferredColorScheme(appearance.browserTheme == .classicMac ? .light : nil)
         .alert("AI request failed", isPresented: Binding(
             get: { model.aiErrorMessage != nil },
             set: { if !$0 { model.aiErrorMessage = nil } }
@@ -148,8 +167,12 @@ struct OverviewView: View {
 
     private var searchHeader: some View {
         HStack {
-            SearchControl(model: model, submit: openSelectedWindow)
-                .frame(maxWidth: 328)
+            SearchControl(
+                model: model,
+                classicTheme: appearance.browserTheme == .classicMac,
+                submit: openSelectedWindow
+            )
+                .frame(maxWidth: 492)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 30)
@@ -211,15 +234,42 @@ struct OverviewView: View {
                             Image(systemName: "square.grid.2x2")
                                 .font(.system(size: max(14, appStripIconSize * 0.58), weight: .medium))
                                 .frame(width: appStripIconSize, height: appStripIconSize)
-                                .padding(appStripIconPadding)
+                                .padding(appearance.browserTheme == .classicMac ? max(appStripIconPadding, 7) : appStripIconPadding)
                                 .background {
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill(model.isAllWindowsAppSelected ? Color.accentColor.opacity(0.12) : .clear)
+                                    if appearance.browserTheme == .classicMac {
+                                        ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(model.isAllWindowsAppSelected ? Color.accentColor.opacity(0.12) : .clear)
+                                    }
+                                }
+                                .overlay {
+                                    if appearance.browserTheme == .classicMac {
+                                        Rectangle()
+                                            .strokeBorder(
+                                                model.isAllWindowsAppSelected
+                                                    ? Color(red: 0.25, green: 0.35, blue: 0.65)
+                                                    : .black,
+                                                lineWidth: 2
+                                            )
+                                    }
                                 }
                             Text(model.isAllWindowsAppSelected && appStripWidth > 0 ? "All Windows" : " ")
                                 .font(.caption2)
                                 .lineLimit(1)
                                 .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, appearance.browserTheme == .classicMac && model.isAllWindowsAppSelected ? 5 : 0)
+                                .padding(.vertical, appearance.browserTheme == .classicMac && model.isAllWindowsAppSelected ? 2 : 0)
+                                .background {
+                                    if appearance.browserTheme == .classicMac, model.isAllWindowsAppSelected {
+                                        ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                                    }
+                                }
+                                .overlay {
+                                    if appearance.browserTheme == .classicMac, model.isAllWindowsAppSelected {
+                                        Rectangle().strokeBorder(.black, lineWidth: 1)
+                                    }
+                                }
                         }
                         .padding(.vertical, 4)
                         .frame(width: appStripCellWidth)
@@ -245,6 +295,7 @@ struct OverviewView: View {
                             stripWidth: appStripWidth,
                             itemCenterX: 4 + CGFloat(index + 1) * (appStripCellWidth + appStripSpacing) + appStripCellWidth / 2,
                             badgeLabel: model.badgeLabel(for: window),
+                            classicTheme: appearance.browserTheme == .classicMac,
                             activate: {
                                 if model.isAppFocused(window.id) {
                                     model.activate(window)
@@ -323,6 +374,19 @@ struct OverviewView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, appearance.browserTheme == .classicMac ? 8 : 0)
+        .padding(.top, appearance.browserTheme == .classicMac ? 6 : 0)
+        .padding(.bottom, appearance.browserTheme == .classicMac ? 9 : 0)
+        .background {
+            if appearance.browserTheme == .classicMac {
+                ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+            }
+        }
+        .overlay {
+            if appearance.browserTheme == .classicMac {
+                Rectangle().strokeBorder(.black, lineWidth: 1)
+            }
+        }
     }
 
     private func updateGridWidth(_ width: CGFloat) {
@@ -414,6 +478,7 @@ struct OverviewView: View {
             window: window,
             dusty: dusty,
             tint: tint,
+            classicTheme: appearance.browserTheme == .classicMac,
             isSelected: model.selectedWindowID == window.id && !model.suppressSelectionHalo,
             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
             isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.physicalWindowID),
@@ -445,12 +510,31 @@ struct OverviewView: View {
     private var repositorySection: some View {
         let repositories = model.filteredGitHubRepositories
         if model.githubRepositoryStore.hasSavedTokens {
-            Divider()
+            if appearance.browserTheme == .classicMac {
+                Rectangle()
+                    .fill(.black)
+                    .frame(height: 2)
+            } else {
+                Divider()
+            }
             ScrollViewReader { scrollProxy in
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text("GitHub Repositories")
                             .font(.headline)
+                            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.primary)
+                            .padding(.horizontal, appearance.browserTheme == .classicMac ? 7 : 0)
+                            .padding(.vertical, appearance.browserTheme == .classicMac ? 3 : 0)
+                            .background {
+                                if appearance.browserTheme == .classicMac {
+                                    ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                                }
+                            }
+                            .overlay {
+                                if appearance.browserTheme == .classicMac {
+                                    Rectangle().strokeBorder(.black, lineWidth: 1)
+                                }
+                            }
                         if model.githubRepositoryStore.isLoading {
                             ProgressView().controlSize(.small)
                         }
@@ -458,14 +542,38 @@ struct OverviewView: View {
                         if model.query.isEmpty, !repositories.isEmpty {
                             Text("Recently updated")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
+                                .padding(.horizontal, appearance.browserTheme == .classicMac ? 6 : 0)
+                                .padding(.vertical, appearance.browserTheme == .classicMac ? 2 : 0)
+                                .background {
+                                    if appearance.browserTheme == .classicMac {
+                                        ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                                    }
+                                }
+                                .overlay {
+                                    if appearance.browserTheme == .classicMac {
+                                        Rectangle().strokeBorder(.black, lineWidth: 1)
+                                    }
+                                }
                         }
                     }
                     if repositories.isEmpty {
                         Text(model.githubRepositoryStore.isLoading
                             ? "Loading repositories…"
                             : model.query.isEmpty ? "No repositories available" : "No matching repositories")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
+                            .padding(.horizontal, appearance.browserTheme == .classicMac && model.githubRepositoryStore.isLoading ? 6 : 0)
+                            .padding(.vertical, appearance.browserTheme == .classicMac && model.githubRepositoryStore.isLoading ? 3 : 0)
+                            .background {
+                                if appearance.browserTheme == .classicMac, model.githubRepositoryStore.isLoading {
+                                    ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                                }
+                            }
+                            .overlay {
+                                if appearance.browserTheme == .classicMac, model.githubRepositoryStore.isLoading {
+                                    Rectangle().strokeBorder(.black, lineWidth: 1)
+                                }
+                            }
                             .frame(height: 96, alignment: .topLeading)
                     } else {
                         ScrollView(.horizontal) {
@@ -475,6 +583,7 @@ struct OverviewView: View {
                                         repository: repository,
                                         isSelected: model.selectedRepositoryID == repository.id,
                                         compact: false,
+                                        classicTheme: appearance.browserTheme == .classicMac,
                                         activate: {
                                             _ = model.activate(repository)
                                             close()
@@ -640,7 +749,9 @@ struct CompactSwitcherView: View {
             }
         }
         .background {
-            if appearance.usesGlassyWindow && !reduceTransparency {
+            if appearance.browserTheme == .classicMac {
+                Color(white: 0.88)
+            } else if appearance.usesGlassyWindow && !reduceTransparency {
                 Rectangle().fill(.ultraThinMaterial)
             } else {
                 Color(nsColor: .windowBackgroundColor)
@@ -662,6 +773,7 @@ struct CompactSwitcherView: View {
         .onChange(of: model.compactSearchBlurRequest) {
             compactSearchIsFocused = false
         }
+        .preferredColorScheme(appearance.browserTheme == .classicMac ? .light : nil)
     }
 
     private var compactHeader: some View {
@@ -673,9 +785,10 @@ struct CompactSwitcherView: View {
     private var compactQueryIndicator: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
             TextField("Search windows, apps, and GitHub repositories", text: $model.query)
                 .textFieldStyle(.plain)
+                .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.primary)
                 .focused($compactSearchIsFocused)
                 .onSubmit {
                     if model.activateCurrentSelection() { close() }
@@ -686,17 +799,33 @@ struct CompactSwitcherView: View {
             Spacer(minLength: 0)
             if !model.query.isEmpty {
                 Text("Esc to clear")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
             }
         }
         .font(.caption)
         .padding(.horizontal, 10)
         .frame(height: 22)
-        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+        .background {
+            if appearance.browserTheme == .classicMac {
+                ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 2)
+            } else {
+                RoundedRectangle(cornerRadius: 6).fill(.quaternary.opacity(0.55))
+            }
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(compactSearchIsFocused ? Color.accentColor.opacity(0.65) : .clear, lineWidth: 1)
-                .allowsHitTesting(false)
+            Group {
+                if appearance.browserTheme == .classicMac {
+                    Rectangle()
+                        .strokeBorder(
+                            compactSearchIsFocused ? Color(red: 0.25, green: 0.35, blue: 0.65) : .black,
+                            lineWidth: 2
+                        )
+                } else {
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(compactSearchIsFocused ? Color.accentColor.opacity(0.65) : .clear, lineWidth: 1)
+                }
+            }
+            .allowsHitTesting(false)
         }
         .frame(width: max(330, compactWidth / 2))
     }
@@ -717,7 +846,7 @@ struct CompactSwitcherView: View {
         }
         .padding(.horizontal, compactAppHorizontalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: 66)
+        .frame(height: appearance.browserTheme == .classicMac ? 80 : 66)
         .clipped()
         .onContinuousHover(coordinateSpace: .local) { phase in
             switch phase {
@@ -812,28 +941,56 @@ struct CompactSwitcherView: View {
                 .frame(width: 36, height: 36)
                 .overlay(alignment: .topTrailing) {
                     AppBadgeView(label: badgeLabel)
-                        .offset(x: 5, y: 4)
+                        .offset(
+                            x: appearance.browserTheme == .classicMac ? 2 : 5,
+                            y: appearance.browserTheme == .classicMac ? 1 : 4
+                        )
                 }
-                .padding(2)
+                .padding(appearance.browserTheme == .classicMac ? 6 : 2)
                 .background {
-                    RoundedRectangle(cornerRadius: 11)
-                        .fill(selected ? Color.accentColor.opacity(0.16) : .clear)
-                        .padding(.horizontal, -5)
-                        .padding(.vertical, -4)
+                    if appearance.browserTheme == .classicMac {
+                        ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
+                    } else {
+                        RoundedRectangle(cornerRadius: 11)
+                            .fill(selected ? Color.accentColor.opacity(0.16) : .clear)
+                            .padding(.horizontal, -5)
+                            .padding(.vertical, -4)
+                    }
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 11)
-                        .strokeBorder(selected ? Color.accentColor.opacity(0.85) : .clear, lineWidth: 1.5)
-                        .padding(.horizontal, -5)
-                        .padding(.vertical, -4)
+                    if appearance.browserTheme == .classicMac {
+                        Rectangle()
+                            .strokeBorder(
+                                selected ? Color(red: 0.25, green: 0.35, blue: 0.65) : .black,
+                                lineWidth: 2
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: 11)
+                            .strokeBorder(selected ? Color.accentColor.opacity(0.85) : .clear, lineWidth: 1.5)
+                            .padding(.horizontal, -5)
+                            .padding(.vertical, -4)
+                    }
                 }
             Text(selected ? title : " ")
                 .font(.caption2)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, appearance.browserTheme == .classicMac && selected ? 5 : 0)
+                .padding(.vertical, appearance.browserTheme == .classicMac && selected ? 2 : 0)
+                .background {
+                    if appearance.browserTheme == .classicMac, selected {
+                        ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                    }
+                }
+                .overlay {
+                    if appearance.browserTheme == .classicMac, selected {
+                        Rectangle().strokeBorder(.black, lineWidth: 1)
+                    }
+                }
                 .offset(x: labelOffset, y: 4)
                 .frame(width: compactAppCellWidth)
         }
+        .padding(.vertical, appearance.browserTheme == .classicMac ? 3 : 0)
         .frame(width: compactAppCellWidth)
         .contentShape(Rectangle())
         .transaction { transaction in
@@ -944,13 +1101,27 @@ struct CompactSwitcherView: View {
                 if model.githubRepositoryStore.isLoading, model.filteredGitHubRepositories.isEmpty {
                     HStack(spacing: 7) {
                         ProgressView().controlSize(.small)
-                        Text("Loading repositories…").font(.caption).foregroundStyle(.secondary)
+                        Text("Loading repositories…")
+                            .font(.caption)
+                            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
+                    }
+                    .padding(.horizontal, appearance.browserTheme == .classicMac ? 6 : 0)
+                    .padding(.vertical, appearance.browserTheme == .classicMac ? 3 : 0)
+                    .background {
+                        if appearance.browserTheme == .classicMac {
+                            ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                        }
+                    }
+                    .overlay {
+                        if appearance.browserTheme == .classicMac {
+                            Rectangle().strokeBorder(.black, lineWidth: 1)
+                        }
                     }
                     .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                 } else if model.filteredGitHubRepositories.isEmpty {
                     Text(model.query.isEmpty ? "No repositories available" : "No matching repositories")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
                         .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                 } else {
                     ScrollViewReader { scrollProxy in
@@ -961,6 +1132,7 @@ struct CompactSwitcherView: View {
                                         repository: repository,
                                         isSelected: model.selectedRepositoryID == repository.id,
                                         compact: true,
+                                        classicTheme: appearance.browserTheme == .classicMac,
                                         activate: {
                                             _ = model.activate(repository)
                                             close()
@@ -996,7 +1168,19 @@ struct CompactSwitcherView: View {
     private func compactSectionLabel(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
+            .padding(.horizontal, appearance.browserTheme == .classicMac ? 6 : 0)
+            .padding(.vertical, appearance.browserTheme == .classicMac ? 2 : 0)
+            .background {
+                if appearance.browserTheme == .classicMac {
+                    ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                }
+            }
+            .overlay {
+                if appearance.browserTheme == .classicMac {
+                    Rectangle().strokeBorder(.black, lineWidth: 1)
+                }
+            }
     }
 
     private var compactWindows: some View {
@@ -1035,14 +1219,24 @@ struct CompactSwitcherView: View {
             }
             .padding(8)
             .frame(width: compactWindowWidth, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .background {
+                if appearance.browserTheme == .classicMac {
+                    ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
+                } else {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                }
+            }
             .overlay {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: appearance.browserTheme == .classicMac ? 1 : 6)
                     .strokeBorder(
-                        selected ? Color.accentColor.opacity(0.85) : Color(nsColor: .separatorColor).opacity(0.35),
-                        lineWidth: selected ? 2 : 1
+                        appearance.browserTheme == .classicMac
+                            ? selected ? Color(red: 0.25, green: 0.35, blue: 0.65) : Color.black
+                            : selected ? Color.accentColor.opacity(0.85) : Color(nsColor: .separatorColor).opacity(0.35),
+                        lineWidth: appearance.browserTheme == .classicMac && selected ? 3 : appearance.browserTheme == .classicMac || selected ? 2 : 1
                     )
             }
+
         }
         .buttonStyle(.plain)
         .contextMenu {
@@ -1115,6 +1309,7 @@ private struct RepositoryResultCard: View {
     let repository: GitHubRepository
     let isSelected: Bool
     let compact: Bool
+    let classicTheme: Bool
     let activate: () -> Void
     let openPullRequests: () -> Void
 
@@ -1156,14 +1351,24 @@ private struct RepositoryResultCard: View {
                 .padding(.trailing, compact ? 30 : 38)
                 .padding(compact ? 7 : 12)
                 .frame(width: compact ? 200 : nil, height: compact ? 60 : 96, alignment: .leading)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: compact ? 4.5 : 6))
+                .background {
+                    if classicTheme {
+                        ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
+                    } else {
+                        RoundedRectangle(cornerRadius: compact ? 4.5 : 6)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    }
+                }
                 .overlay {
-                    RoundedRectangle(cornerRadius: compact ? 4.5 : 6)
+                    RoundedRectangle(cornerRadius: classicTheme ? 1 : (compact ? 4.5 : 6))
                         .strokeBorder(
-                            isSelected ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor).opacity(0.35),
-                            lineWidth: isSelected ? 2 : 1
+                            classicTheme
+                                ? isSelected ? Color(red: 0.25, green: 0.35, blue: 0.65) : Color.black
+                                : isSelected ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor).opacity(0.35),
+                            lineWidth: classicTheme || isSelected ? 2 : 1
                         )
                 }
+
             }
             .buttonStyle(.plain)
             .help("Open \(repository.fullName) on GitHub")
@@ -1171,12 +1376,28 @@ private struct RepositoryResultCard: View {
             Button(action: openPullRequests) {
                 Text("PRs")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(isHoveringPullRequests ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(
+                        classicTheme
+                            ? isHoveringPullRequests ? Color.white : Color.black
+                            : isHoveringPullRequests ? Color.accentColor : Color.secondary
+                    )
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background {
-                        Capsule()
-                            .fill(isHoveringPullRequests ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12))
+                        if classicTheme {
+                            ZStack {
+                                Rectangle().fill(.black).offset(x: 1, y: 1)
+                                Rectangle().fill(isHoveringPullRequests ? Color.black : Color(white: 0.90))
+                            }
+                        } else {
+                            Capsule()
+                                .fill(isHoveringPullRequests ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12))
+                        }
+                    }
+                    .overlay {
+                        if classicTheme {
+                            Rectangle().strokeBorder(.black, lineWidth: 1)
+                        }
                     }
             }
             .buttonStyle(.plain)
@@ -1230,10 +1451,24 @@ private struct RepositoryResultCard: View {
     private func repoBadge(_ text: String) -> some View {
         Text(text)
             .font(.system(size: 9, weight: .medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(classicTheme ? Color.black : Color.secondary)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
-            .background(.quaternary, in: Capsule())
+            .background {
+                if classicTheme {
+                    ZStack {
+                        Rectangle().fill(.black).offset(x: 1, y: 1)
+                        Rectangle().fill(Color(white: 0.90))
+                    }
+                } else {
+                    Capsule().fill(.quaternary)
+                }
+            }
+            .overlay {
+                if classicTheme {
+                    Rectangle().strokeBorder(.black, lineWidth: 1)
+                }
+            }
     }
 }
 
@@ -1260,6 +1495,7 @@ private struct RecentAppButton: View {
     let stripWidth: CGFloat
     let itemCenterX: CGFloat
     let badgeLabel: String?
+    let classicTheme: Bool
     let activate: () -> Void
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
@@ -1302,24 +1538,48 @@ private struct RecentAppButton: View {
                 .frame(width: iconSize, height: iconSize)
                 .overlay(alignment: .topTrailing) {
                     AppBadgeView(label: badgeLabel)
-                        .offset(x: 5, y: 4)
+                        .offset(x: classicTheme ? 2 : 5, y: classicTheme ? 1 : 4)
                 }
-                .padding(iconPadding)
+                .padding(classicTheme ? max(iconPadding, 7) : iconPadding)
                 .background {
-                    RoundedRectangle(cornerRadius: 11)
-                        .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
-                        .padding(-4)
+                    if classicTheme {
+                        ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
+                    } else {
+                        RoundedRectangle(cornerRadius: 11)
+                            .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
+                            .padding(-4)
+                    }
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 11)
-                        .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
-                        .padding(-4)
+                    if classicTheme {
+                        Rectangle()
+                            .strokeBorder(
+                                isSelected ? Color(red: 0.25, green: 0.35, blue: 0.65) : .black,
+                                lineWidth: 2
+                            )
+                    } else {
+                        RoundedRectangle(cornerRadius: 11)
+                            .strokeBorder(isSelected ? Color.accentColor.opacity(0.8) : .clear, lineWidth: 1.5)
+                            .padding(-4)
+                    }
                 }
 
                 Text(isSelected && stripWidth > 0 ? window.appName : " ")
                     .font(.caption2)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, classicTheme && isSelected ? 5 : 0)
+                    .padding(.vertical, classicTheme && isSelected ? 2 : 0)
+                    .background {
+                        if classicTheme, isSelected {
+                            ClassicMacCardBackground(cornerRadius: 0, shadowOffset: 1)
+                        }
+                    }
+                    .overlay {
+                        if classicTheme, isSelected {
+                            Rectangle().strokeBorder(.black, lineWidth: 1)
+                        }
+                    }
                     .offset(y: 2)
                     .frame(width: cellWidth, alignment: labelAlignment)
             }
@@ -1461,6 +1721,7 @@ private struct WindowCard: View {
     let window: WindowItem
     let dusty: Bool
     let tint: Color?
+    let classicTheme: Bool
     let isSelected: Bool
     let liveThumbnail: NSImage?
     let isRefreshingThumbnail: Bool
@@ -1485,8 +1746,17 @@ private struct WindowCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        ZStack {
             Button(action: select) {
+                Color.clear
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(-12)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(window.title)
+
+            VStack(alignment: .leading, spacing: 10) {
                 ZStack {
                     Color.clear
 
@@ -1541,10 +1811,8 @@ private struct WindowCard: View {
                 .contentShape(RoundedRectangle(cornerRadius: 5))
                 .animation(.easeInOut(duration: 0.18), value: window.thumbnailRevision)
                 .animation(.easeInOut(duration: 0.12), value: liveThumbnail != nil)
-            }
-            .buttonStyle(.plain)
-            .frame(maxWidth: .infinity)
-            HStack(alignment: .bottom) {
+                .allowsHitTesting(false)
+                HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(window.title).font(.headline).lineLimit(1)
                     Text(taskContext ?? " ")
@@ -1555,10 +1823,18 @@ private struct WindowCard: View {
                 }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
-                if !window.safariTabs.isEmpty { Text(L10n.format("%lld tabs", Int64(window.safariTabs.count))).font(.caption).foregroundStyle(.secondary).fixedSize() }
+                    .allowsHitTesting(false)
+                if !window.safariTabs.isEmpty {
+                    Text(L10n.format("%lld tabs", Int64(window.safariTabs.count)))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                        .allowsHitTesting(false)
+                }
                 if isRefreshingThumbnail, liveThumbnail == nil {
                     ProgressView()
                         .controlSize(.mini)
+                        .allowsHitTesting(false)
                         .frame(width: 18, height: 18)
                         .transition(.opacity)
                 }
@@ -1587,10 +1863,13 @@ private struct WindowCard: View {
                     }
                 }
             }
+            }
         }
         .padding(12)
         .background {
-            if let tint {
+            if classicTheme {
+                ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 3)
+            } else if let tint {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(tint.opacity(0.20))
             } else {
@@ -1599,12 +1878,14 @@ private struct WindowCard: View {
             }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 7.5)
+            RoundedRectangle(cornerRadius: classicTheme ? 1 : 7.5)
                 .strokeBorder(
-                    isSelected ? Color.accentColor.opacity(0.85) : (tint?.opacity(0.42) ?? .clear),
-                    lineWidth: isSelected ? 2 : 1
+                    classicTheme
+                        ? isSelected ? Color(red: 0.25, green: 0.35, blue: 0.65) : Color.black
+                        : isSelected ? Color.accentColor.opacity(0.85) : (tint?.opacity(0.42) ?? .clear),
+                    lineWidth: classicTheme && isSelected ? 3 : classicTheme || isSelected ? 2 : 1
                 )
-                .padding(1)
+                .padding(classicTheme ? 0 : 1)
         }
         .animation(.easeOut(duration: 0.08), value: isSelected)
         .contextMenu {
