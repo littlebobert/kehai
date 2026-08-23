@@ -202,7 +202,7 @@ struct SettingsView: View {
     private var integrationsSettings: some View {
         Form {
             Section("GitHub Repository Search") {
-                Text("Connect one or more GitHub accounts to include their repositories in Kehai search.")
+                Text("Add fine-grained GitHub tokens to include selected repositories in Kehai search. Token requirements are listed below.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {

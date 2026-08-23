@@ -260,23 +260,43 @@ struct GitHubConnectionView: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                Text(store.connections.isEmpty ? "Connect GitHub" : "Add another token")
-                    .font(.callout.weight(.medium))
+                if store.connections.isEmpty {
+                    Text("Connect GitHub")
+                        .font(.callout.weight(.medium))
+                }
                 SecureField("Personal access token", text: $store.newToken)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { addConnection() }
                 HStack {
-                    Text("Fine-grained tokens are limited to one resource owner. Add one token for each personal or organization account you want to search.")
+                    Text("Use one fine-grained token per resource owner (personal account or organization).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 12)
-                    Button(store.connections.isEmpty ? "Connect" : "Add Token") {
+                    Button(store.connections.isEmpty ? "Connect" : "Add another token") {
                         addConnection()
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(store.newToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.isLoading)
                 }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Fine-grained token requirements")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("• Repository access: select the repositories you want to search")
+                    Text("• Metadata: Read (added automatically)")
+                    Text("• Contents: Read — commit activity")
+                    Text("• Pull requests: Read — PR and review activity")
+                    Text("• Issues: Read — issue activity")
+                    Text("Organization approval or SSO authorization may also be required.")
+                        .padding(.top, 2)
+                    Text("Missing contribution permissions only reduce personalization; repository search still works.")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
             }
 
             if store.isAddingConnection {
@@ -290,9 +310,18 @@ struct GitHubConnectionView: View {
                       store.connections.isEmpty || store.connections.allSatisfy({ $0.errorMessage == nil }) {
                 Text(errorMessage).font(.caption).foregroundStyle(.red)
             } else {
-                Text("Tokens are stored separately in your login Keychain and used only with GitHub’s API.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Tokens are stored separately in your login Keychain and used only with GitHub’s API.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if store.hasLocalInteractionHistory {
+                        Button("Reset Ranking History") {
+                            store.clearLocalInteractionHistory()
+                        }
+                        .controlSize(.small)
+                    }
+                }
             }
         }
     }
@@ -334,11 +363,24 @@ private struct GitHubConnectionRow: View {
             }
             if let errorMessage = connection.errorMessage {
                 Text(errorMessage).font(.caption).foregroundStyle(.red)
+            } else if let contributionWarning = connection.contributionWarning {
+                Text("Personal activity unavailable: \(contributionWarning)")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             } else if let lastRefreshedAt = connection.lastRefreshedAt {
-                Text("Refreshed \(lastRefreshedAt, style: .relative)")
+                Text("Refreshed \(relativeRefreshTime(lastRefreshedAt))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func relativeRefreshTime(_ date: Date) -> String {
+        let secondsAgo = Date().timeIntervalSince(date)
+        if secondsAgo >= 0, secondsAgo < 60 { return "<1 min ago" }
+        if secondsAgo < 0, secondsAgo > -60 { return "in <1 min" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: date, relativeTo: Date())
     }
 }

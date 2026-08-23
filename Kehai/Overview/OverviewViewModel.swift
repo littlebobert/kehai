@@ -925,8 +925,7 @@ final class OverviewViewModel {
     }
 
     private func moveRepositorySelection(horizontal: Int, vertical: Int) {
-        let visibleLimit = isSwitcherMode ? 3 : 12
-        let repositories = Array(filteredGitHubRepositories.prefix(visibleLimit))
+        let repositories = filteredGitHubRepositories
         guard !repositories.isEmpty else {
             selectedRepositoryID = nil
             preserveSelectionOrSelectFirst()
@@ -1054,7 +1053,7 @@ final class OverviewViewModel {
     func activateCurrentSelection() -> Bool {
         if let selectedRepositoryID,
            let repository = filteredGitHubRepositories.first(where: { $0.id == selectedRepositoryID }) {
-            return NSWorkspace.shared.open(repository.htmlURL)
+            return activate(repository)
         }
         if let focusedAppKey,
            let window = recentAppWindows.first(where: { appKey(for: $0) == focusedAppKey }) {
@@ -1118,7 +1117,14 @@ final class OverviewViewModel {
 
     @discardableResult
     func activate(_ repository: GitHubRepository) -> Bool {
-        NSWorkspace.shared.open(repository.htmlURL)
+        githubRepositoryStore.recordInteraction(repositoryID: repository.id)
+        return NSWorkspace.shared.open(repository.htmlURL)
+    }
+
+    @discardableResult
+    func openPullRequests(for repository: GitHubRepository) -> Bool {
+        githubRepositoryStore.recordInteraction(repositoryID: repository.id)
+        return NSWorkspace.shared.open(repository.htmlURL.appending(path: "pulls"))
     }
 
     func focusApp(_ windowID: CGWindowID) {

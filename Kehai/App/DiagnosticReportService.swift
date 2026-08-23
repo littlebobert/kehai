@@ -60,8 +60,9 @@ final class DiagnosticReportService {
 
         Privacy
         This report intentionally excludes names, email addresses, app names, bundle identifiers,
-        window titles, URLs, file paths, screenshots, API keys, window IDs, task-group names,
-        search queries, activity history, and unified system log messages.
+        window titles, URLs, repository IDs, file paths, screenshots, API keys, window IDs,
+        task-group names, search queries, identifiable activity history, and unified system log messages.
+        GitHub organization and repository names may appear only in repository-ranking diagnostics.
         """
         return report
     }

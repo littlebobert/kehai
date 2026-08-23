@@ -466,11 +466,11 @@ struct OverviewView: View {
                             ? "Loading repositories…"
                             : model.query.isEmpty ? "No repositories available" : "No matching repositories")
                             .foregroundStyle(.secondary)
-                            .frame(height: 72, alignment: .topLeading)
+                            .frame(height: 96, alignment: .topLeading)
                     } else {
                         ScrollView(.horizontal) {
                             LazyHStack(spacing: 12) {
-                                ForEach(repositories.prefix(12)) { repository in
+                                ForEach(repositories) { repository in
                                     RepositoryResultCard(
                                         repository: repository,
                                         isSelected: model.selectedRepositoryID == repository.id,
@@ -480,7 +480,7 @@ struct OverviewView: View {
                                             close()
                                         },
                                         openPullRequests: {
-                                            _ = NSWorkspace.shared.open(repository.htmlURL.appending(path: "pulls"))
+                                            _ = model.openPullRequests(for: repository)
                                             close()
                                         }
                                     )
@@ -595,13 +595,14 @@ struct CompactSwitcherView: View {
         ZStack {
             VStack(spacing: 0) {
                 if opensUp {
-                    compactWindows
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 12)
-                    compactRepositoryShelf
                     compactHeader
+                        .padding(.top, 6)
                         .padding(.bottom, 8)
+                    compactWindows
+                        .padding(.top, 4)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .padding(.horizontal, 12)
+                    compactRepositoryShelf
                     appStrip
                         .padding(.bottom, 2)
                 } else {
@@ -952,27 +953,38 @@ struct CompactSwitcherView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
                 } else {
-                    ScrollView(.horizontal) {
-                        LazyHStack(spacing: 7) {
-                            ForEach(model.filteredGitHubRepositories.prefix(12)) { repository in
-                                RepositoryResultCard(
-                                    repository: repository,
-                                    isSelected: model.selectedRepositoryID == repository.id,
-                                    compact: true,
-                                    activate: {
-                                        _ = model.activate(repository)
-                                        close()
-                                    },
-                                    openPullRequests: {
-                                        _ = NSWorkspace.shared.open(repository.htmlURL.appending(path: "pulls"))
-                                        close()
-                                    }
-                                )
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 7) {
+                                ForEach(model.filteredGitHubRepositories) { repository in
+                                    RepositoryResultCard(
+                                        repository: repository,
+                                        isSelected: model.selectedRepositoryID == repository.id,
+                                        compact: true,
+                                        activate: {
+                                            _ = model.activate(repository)
+                                            close()
+                                        },
+                                        openPullRequests: {
+                                            _ = model.openPullRequests(for: repository)
+                                            close()
+                                        }
+                                    )
+                                    .id("compact-repository-\(repository.id)")
+                                }
+                            }
+                        }
+                        .scrollIndicators(.never)
+                        .frame(height: 60)
+                        .onChange(of: model.selectedRepositoryID) { _, repositoryID in
+                            guard let repositoryID else { return }
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                scrollProxy.scrollTo("compact-repository-\(repositoryID)", anchor: .center)
                             }
                         }
                     }
-                    .scrollIndicators(.never)
-                    .frame(height: 60)
                 }
             }
             .padding(.horizontal, 12)
