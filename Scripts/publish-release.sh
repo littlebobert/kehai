@@ -13,7 +13,7 @@ fi
 REPO="${GITHUB_REPO:-littlebobert/kehai}"
 LANDING_PAGE="${LANDING_PAGE:-$ROOT_DIR/../littlebobert.github.io/kehai.html}"
 APPCAST_PATH="${APPCAST_PATH:-$(dirname "$LANDING_PAGE")/kehai-appcast.xml}"
-APPCAST_PRODUCT_LINK="${APPCAST_PRODUCT_LINK:-https://littlebobert.github.io/kehai.html}"
+APPCAST_PRODUCT_LINK="${APPCAST_PRODUCT_LINK:-https://kehai.jp/}"
 SPARKLE_ACCOUNT="${SPARKLE_ACCOUNT:-kehai}"
 TOOLS_DIR="$ROOT_DIR/.build/ReleaseDerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
 GENERATE_APPCAST="${SPARKLE_GENERATE_APPCAST:-$TOOLS_DIR/generate_appcast}"

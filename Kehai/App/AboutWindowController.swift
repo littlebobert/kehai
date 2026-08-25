@@ -28,7 +28,7 @@ struct AboutView: View {
             Text("A faster way to switch apps and find windows.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Link("Made in Japan", destination: URL(string: "https://littlebobert.github.io/kehai.html")!)
+            Link("Made in Japan", destination: URL(string: "https://kehai.jp/")!)
                 .font(.callout)
                 .foregroundStyle(.link)
             Button("Report a Bug…") {
