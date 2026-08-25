@@ -668,7 +668,19 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 }
                 return nil
             }
-            guard !editingText else { return event }
+            let isComposingInput = (event.window?.firstResponder as? NSTextView)?.hasMarkedText() == true
+            let isVerticalArrow = event.keyCode == 125 || event.keyCode == 126
+            if editingText, isVerticalArrow, !isComposingInput, modifiers.isEmpty || modifiers == .option {
+                if event.window === self.compactWindow {
+                    self.model.compactSearchBlurRequest += 1
+                    self.compactWindow?.makeFirstResponder(self.compactWindow?.contentView)
+                } else {
+                    self.model.searchBlurRequest += 1
+                    self.window?.makeFirstResponder(self.window?.contentView)
+                }
+            } else if editingText {
+                return event
+            }
 
             if event.keyCode == 48, modifiers.isEmpty || modifiers == .shift {
                 self.model.cycleSelectionByApp(modifiers == .shift ? -1 : 1)
