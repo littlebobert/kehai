@@ -173,6 +173,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         githubRefreshTimer = nil
         activityMonitor.stop()
         windowInventoryMonitor.stop()
+        dockBadgeMonitor.setActive(false)
         viewModel.prepareForTermination()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
     }

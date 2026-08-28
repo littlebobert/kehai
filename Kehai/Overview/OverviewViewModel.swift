@@ -765,11 +765,20 @@ final class OverviewViewModel {
     }
 
     func finishTermination() async {
-        if let liveThumbnailTask {
-            await liveThumbnailTask.value
-            self.liveThumbnailTask = nil
-        }
-        while activeRefreshCount > 0 {
+        // Don't await `liveThumbnailTask`. It may be parked inside a
+        // ScreenCaptureKit call that ignores cancellation, and there is nothing
+        // left to wait for: both this type and LiveThumbnailService are
+        // @MainActor, so `prepareForTermination` cannot have interleaved between
+        // the service's pre-capture guard and `startCapture()`, which means it
+        // already saw and tore down any stream that will ever exist.
+        liveThumbnailTask = nil
+
+        // An in-flight refresh bails at its next suspension point, but the call
+        // it is currently parked in (ScreenCaptureKit, Accessibility, Apple
+        // Events) can run for seconds and cannot be interrupted. Give it a brief
+        // grace period rather than holding up the quit behind it.
+        let deadline = ContinuousClock.now.advanced(by: .milliseconds(250))
+        while activeRefreshCount > 0, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(25))
         }
         await liveThumbnails.stop()
@@ -1636,30 +1645,34 @@ final class OverviewViewModel {
         includeSafariTabs: Bool,
         showsGlobalLoading: Bool
     ) async -> [(WindowItem, SCWindow)]? {
-        guard !shouldFreezeInventory else { return nil }
+        guard !isTerminating, !shouldFreezeInventory else { return nil }
         guard !isReconcilingInventory else { return nil }
         isReconcilingInventory = true
         let epochAtStart = inventoryEpoch
         defer { isReconcilingInventory = false }
         do {
             let seen = await history.lastSeen()
-            // Re-check after every await — a drag may have started mid-catalog.
-            guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+            // Re-check after every await — a drag may have started, or the app may
+            // have begun terminating, mid-catalog.
+            guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
                 SafeDiagnosticLog.shared.record("window-inventory: discarded after freeze mid-catalog")
                 return nil
             }
             let pairs = try await catalog.windows(lastSeen: seen)
-            guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+            guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
                 SafeDiagnosticLog.shared.record("window-inventory: discarded sparse catalog during drag")
                 return nil
             }
             logger.notice("Window catalog returned \(pairs.count) capture candidates")
             var items = pairs.map(\.0)
 
-            if includeSafariTabs {
+            // Enumerating Safari tabs is a blocking Apple Event that routinely takes
+            // seconds, and it cannot be cancelled once started. Never begin one while
+            // the app is shutting down.
+            if includeSafariTabs, !isTerminating {
                 do {
                     let tabs = try await safari.listTabs()
-                    guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+                    guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
                         SafeDiagnosticLog.shared.record("window-inventory: discarded after freeze mid-safari")
                         return nil
                     }
@@ -1728,7 +1741,7 @@ final class OverviewViewModel {
                 return nil
             }
 
-            guard inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
+            guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
                 SafeDiagnosticLog.shared.record("window-inventory: discarded before apply during drag")
                 return nil
             }
