@@ -331,7 +331,7 @@ PY
 
 python3 - "$LANDING_PAGE" "$VERSION" "$DOWNLOAD_URL" "$NOTES_TRANSLATIONS_FILE" <<'PY'
 from pathlib import Path
-import html, json, re, sys
+import datetime, html, json, re, sys
 page_path = Path(sys.argv[1])
 version = sys.argv[2]
 download_url = sys.argv[3]
@@ -349,7 +349,12 @@ items = "\n".join(
     f'          <li data-label-en="{html.escape(en, quote=True)}" data-label-ja="{html.escape(ja, quote=True)}">{html.escape(en)}</li>'
     for en, ja in zip(en_notes, ja_notes)
 )
-entry = f'''        <h2>{html.escape(version)}</h2>\n        <ul>\n{items}\n        </ul>\n'''
+english_months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+today = datetime.date.today()
+date_en = f"{english_months[today.month - 1]} {today.day}, {today.year}"
+date_ja = f"{today.year}年{today.month}月{today.day}日"
+date_line = f'        <span class="release-date" data-label-en="{date_en}" data-label-ja="{date_ja}">{date_en}</span>'
+entry = f'''        <h2>{html.escape(version)}</h2>\n{date_line}\n        <ul>\n{items}\n        </ul>\n'''
 marker = '        <summary data-label-en="Changelog" data-label-ja="変更履歴">Changelog</summary>\n'
 if marker not in page:
     raise SystemExit("error: changelog marker not found")
