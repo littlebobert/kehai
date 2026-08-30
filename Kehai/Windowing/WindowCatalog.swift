@@ -3,6 +3,18 @@ import ApplicationServices
 import OSLog
 import ScreenCaptureKit
 
+/// One pass of the window inventory, plus the evidence needed to tell a genuinely
+/// closed window apart from one that is merely missing from a sparse snapshot.
+struct WindowCatalogSnapshot {
+    let pairs: [(WindowItem, SCWindow)]
+
+    /// Windows ScreenCaptureKit still reports, whose owning process answered an
+    /// Accessibility query that did not contain them. The window server keeps
+    /// serving records for windows that are already closed, so Accessibility is
+    /// the authority: these are gone, not just absent from one snapshot.
+    let accessibilityContradictedWindowIDs: Set<CGWindowID>
+}
+
 @MainActor
 final class WindowCatalog {
     private let logger = Logger(subsystem: "com.justin.Kehai", category: "WindowCatalog")
@@ -13,7 +25,7 @@ final class WindowCatalog {
         self.excludedApps = excludedApps
     }
 
-    func windows(lastSeen: [CGWindowID: Date]) async throws -> [(WindowItem, SCWindow)] {
+    func snapshot(lastSeen: [CGWindowID: Date]) async throws -> WindowCatalogSnapshot {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
         let ownPID = ProcessInfo.processInfo.processIdentifier
         let candidates = content.windows.filter { window in
@@ -52,6 +64,7 @@ final class WindowCatalog {
             liveWindowIDs: liveWindowIDs
         )
 
+        var accessibilityContradictedWindowIDs: Set<CGWindowID> = []
         let items: [(WindowItem, SCWindow)] = candidates.compactMap { window -> (WindowItem, SCWindow)? in
             guard let app = window.owningApplication else { return nil }
             let title = window.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -65,6 +78,7 @@ final class WindowCatalog {
                !validatedSafariWindowIDs.contains(window.windowID) {
                 logger.notice("Excluded ScreenCaptureKit Safari window without a unique Accessibility match")
                 SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched Safari window")
+                accessibilityContradictedWindowIDs.insert(window.windowID)
                 return nil
             }
 
@@ -76,6 +90,7 @@ final class WindowCatalog {
                !signatures.contains(where: { $0.matches(title: title, frame: window.frame) }) {
                 logger.notice("Excluded ScreenCaptureKit window without a matching Accessibility window")
                 SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched window")
+                accessibilityContradictedWindowIDs.insert(window.windowID)
                 return nil
             }
 
@@ -96,7 +111,10 @@ final class WindowCatalog {
         let pairsByID: [CGWindowID: (WindowItem, SCWindow)] = Dictionary(
             uniqueKeysWithValues: items.map { ($0.0.id, $0) }
         )
-        return orderedItems.compactMap { pairsByID[$0.id] }
+        return WindowCatalogSnapshot(
+            pairs: orderedItems.compactMap { pairsByID[$0.id] },
+            accessibilityContradictedWindowIDs: accessibilityContradictedWindowIDs
+        )
     }
 
     private static func isUserSwitchableApplication(_ application: NSRunningApplication) -> Bool {

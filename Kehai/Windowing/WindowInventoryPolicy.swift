@@ -10,14 +10,21 @@ enum WindowInventoryPolicy {
     /// snapshot rather than a real close. Windows from apps that have already quit
     /// are not protected — otherwise quitting QuickTime with many movies open would
     /// look like a 60% inventory collapse and freeze the ghost windows in place.
+    /// Windows Accessibility positively contradicted are not protected either:
+    /// closing several windows of a running app is a real close, not a sparse read.
     static func isSparseSnapshot(
         previous: [WindowItem],
         current: [WindowItem],
+        accessibilityContradictedWindowIDs: Set<CGWindowID> = [],
         isProcessRunning: (pid_t) -> Bool = isProcessRunning
     ) -> Bool {
         let currentIDs = Set(current.map(\.id))
         let protectedPreviousIDs = Set(previous
-            .filter { $0.bundleIdentifier != "com.apple.Safari" && isProcessRunning($0.processID) }
+            .filter {
+                $0.bundleIdentifier != "com.apple.Safari"
+                    && isProcessRunning($0.processID)
+                    && !accessibilityContradictedWindowIDs.contains($0.id)
+            }
             .map(\.id))
         let protectedCurrentCount = current
             .filter { $0.bundleIdentifier != "com.apple.Safari" }

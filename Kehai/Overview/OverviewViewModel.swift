@@ -1658,7 +1658,8 @@ final class OverviewViewModel {
                 SafeDiagnosticLog.shared.record("window-inventory: discarded after freeze mid-catalog")
                 return nil
             }
-            let pairs = try await catalog.windows(lastSeen: seen)
+            let snapshot = try await catalog.snapshot(lastSeen: seen)
+            let pairs = snapshot.pairs
             guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
                 SafeDiagnosticLog.shared.record("window-inventory: discarded sparse catalog during drag")
                 return nil
@@ -1714,12 +1715,17 @@ final class OverviewViewModel {
             // mid-drag (or under load) otherwise looks like the UI is "filtering".
             // Safari is the exception: keeping every missing window while Safari is
             // still running leaves genuinely closed browser windows in the inventory.
+            // A window Accessibility contradicted is another exception, and without
+            // it a closed window of a still-running app is re-added on every tick:
+            // one flaky AX read admits the ghost, and this loop then pins it there
+            // for as long as the panel stays key.
             items.removeAll { !WindowInventoryPolicy.isProcessRunning($0.processID) }
             if !includeSafariTabs {
                 let newIDs = Set(items.map(\.id))
                 for previous in windows where !newIDs.contains(previous.id) {
                     if WindowInventoryPolicy.isProcessRunning(previous.processID),
-                       previous.bundleIdentifier != "com.apple.Safari" {
+                       previous.bundleIdentifier != "com.apple.Safari",
+                       !snapshot.accessibilityContradictedWindowIDs.contains(previous.id) {
                         items.append(previous)
                     }
                 }
@@ -1731,7 +1737,11 @@ final class OverviewViewModel {
             let currentIDs = Set(items.map(\.id))
             // Guard against sparse mid-drag / transient SCK snapshots replacing a healthy list.
             // Missing Safari windows and windows from apps that have quit are authoritative.
-            if WindowInventoryPolicy.isSparseSnapshot(previous: windows, current: items) {
+            if WindowInventoryPolicy.isSparseSnapshot(
+                previous: windows,
+                current: items,
+                accessibilityContradictedWindowIDs: snapshot.accessibilityContradictedWindowIDs
+            ) {
                 let removedCount = previousIDs.subtracting(currentIDs).count
                 logger.notice("Rejected sparse inventory snapshot (\(items.count) vs \(self.windows.count))")
                 SafeDiagnosticLog.shared.record(

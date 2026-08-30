@@ -225,6 +225,55 @@ final class KehaiTests: XCTestCase {
         )
     }
 
+    func testSparseGuardAllowsAccessibilityConfirmedCloses() {
+        let previous = (1...10).map { id in
+            WindowItem(
+                id: CGWindowID(id),
+                processID: 10,
+                appName: "Terminal",
+                bundleIdentifier: "com.apple.Terminal",
+                title: "Shell \(id)",
+                frame: .zero,
+                isOnScreen: true
+            )
+        }
+        let survivors = Array(previous.prefix(3))
+        let closed = Set(previous.dropFirst(3).map(\.id))
+
+        XCTAssertFalse(
+            WindowInventoryPolicy.isSparseSnapshot(
+                previous: previous,
+                current: survivors,
+                accessibilityContradictedWindowIDs: closed,
+                isProcessRunning: { _ in true }
+            )
+        )
+    }
+
+    func testSparseGuardStillRejectsUnexplainedLoss() {
+        let previous = (1...10).map { id in
+            WindowItem(
+                id: CGWindowID(id),
+                processID: 10,
+                appName: "Terminal",
+                bundleIdentifier: "com.apple.Terminal",
+                title: "Shell \(id)",
+                frame: .zero,
+                isOnScreen: true
+            )
+        }
+
+        // Only one window is accounted for, so the rest are still an unexplained collapse.
+        XCTAssertTrue(
+            WindowInventoryPolicy.isSparseSnapshot(
+                previous: previous,
+                current: Array(previous.prefix(3)),
+                accessibilityContradictedWindowIDs: [previous[9].id],
+                isProcessRunning: { _ in true }
+            )
+        )
+    }
+
     func testWindowMatchPrefersExactTitle() {
         let item = WindowItem(id: 1, processID: 1, appName: "Terminal", bundleIdentifier: nil, title: "Build", frame: CGRect(x: 10, y: 10, width: 500, height: 300), isOnScreen: true, lastSeen: Date())
         let exact = WindowMatchCandidate(title: "Build", frame: .zero).score(for: item)
