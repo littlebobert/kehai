@@ -1139,7 +1139,10 @@ final class OverviewViewModel {
     @discardableResult
     func openPullRequests(for repository: GitHubRepository) -> Bool {
         githubRepositoryStore.recordInteraction(repositoryID: repository.id)
-        return NSWorkspace.shared.open(repository.htmlURL.appending(path: "pulls"))
+        let url = repository.htmlURL
+            .appending(path: "pulls")
+            .appending(queryItems: [URLQueryItem(name: "q", value: "is:pr is:open sort:updated-desc")])
+        return NSWorkspace.shared.open(url)
     }
 
     func focusApp(_ windowID: CGWindowID) {
