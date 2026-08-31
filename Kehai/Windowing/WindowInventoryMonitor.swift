@@ -15,7 +15,12 @@ final class WindowInventoryMonitor {
     private var applicationObservations: [pid_t: ApplicationObservation] = [:]
     private var reconciliationTimer: Timer?
     private var changeTask: Task<Void, Never>?
+    private var initialEnumerationTask: Task<Void, Never>?
     private var isRunning = false
+
+    /// Ceiling for each synchronous Accessibility round-trip. Without it, a single
+    /// unresponsive app can stall a call for the system default (~6s).
+    private static let accessibilityMessagingTimeout: Float = 0.5
 
     init(
         changed: @escaping @MainActor () -> Void,
@@ -43,8 +48,15 @@ final class WindowInventoryMonitor {
             })
         }
 
-        for application in NSWorkspace.shared.runningApplications {
-            observe(application)
+        // Observing an app costs several synchronous Accessibility round-trips into
+        // that process. Enumerate off the launch path, yielding between apps, so the
+        // first window can appear without waiting on IPC to every running app.
+        initialEnumerationTask = Task { @MainActor [weak self] in
+            for application in NSWorkspace.shared.runningApplications {
+                guard let self, self.isRunning, !Task.isCancelled else { return }
+                self.observe(application)
+                await Task.yield()
+            }
         }
 
         reconciliationTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
@@ -57,6 +69,8 @@ final class WindowInventoryMonitor {
     func stop() {
         guard isRunning else { return }
         isRunning = false
+        initialEnumerationTask?.cancel()
+        initialEnumerationTask = nil
         changeTask?.cancel()
         changeTask = nil
         reconciliationTimer?.invalidate()
@@ -95,6 +109,7 @@ final class WindowInventoryMonitor {
               let observer else { return }
 
         let applicationElement = AXUIElementCreateApplication(processID)
+        AXUIElementSetMessagingTimeout(applicationElement, Self.accessibilityMessagingTimeout)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         for notification in [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification] {
             AXObserverAddNotification(observer, applicationElement, notification as CFString, refcon)
@@ -123,6 +138,8 @@ final class WindowInventoryMonitor {
            let windows = value as? [AXUIElement] {
             observation.windowElements = windows
             for element in windows {
+                // The messaging timeout is per-element, not inherited from the app element.
+                AXUIElementSetMessagingTimeout(element, Self.accessibilityMessagingTimeout)
                 AXObserverAddNotification(observation.observer, element, kAXUIElementDestroyedNotification as CFString, refcon)
                 AXObserverAddNotification(observation.observer, element, kAXTitleChangedNotification as CFString, refcon)
             }
