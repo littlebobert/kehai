@@ -45,7 +45,7 @@ struct GroupingControl: View {
                 .buttonStyle(.bordered)
                 .controlSize(.regular)
                 .disabled(model.isLoading || model.isGrouping)
-                .help("Use AI with downsampled window screenshots to infer task groups · Command-R")
+                .help("Use AI with downsampled window screenshots to infer task groups · Command-Shift-R")
                 .frame(height: 24, alignment: .topLeading)
             }
 

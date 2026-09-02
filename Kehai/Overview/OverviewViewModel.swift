@@ -1901,9 +1901,10 @@ final class OverviewViewModel {
         await refreshTaskGroups()
     }
 
-    func refreshWindows() async {
+    func refreshBrowser() async {
         guard !isGrouping, !isLoading else { return }
         await refresh(generateInitialGroups: false)
+        await githubRepositoryStore.refreshAll()
     }
 
     func refreshAndRegenerateGroups() async {

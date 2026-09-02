@@ -432,14 +432,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         viewModel.cycleSelectionByApp(direction)
     }
 
-    func refreshWindows() {
+    func refreshBrowserContent() {
         permissionManager.refresh()
         guard permissionManager.hasCorePermissions else {
             showSettings()
             return
         }
         panelController.show()
-        Task { await viewModel.refreshWindows() }
+        Task { await viewModel.refreshBrowser() }
     }
 
     func regenerateGroups() {

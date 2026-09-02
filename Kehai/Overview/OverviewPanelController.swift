@@ -605,7 +605,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             }
             if modifiers == .command,
                event.charactersIgnoringModifiers?.lowercased() == "r" {
-                Task { await self.model.refreshWindows() }
+                Task { await self.model.refreshBrowser() }
                 return nil
             }
             if modifiers.contains(.command),

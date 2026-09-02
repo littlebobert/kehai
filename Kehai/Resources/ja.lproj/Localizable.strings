@@ -13,7 +13,7 @@
 "Previous App" = "前のアプリ";
 "Generate Groups" = "グループを生成";
 "Regenerate Groups" = "グループを再生成";
-"Refresh Windows" = "ウインドウを更新";
+"Refresh Browser" = "ブラウザを更新";
 "Search" = "検索";
 "Welcome to Kehai" = "Kehaiへようこそ";
 "Kehai helps you return to interrupted work. Press Command+Shift+Space any time you forget where you were." = "Kehaiは中断した作業への復帰を助けます。何をしていたか思い出せないときは、いつでもCommand+Shift+Spaceを押してください。";
@@ -109,7 +109,7 @@
 "Move Kehai to Applications?" = "Kehaiをアプリケーションに移動しますか？";
 "Running Kehai from Applications keeps permissions, updates, Dock shortcuts, and launches tied to one stable copy." = "Kehaiをアプリケーションフォルダから実行すると、権限、アップデート、Dockショートカット、起動先が1つの安定したコピーにまとまります。";
 "Use the arrow keys, then press Return. Escape chooses Not Now." = "矢印キーで選び、Returnを押してください。Escapeを押すと「今はしない」を選択します。";
-"Use AI with downsampled window screenshots to infer task groups · Command-R" = "縮小したウインドウのスクリーンショットをAIで解析してタスクグループを推定 · Command-R";
+"Use AI with downsampled window screenshots to infer task groups · Command-Shift-R" = "縮小したウインドウのスクリーンショットをAIで解析してタスクグループを推定 · Command-Shift-R";
 "Group by task: Command-1 · Sort all by recent: Command-2" = "タスク別：Command-1 · 最近使った順：Command-2";
 "Exclude hidden windows" = "非表示のウインドウを除外";
 "Hide windows you have marked as hidden" = "非表示に設定したウインドウを隠します";

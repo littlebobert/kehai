@@ -70,8 +70,8 @@ struct KehaiApp: App {
                 }
                 .keyboardShortcut(.tab, modifiers: .shift)
                 Divider()
-                Button("Refresh Windows") {
-                    appDelegate.coordinator.refreshWindows()
+                Button("Refresh Browser") {
+                    appDelegate.coordinator.refreshBrowserContent()
                 }
                 .keyboardShortcut("r", modifiers: .command)
                 Button("Regenerate Groups") {
