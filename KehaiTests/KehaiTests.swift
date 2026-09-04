@@ -274,6 +274,54 @@ final class KehaiTests: XCTestCase {
         )
     }
 
+    func testSparseStreakAcceptsPersistentStableSnapshot() {
+        var streak = SparseSnapshotStreak()
+        let start = Date()
+        let ids: Set<CGWindowID> = [1, 2, 3, 4]
+
+        XCTAssertFalse(streak.recordRejection(currentIDs: ids, at: start))
+        XCTAssertFalse(streak.recordRejection(currentIDs: ids, at: start.addingTimeInterval(2)))
+        // Third rejection, but not enough wall-clock time yet.
+        XCTAssertFalse(streak.recordRejection(currentIDs: ids, at: start.addingTimeInterval(4)))
+        // Same snapshot, stable for longer than any drag: accept.
+        XCTAssertTrue(streak.recordRejection(currentIDs: ids, at: start.addingTimeInterval(6)))
+    }
+
+    func testSparseStreakToleratesSmallChurn() {
+        var streak = SparseSnapshotStreak()
+        let start = Date()
+
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3, 4], at: start))
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3, 5], at: start.addingTimeInterval(3)))
+        XCTAssertTrue(streak.recordRejection(currentIDs: [1, 2, 3, 5], at: start.addingTimeInterval(6)))
+    }
+
+    func testSparseStreakRestartsWhenSnapshotChanges() {
+        var streak = SparseSnapshotStreak()
+        let start = Date()
+
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3, 4], at: start))
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3, 4], at: start.addingTimeInterval(3)))
+        // A very different sparse read is a different transient, not the same truth.
+        XCTAssertFalse(streak.recordRejection(currentIDs: [7, 8, 9, 10], at: start.addingTimeInterval(6)))
+        XCTAssertEqual(streak.count, 1)
+        XCTAssertFalse(streak.recordRejection(currentIDs: [7, 8, 9, 10], at: start.addingTimeInterval(9)))
+        XCTAssertFalse(streak.recordRejection(currentIDs: [7, 8, 9, 10], at: start.addingTimeInterval(10)))
+        XCTAssertTrue(streak.recordRejection(currentIDs: [7, 8, 9, 10], at: start.addingTimeInterval(12)))
+    }
+
+    func testSparseStreakResetClearsHistory() {
+        var streak = SparseSnapshotStreak()
+        let start = Date()
+
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3], at: start))
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3], at: start.addingTimeInterval(3)))
+        streak.reset()
+        XCTAssertEqual(streak.count, 0)
+        XCTAssertFalse(streak.recordRejection(currentIDs: [1, 2, 3], at: start.addingTimeInterval(6)))
+        XCTAssertEqual(streak.count, 1)
+    }
+
     func testWindowMatchPrefersExactTitle() {
         let item = WindowItem(id: 1, processID: 1, appName: "Terminal", bundleIdentifier: nil, title: "Build", frame: CGRect(x: 10, y: 10, width: 500, height: 300), isOnScreen: true, lastSeen: Date())
         let exact = WindowMatchCandidate(title: "Build", frame: .zero).score(for: item)

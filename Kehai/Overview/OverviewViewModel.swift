@@ -171,6 +171,7 @@ final class OverviewViewModel {
     private var activeRefreshCount = 0
     private var isTerminating = false
     private var thumbnailCapturedAt: [CGWindowID: Date] = [:]
+    private var sparseSnapshotStreak = SparseSnapshotStreak()
     private static let thumbnailStaleInterval: TimeInterval = 5 * 60
     private let catalog: WindowCatalog
     private let thumbnails: ThumbnailService
@@ -1740,18 +1741,41 @@ final class OverviewViewModel {
             let currentIDs = Set(items.map(\.id))
             // Guard against sparse mid-drag / transient SCK snapshots replacing a healthy list.
             // Missing Safari windows and windows from apps that have quit are authoritative.
-            if WindowInventoryPolicy.isSparseSnapshot(
+            let looksSparse = WindowInventoryPolicy.isSparseSnapshot(
                 previous: windows,
                 current: items,
                 accessibilityContradictedWindowIDs: snapshot.accessibilityContradictedWindowIDs
-            ) {
+            )
+            // A sparse snapshot that persists across several reconciles is not a
+            // transient read — it's what actually survived sleep/wake or a display
+            // change. Accept it rather than pinning a stale inventory forever.
+            let acceptPersistentSparse = looksSparse
+                && sparseSnapshotStreak.recordRejection(currentIDs: currentIDs)
+            if looksSparse, !acceptPersistentSparse {
                 let removedCount = previousIDs.subtracting(currentIDs).count
                 logger.notice("Rejected sparse inventory snapshot (\(items.count) vs \(self.windows.count))")
                 SafeDiagnosticLog.shared.record(
-                    "window-inventory: rejected sparse snapshot new=\(items.count) previous=\(windows.count) removed=\(removedCount)"
+                    "window-inventory: rejected sparse snapshot new=\(items.count) previous=\(windows.count) removed=\(removedCount) streak=\(sparseSnapshotStreak.count)"
                 )
                 if showsGlobalLoading { isLoading = false }
-                return nil
+                // The inventory stays put, but thumbnails must not be held hostage by
+                // it: windows the snapshot did return are real and capturable now.
+                let knownIDs = Set(windows.map(\.id))
+                return pairs.filter {
+                    knownIDs.contains($0.0.id) && thumbnailRefreshIDs.contains($0.0.id)
+                }
+            }
+            if acceptPersistentSparse {
+                logger.notice("Accepted persistent sparse inventory snapshot (\(items.count) vs \(self.windows.count))")
+                SafeDiagnosticLog.shared.record(
+                    "window-inventory: accepted persistent sparse snapshot new=\(items.count) previous=\(windows.count)"
+                )
+            }
+            // Background ticks pad `items` with still-running windows, so they can
+            // never look sparse and say nothing about the streak. Only an unpadded
+            // full snapshot that came back healthy proves the sparse reads were noise.
+            if includeSafariTabs || acceptPersistentSparse {
+                sparseSnapshotStreak.reset()
             }
 
             guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {

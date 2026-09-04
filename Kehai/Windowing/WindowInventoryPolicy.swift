@@ -36,3 +36,42 @@ enum WindowInventoryPolicy {
             && Double(protectedCurrentCount) < Double(protectedPreviousIDs.count) * 0.6
     }
 }
+
+/// Escape hatch for `isSparseSnapshot`. A transient ScreenCaptureKit / Accessibility
+/// read is sparse once or twice; a snapshot that keeps coming back with the same
+/// windows for several reconciles spanning real time is the truth (typically after
+/// sleep/wake or a display reconfigure). Without this, a large pre-sleep inventory
+/// blocks every later inventory and, with it, every thumbnail refresh until relaunch.
+struct SparseSnapshotStreak {
+    static let acceptanceCount = 3
+    static let acceptanceInterval: TimeInterval = 5
+
+    private(set) var count = 0
+    private var firstRejectionDate: Date?
+    private var lastIDs: Set<CGWindowID> = []
+
+    /// Records that a sparse snapshot was rejected. Returns true when the streak
+    /// is long and stable enough that the snapshot should be accepted instead.
+    mutating func recordRejection(currentIDs: Set<CGWindowID>, at date: Date = Date()) -> Bool {
+        if count > 0, Self.isSimilar(currentIDs, lastIDs) {
+            count += 1
+        } else {
+            count = 1
+            firstRejectionDate = date
+        }
+        lastIDs = currentIDs
+        guard count >= Self.acceptanceCount, let firstRejectionDate else { return false }
+        return date.timeIntervalSince(firstRejectionDate) >= Self.acceptanceInterval
+    }
+
+    mutating func reset() {
+        count = 0
+        firstRejectionDate = nil
+        lastIDs = []
+    }
+
+    /// Windows open and close between ticks; a couple of differences is still "the same" snapshot.
+    private static func isSimilar(_ lhs: Set<CGWindowID>, _ rhs: Set<CGWindowID>) -> Bool {
+        lhs.symmetricDifference(rhs).count <= 2
+    }
+}
