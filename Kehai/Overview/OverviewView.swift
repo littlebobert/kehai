@@ -37,7 +37,10 @@ struct OverviewView: View {
     private var columns: [GridItem] {
         [GridItem(.adaptive(minimum: model.thumbnailCardWidth, maximum: model.thumbnailCardWidth), spacing: gridSpacing)]
     }
-    private var gridColumnCount: Int { max(1, Int((gridWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing))) }
+    private var gridColumnCount: Int {
+        let availableWidth = max(0, gridWidth - 60)
+        return max(1, Int((availableWidth + gridSpacing) / (model.thumbnailCardWidth + gridSpacing)))
+    }
     private var thumbnailCellHeight: CGFloat { model.thumbnailCardWidth * 0.64 }
 
     var body: some View {
@@ -191,28 +194,48 @@ struct OverviewView: View {
 
     /// Reserve one stable row while icon and label sizes adapt to the app count.
     private var recentAppsRowHeight: CGFloat { 88 }
-    private var displayedAppWindows: [WindowItem] {
+    /// Every candidate app, most recent first, before the strip's width budget applies.
+    private var availableAppWindows: [WindowItem] {
         if !model.query.isEmpty { return model.filteredRecentAppWindows }
         return model.isSwitcherMode ? model.recentAppWindows : (frozenAppWindows ?? model.recentAppWindows)
     }
-    private var appStripItemCount: Int { displayedAppWindows.count + 1 }
-    private var appStripSpacing: CGFloat {
-        guard appStripItemCount > 1, appStripWidth > 0 else { return 4 }
-        let widthPerItem = appStripWidth / CGFloat(appStripItemCount)
-        return max(1, min(4, (widthPerItem - 16) / 6))
-    }
-    private var appStripCellWidth: CGFloat {
-        guard appStripItemCount > 0, appStripWidth > 0 else { return 42 }
-        return max(12, min(60, (appStripWidth - CGFloat(appStripItemCount - 1) * appStripSpacing - 8) / CGFloat(appStripItemCount)))
-    }
-    private var appStripIconPadding: CGFloat {
-        max(1, min(4, appStripCellWidth * 0.08))
-    }
-    private var appStripIconSize: CGFloat {
-        max(10, min(42, appStripCellWidth - appStripIconPadding * 2))
+
+    /// Drop the least recent apps once another fixed-size cell would no longer fit.
+    private var displayedAppWindows: [WindowItem] {
+        let apps = availableAppWindows
+        guard appStripWidth > 0 else { return apps }
+        // Budget excludes the leading "All Windows" cell and the strip's horizontal padding.
+        // Each remaining app costs a preceding gap plus its own cell.
+        let available = appStripWidth - 8 - Self.appStripCellWidth
+        let slot = Self.appStripCellWidth + Self.appStripSpacing
+        let capacity = max(0, Int(available / slot))
+        return apps.count <= capacity ? apps : Array(apps.prefix(capacity))
     }
 
+    private static let appStripCellWidth: CGFloat = 60
+    private static let appStripSpacing: CGFloat = 4
+    private static let appStripIconSize: CGFloat = 42
+    private static let appStripIconPadding: CGFloat = 4
+    private var appStripCellWidth: CGFloat { Self.appStripCellWidth }
+    private var appStripSpacing: CGFloat { Self.appStripSpacing }
+    private var appStripIconPadding: CGFloat { Self.appStripIconPadding }
+    private var renderedAppStripIconPadding: CGFloat {
+        appearance.browserTheme == .classicMac ? max(appStripIconPadding, 7) : appStripIconPadding
+    }
+    private var appStripIconSize: CGFloat { Self.appStripIconSize }
+
     private var recentAppsStrip: some View {
+        GeometryReader { proxy in
+            recentAppsStripContent
+                .frame(width: proxy.size.width, alignment: .leading)
+                .clipped()
+                .onAppear { updateAppStripWidth(proxy.size.width) }
+                .onChange(of: proxy.size.width) { _, width in updateAppStripWidth(width) }
+        }
+        .frame(height: recentAppsRowHeight)
+    }
+
+    private var recentAppsStripContent: some View {
         let allWindowsFocused = model.hoveredRepositoryID == nil && model.isAllWindowsAppSelected
         return Group {
             if displayedAppWindows.isEmpty, !model.query.isEmpty {
@@ -235,7 +258,7 @@ struct OverviewView: View {
                             Image(systemName: "square.grid.2x2")
                                 .font(.system(size: max(14, appStripIconSize * 0.58), weight: .medium))
                                 .frame(width: appStripIconSize, height: appStripIconSize)
-                                .padding(appearance.browserTheme == .classicMac ? max(appStripIconPadding, 7) : appStripIconPadding)
+                                .padding(renderedAppStripIconPadding)
                                 .background {
                                     if appearance.browserTheme == .classicMac {
                                         ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
@@ -326,13 +349,7 @@ struct OverviewView: View {
                         frozenAppWindows = nil
                     }
                 }
-                .background {
-                    GeometryReader { proxy in
-                        Color.clear
-                            .onAppear { updateAppStripWidth(proxy.size.width) }
-                            .onChange(of: proxy.size.width) { _, width in updateAppStripWidth(width) }
-                    }
-                }
+                .onChange(of: availableAppWindows.count) { _, _ in syncVisibleAppStripCount() }
             }
         }
         .frame(height: recentAppsRowHeight, alignment: .leading)
@@ -345,6 +362,14 @@ struct OverviewView: View {
         withTransaction(transaction) {
             appStripWidth = width
         }
+        syncVisibleAppStripCount()
+    }
+
+    /// Keep keyboard navigation from reaching apps the narrowed strip has dropped.
+    private func syncVisibleAppStripCount() {
+        let count = displayedAppWindows.count
+        guard model.visibleAppStripCount != count else { return }
+        model.visibleAppStripCount = count
     }
 
     private var controlBar: some View {
@@ -797,6 +822,8 @@ struct CompactSwitcherView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: appearance.browserTheme == .classicMac ? 80 : 66)
         .clipped()
+        .onAppear { model.visibleAppStripCount = displayedApps.count }
+        .onChange(of: displayedApps.count) { _, count in model.visibleAppStripCount = count }
         .onContinuousHover(coordinateSpace: .local) { phase in
             switch phase {
             case .active(let location):

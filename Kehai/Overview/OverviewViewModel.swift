@@ -133,6 +133,9 @@ final class OverviewViewModel {
     var actionChooserSelection = 0
     private var actionChooserReturnsToRemoval = false
     var keyboardColumnCount = 1
+    /// How many app icons the active browser presentation can currently show.
+    /// Narrowing either browser truncates the least recent ones, and navigation must match.
+    var visibleAppStripCount: Int?
     var hiddenWindowsRevision = 0
     var thumbnailCardWidth: CGFloat {
         didSet { UserDefaults.standard.set(Double(thumbnailCardWidth), forKey: Self.thumbnailCardWidthKey) }
@@ -302,6 +305,13 @@ final class OverviewViewModel {
         guard githubRepositoryStore.hasSavedTokens else { return [] }
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return githubRepositoryStore.search(trimmedQuery)
+    }
+
+    /// The app strip as the user actually sees it, honouring width-based truncation.
+    var navigableRecentAppWindows: [WindowItem] {
+        let apps = filteredRecentAppWindows
+        guard let visibleAppStripCount, visibleAppStripCount < apps.count else { return apps }
+        return Array(apps.prefix(visibleAppStripCount))
     }
 
     var filteredRecentAppWindows: [WindowItem] {
@@ -850,7 +860,7 @@ final class OverviewViewModel {
 
     func cycleSelectionByApp(_ direction: Int) {
         guard direction != 0 else { return }
-        let representatives = filteredRecentAppWindows
+        let representatives = navigableRecentAppWindows
         guard !representatives.isEmpty else { return }
 
         let itemCount = representatives.count + 1
@@ -909,7 +919,7 @@ final class OverviewViewModel {
            let firstRow = visualRows.first,
            firstRow.contains(where: { $0.id == selectedWindowID }) {
             if let appWindowIDBeforeEnteringWindows,
-               filteredRecentAppWindows.contains(where: { $0.id == appWindowIDBeforeEnteringWindows }) {
+               navigableRecentAppWindows.contains(where: { $0.id == appWindowIDBeforeEnteringWindows }) {
                 focusApp(appWindowIDBeforeEnteringWindows)
             } else {
                 selectAllWindowsApp()
@@ -962,7 +972,7 @@ final class OverviewViewModel {
     }
 
     private func moveAppSelection(horizontal: Int, vertical: Int, windowsAboveAppStrip: Bool) {
-        let apps = filteredRecentAppWindows
+        let apps = navigableRecentAppWindows
         guard !apps.isEmpty else {
             selectedAppWindowID = nil
             isAllWindowsAppSelected = true
