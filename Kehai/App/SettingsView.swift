@@ -4,7 +4,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var shortcut: ShortcutSettings
-    @Bindable var appearance: AppearanceSettings
     @Bindable var idleGrouping: IdleGroupingSettings
     @Bindable var excludedApps: ExcludedAppStore
     @Bindable var aiExcludedApps: AIExcludedAppStore
@@ -15,7 +14,6 @@ struct SettingsView: View {
     @Bindable var githubRefreshSettings: GitHubRefreshSettings
     let safariService: SafariTabService
     let shortcutChanged: () -> Void
-    let appearanceChanged: () -> Void
     let idleGroupingChanged: () -> Void
     let githubRefreshIntervalChanged: () -> Void
     let exclusionsChanged: () -> Void
@@ -25,8 +23,6 @@ struct SettingsView: View {
         TabView {
             generalSettings
                 .tabItem { Label("General", systemImage: "gearshape") }
-            appearanceSettings
-                .tabItem { Label("Appearance", systemImage: "paintbrush") }
             aiSettings
                 .tabItem { Label("AI", systemImage: "sparkles") }
             integrationsSettings
@@ -120,41 +116,6 @@ struct SettingsView: View {
                 Text("Runs once per idle period, and only when task groups are missing or the workspace has changed.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private var appearanceSettings: some View {
-        Form {
-            Section("Browser Window") {
-                Picker("Theme", selection: Binding(
-                    get: { appearance.browserTheme },
-                    set: {
-                        appearance.browserTheme = $0
-                        appearanceChanged()
-                    }
-                )) {
-                    ForEach(BrowserTheme.allCases) { theme in
-                        Text(theme.displayName).tag(theme)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-
-                if appearance.browserTheme == .system {
-                    Toggle("Use glassy background", isOn: Binding(
-                        get: { appearance.usesGlassyWindow },
-                        set: {
-                            appearance.usesGlassyWindow = $0
-                            appearanceChanged()
-                        }
-                    ))
-
-                    Text("Adds translucent macOS material behind Kehai while keeping window cards readable.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
         }
         .formStyle(.grouped)

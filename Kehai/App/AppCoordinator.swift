@@ -101,7 +101,6 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     )
     private lazy var settingsController = SettingsWindowController(
         shortcut: shortcutSettings,
-        appearance: appearanceSettings,
         idleGrouping: idleGroupingSettings,
         excludedApps: excludedAppStore,
         aiExcludedApps: aiExcludedAppStore,
@@ -112,7 +111,6 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         githubRefreshSettings: githubRefreshSettings,
         safariService: safari,
         shortcutChanged: { [weak self] in self?.registerHotKey() },
-        appearanceChanged: { [weak self] in self?.refreshBrowserAppearance() },
         idleGroupingChanged: { [weak self] in self?.updateIdleGroupingMonitoring() },
         githubRefreshIntervalChanged: { [weak self] in self?.updateGitHubRefreshMonitoring() },
         exclusionsChanged: { [weak self] in

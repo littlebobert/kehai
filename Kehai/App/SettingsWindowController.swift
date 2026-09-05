@@ -5,7 +5,6 @@ import SwiftUI
 final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     init(
         shortcut: ShortcutSettings,
-        appearance: AppearanceSettings,
         idleGrouping: IdleGroupingSettings,
         excludedApps: ExcludedAppStore,
         aiExcludedApps: AIExcludedAppStore,
@@ -16,7 +15,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         githubRefreshSettings: GitHubRefreshSettings,
         safariService: SafariTabService,
         shortcutChanged: @escaping () -> Void,
-        appearanceChanged: @escaping () -> Void,
         idleGroupingChanged: @escaping () -> Void,
         githubRefreshIntervalChanged: @escaping () -> Void,
         exclusionsChanged: @escaping () -> Void
@@ -33,7 +31,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.contentMinSize = NSSize(width: 620, height: 500)
         window.contentView = NSHostingView(rootView: SettingsView(
             shortcut: shortcut,
-            appearance: appearance,
             idleGrouping: idleGrouping,
             excludedApps: excludedApps,
             aiExcludedApps: aiExcludedApps,
@@ -44,7 +41,6 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             githubRefreshSettings: githubRefreshSettings,
             safariService: safariService,
             shortcutChanged: shortcutChanged,
-            appearanceChanged: appearanceChanged,
             idleGroupingChanged: idleGroupingChanged,
             githubRefreshIntervalChanged: githubRefreshIntervalChanged,
             exclusionsChanged: exclusionsChanged
