@@ -7,16 +7,18 @@ import Sparkle
 final class AutoUpdateService {
     private(set) var canCheckForUpdates = false
 
-    private let updaterController: SPUStandardUpdaterController
+    private var updaterController: SPUStandardUpdaterController?
     private var canCheckForUpdatesObservation: NSKeyValueObservation?
 
-    init(startingUpdater: Bool = true) {
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: startingUpdater,
+    func start() {
+        guard updaterController == nil else { return }
+        let controller = SPUStandardUpdaterController(
+            startingUpdater: true,
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
-        canCheckForUpdatesObservation = updaterController.updater.observe(
+        updaterController = controller
+        canCheckForUpdatesObservation = controller.updater.observe(
             \.canCheckForUpdates,
             options: [.initial, .new]
         ) { [weak self] updater, _ in
@@ -28,7 +30,8 @@ final class AutoUpdateService {
     }
 
     func checkForUpdates() {
+        start()
         SafeDiagnosticLog.shared.record("updater: manual check requested")
-        updaterController.checkForUpdates(nil)
+        updaterController?.checkForUpdates(nil)
     }
 }

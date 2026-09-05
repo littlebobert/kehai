@@ -11,12 +11,13 @@ final class APIKeyStore {
     var apiKey: String = ""
     var saveError: String?
     private var savedAPIKey: String = ""
+    private var hasLoadedStoredKey = false
+    private var isLoadingStoredKey = false
 
-    init(service: String) {
+    init(service: String, loadsStoredKey: Bool = true) {
         self.service = service
-        let stored = Self.load(service: service) ?? ""
-        apiKey = stored
-        savedAPIKey = stored
+        guard loadsStoredKey else { return }
+        applyStoredKey(Self.load(service: service) ?? "")
     }
 
     var hasKey: Bool { !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -24,12 +25,25 @@ final class APIKeyStore {
     var hasUnsavedChanges: Bool { apiKey.trimmingCharacters(in: .whitespacesAndNewlines) != savedAPIKey }
     var canSave: Bool { hasKey && hasUnsavedChanges }
 
+    func hydrate() async {
+        guard !hasLoadedStoredKey, !isLoadingStoredKey else { return }
+        isLoadingStoredKey = true
+        let service = service
+        let storedKey = await Task.detached(priority: .utility) {
+            Self.load(service: service) ?? ""
+        }.value
+        isLoadingStoredKey = false
+        guard !hasLoadedStoredKey else { return }
+        applyStoredKey(storedKey)
+    }
+
     func discardUnsavedChanges() {
         apiKey = savedAPIKey
         saveError = nil
     }
 
     func save() {
+        hasLoadedStoredKey = true
         let value = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else {
             Self.delete(service: service)
@@ -57,7 +71,7 @@ final class APIKeyStore {
         }
     }
 
-    static func load(service: String) -> String? {
+    nonisolated static func load(service: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -79,13 +93,30 @@ final class APIKeyStore {
         ]
         SecItemDelete(query as CFDictionary)
     }
+
+    private func applyStoredKey(_ storedKey: String) {
+        // Preserve text entered before deferred hydration completes.
+        if apiKey.isEmpty {
+            apiKey = storedKey
+        }
+        savedAPIKey = storedKey
+        hasLoadedStoredKey = true
+    }
 }
 
 typealias OpenAIKeyStore = APIKeyStore
 typealias AnthropicKeyStore = APIKeyStore
 
 extension APIKeyStore {
-    static func openAI() -> APIKeyStore { APIKeyStore(service: "com.justin.Kehai.openai") }
-    static func anthropic() -> APIKeyStore { APIKeyStore(service: "com.justin.Kehai.anthropic") }
-    static func github() -> APIKeyStore { APIKeyStore(service: "com.justin.Kehai.github") }
+    static func openAI(loadsStoredKey: Bool = true) -> APIKeyStore {
+        APIKeyStore(service: "com.justin.Kehai.openai", loadsStoredKey: loadsStoredKey)
+    }
+
+    static func anthropic(loadsStoredKey: Bool = true) -> APIKeyStore {
+        APIKeyStore(service: "com.justin.Kehai.anthropic", loadsStoredKey: loadsStoredKey)
+    }
+
+    static func github(loadsStoredKey: Bool = true) -> APIKeyStore {
+        APIKeyStore(service: "com.justin.Kehai.github", loadsStoredKey: loadsStoredKey)
+    }
 }

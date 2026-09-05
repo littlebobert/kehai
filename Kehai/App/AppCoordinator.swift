@@ -19,9 +19,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let permissionManager = PermissionManager()
     let safari = SafariTabService()
     private let history = ActivityStore()
-    let openAIKeyStore = APIKeyStore.openAI()
-    let anthropicKeyStore = APIKeyStore.anthropic()
-    let githubRepositoryStore = GitHubRepositoryStore()
+    let openAIKeyStore = APIKeyStore.openAI(loadsStoredKey: false)
+    let anthropicKeyStore = APIKeyStore.anthropic(loadsStoredKey: false)
+    let githubRepositoryStore = GitHubRepositoryStore(
+        keyStore: .github(loadsStoredKey: false),
+        loadsStoredState: false
+    )
     let githubRefreshSettings = GitHubRefreshSettings()
     let excludedAppStore = ExcludedAppStore()
     let aiExcludedAppStore = AIExcludedAppStore()
@@ -124,6 +127,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var modifierMonitors: [Any] = []
     private var isShortcutSessionActive = false
     private var hasStartedServices = false
+    private var deferredStartupTask: Task<Void, Never>?
     private lazy var installationLocationController = InstallationLocationWindowController { [weak self] in
         self?.startServices()
     }
@@ -148,9 +152,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         registerHotKey()
         updateIdleGroupingMonitoring()
         updateGitHubRefreshMonitoring()
-        if githubRepositoryStore.hasSavedTokens {
-            Task { await githubRepositoryStore.refreshAll() }
-        }
+        startDeferredServices()
         activationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -164,6 +166,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     func prepareForTermination() {
         guard hasStartedServices else { return }
         hasStartedServices = false
+        deferredStartupTask?.cancel()
+        deferredStartupTask = nil
         hotKey.unregister()
         isShortcutSessionActive = false
         removeModifierMonitor()
@@ -176,6 +180,25 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         dockBadgeMonitor.setActive(false)
         viewModel.prepareForTermination()
         if let activationObserver { NotificationCenter.default.removeObserver(activationObserver) }
+    }
+
+    private func startDeferredServices() {
+        deferredStartupTask?.cancel()
+        deferredStartupTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled else { return }
+
+            async let hydrateOpenAI: Void = self.openAIKeyStore.hydrate()
+            async let hydrateAnthropic: Void = self.anthropicKeyStore.hydrate()
+            async let hydrateGitHub: Void = self.githubRepositoryStore.hydrate()
+            _ = await (hydrateOpenAI, hydrateAnthropic, hydrateGitHub)
+            guard !Task.isCancelled else { return }
+
+            self.autoUpdates.start()
+            if self.githubRepositoryStore.hasSavedTokens {
+                await self.githubRepositoryStore.refreshAll()
+            }
+        }
     }
 
     func finishTermination() async {

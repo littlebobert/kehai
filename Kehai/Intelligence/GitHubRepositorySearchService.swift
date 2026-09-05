@@ -1386,22 +1386,25 @@ final class GitHubRepositoryStore {
 
     private let service: GitHubRepositorySearchService
     private let userDefaults: UserDefaults
+    private let legacyKeyStore: APIKeyStore
     private var localInteractions: [GitHubRepository.ID: GitHubRepositoryLocalInteraction]
+    private var hasHydratedStoredState = false
+    private var isHydratingStoredState = false
 
     init(
         keyStore: APIKeyStore = .github(),
         service: GitHubRepositorySearchService = GitHubRepositorySearchService(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        loadsStoredState: Bool = true
     ) {
         self.service = service
         self.userDefaults = userDefaults
-        if let data = userDefaults.data(forKey: Self.localInteractionsKey),
-           let saved = try? JSONDecoder().decode([GitHubRepository.ID: GitHubRepositoryLocalInteraction].self, from: data) {
-            localInteractions = saved
-        } else {
-            localInteractions = [:]
-        }
+        legacyKeyStore = keyStore
+        localInteractions = [:]
+        connections = []
 
+        guard loadsStoredState else { return }
+        loadLocalInteractions()
         var persistedIDs = userDefaults.stringArray(forKey: Self.persistedConnectionIDsKey) ?? []
         if keyStore.hasSavedKey, !persistedIDs.contains(Self.legacyConnectionID) {
             persistedIDs.insert(Self.legacyConnectionID, at: 0)
@@ -1417,7 +1420,44 @@ final class GitHubRepositoryStore {
             return GitHubRepositoryConnection(id: id, keyStore: connectionKeyStore)
         }
 
-        userDefaults.set(connections.map(\.id), forKey: Self.persistedConnectionIDsKey)
+        persistConnectionIDsIfChanged(from: persistedIDs)
+        hasHydratedStoredState = true
+    }
+
+    func hydrate() async {
+        guard !hasHydratedStoredState, !isHydratingStoredState else { return }
+        isHydratingStoredState = true
+        defer { isHydratingStoredState = false }
+
+        loadLocalInteractions()
+        await legacyKeyStore.hydrate()
+
+        var persistedIDs = userDefaults.stringArray(forKey: Self.persistedConnectionIDsKey) ?? []
+        if legacyKeyStore.hasSavedKey, !persistedIDs.contains(Self.legacyConnectionID) {
+            persistedIDs.insert(Self.legacyConnectionID, at: 0)
+        }
+
+        var seenIDs = Set<String>()
+        var hydratedConnections: [GitHubRepositoryConnection] = []
+        for id in persistedIDs {
+            guard seenIDs.insert(id).inserted, Self.isValidConnectionID(id) else { continue }
+            let connectionKeyStore: APIKeyStore
+            if id == Self.legacyConnectionID {
+                connectionKeyStore = legacyKeyStore
+            } else {
+                connectionKeyStore = APIKeyStore(
+                    service: Self.connectionServicePrefix + id,
+                    loadsStoredKey: false
+                )
+                await connectionKeyStore.hydrate()
+            }
+            guard connectionKeyStore.hasSavedKey else { continue }
+            hydratedConnections.append(GitHubRepositoryConnection(id: id, keyStore: connectionKeyStore))
+        }
+
+        connections = hydratedConnections
+        persistConnectionIDsIfChanged(from: persistedIDs)
+        hasHydratedStoredState = true
     }
 
     var repositories: [GitHubRepository] {
@@ -1466,7 +1506,7 @@ final class GitHubRepositoryStore {
     }
 
     var isLoading: Bool {
-        isAddingConnection || connections.contains(where: \.isLoading)
+        isHydratingStoredState || isAddingConnection || connections.contains(where: \.isLoading)
     }
 
     var errorMessage: String? {
@@ -1637,9 +1677,27 @@ final class GitHubRepositoryStore {
         return Array(repositoriesByID.values)
     }
 
+    private func loadLocalInteractions() {
+        guard let data = userDefaults.data(forKey: Self.localInteractionsKey),
+              let saved = try? JSONDecoder().decode(
+                [GitHubRepository.ID: GitHubRepositoryLocalInteraction].self,
+                from: data
+              ) else {
+            localInteractions = [:]
+            return
+        }
+        localInteractions = saved
+    }
+
     private func persistLocalInteractions() {
         guard let data = try? JSONEncoder().encode(localInteractions) else { return }
         userDefaults.set(data, forKey: Self.localInteractionsKey)
+    }
+
+    private func persistConnectionIDsIfChanged(from persistedIDs: [String]) {
+        let normalizedIDs = connections.map(\.id)
+        guard normalizedIDs != persistedIDs else { return }
+        userDefaults.set(normalizedIDs, forKey: Self.persistedConnectionIDsKey)
     }
 
     private func persistConnectionIDs() {
