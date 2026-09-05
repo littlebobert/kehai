@@ -136,7 +136,7 @@ final class OverviewViewModel {
     /// How many app icons the active browser presentation can currently show.
     /// Narrowing either browser truncates the least recent ones, and navigation must match.
     var visibleAppStripCount: Int?
-    private(set) var initialAppOrderAnimationRevision = 0
+    private(set) var isInitialAppOrderResolved = false
     var hiddenWindowsRevision = 0
     var thumbnailCardWidth: CGFloat {
         didSet { UserDefaults.standard.set(Double(thumbnailCardWidth), forKey: Self.thumbnailCardWidthKey) }
@@ -169,7 +169,6 @@ final class OverviewViewModel {
     var aiErrorMessage: String?
 
     private var hasPerformedInitialRefresh = false
-    private var hasReconciledInitialAppOrder = false
     private var isPerformingInitialRefresh = false
     private var inventoryReconciliationTask: Task<Void, Never>?
     private var isReconcilingInventory = false
@@ -1602,6 +1601,7 @@ final class OverviewViewModel {
         isPerformingInitialRefresh = true
         await refresh()
         isPerformingInitialRefresh = false
+        isInitialAppOrderResolved = true
         hasPerformedInitialRefresh = !windows.isEmpty || errorMessage != nil
     }
 
@@ -1805,21 +1805,16 @@ final class OverviewViewModel {
                 SafeDiagnosticLog.shared.record("window-inventory: reconciled added=\(currentIDs.subtracting(previousIDs).count) removed=\(previousIDs.subtracting(currentIDs).count)")
             }
 
-            let previousAppOrder = currentRecentAppWindows.map(\.processID)
             let inventoryChanged = !inventoryIsEquivalent(windows, items)
             if inventoryChanged {
                 windows = items
-                let updatedAppOrder = currentRecentAppWindows.map(\.processID)
-                if !hasReconciledInitialAppOrder, previousAppOrder != updatedAppOrder {
-                    initialAppOrderAnimationRevision += 1
-                }
                 hiddenWindowStore.reconcile(with: items)
                 syncSwitcherAppSnapshot()
                 reconcileCachedGroups()
                 preserveSelectionOrSelectFirst()
                 activityMonitor.update(windows: items)
             }
-            hasReconciledInitialAppOrder = true
+            isInitialAppOrderResolved = true
             thumbnailCapturedAt = thumbnailCapturedAt.filter { currentIDs.contains($0.key) }
             if showsGlobalLoading { isLoading = false }
             // Map only windows whose thumbnail is new, changed, missing, rejected, or stale.

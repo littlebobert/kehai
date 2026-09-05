@@ -196,6 +196,7 @@ struct OverviewView: View {
     private var recentAppsRowHeight: CGFloat { 88 }
     /// Every candidate app, most recent first, before the strip's width budget applies.
     private var availableAppWindows: [WindowItem] {
+        guard model.isInitialAppOrderResolved else { return [] }
         if !model.query.isEmpty { return model.filteredRecentAppWindows }
         return model.isSwitcherMode ? model.recentAppWindows : (frozenAppWindows ?? model.recentAppWindows)
     }
@@ -297,7 +298,7 @@ struct OverviewView: View {
                         }
                     }
 
-                    ForEach(Array(displayedAppWindows.enumerated()), id: \.element.processID) { index, window in
+                    ForEach(Array(displayedAppWindows.enumerated()), id: \.element.id) { index, window in
                         RecentAppButton(
                             window: window,
                             isSelected: model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo,
@@ -338,10 +339,6 @@ struct OverviewView: View {
                         )
                     }
                 }
-                .animation(
-                    .easeInOut(duration: 0.24),
-                    value: model.initialAppOrderAnimationRevision
-                )
                 .padding(.horizontal, 4)
                 .padding(.vertical, 9)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -663,7 +660,8 @@ struct CompactSwitcherView: View {
     }
 
     private var displayedApps: [WindowItem] {
-        Array(model.filteredRecentAppWindows.prefix(maximumVisibleApps))
+        guard model.isInitialAppOrderResolved else { return [] }
+        return Array(model.filteredRecentAppWindows.prefix(maximumVisibleApps))
     }
 
     private let compactWindowWidth: CGFloat = 212
@@ -814,7 +812,7 @@ struct CompactSwitcherView: View {
             if opensRight {
                 allWindowsButton(itemIndex: 0)
             }
-            ForEach(Array(displayedApps.enumerated()), id: \.element.processID) { index, window in
+            ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, window in
                 compactAppButton(window, itemIndex: index + (opensRight ? 1 : 0))
             }
             if !opensRight {
@@ -822,10 +820,6 @@ struct CompactSwitcherView: View {
                 allWindowsButton(itemIndex: displayedApps.count)
             }
         }
-        .animation(
-            .easeInOut(duration: 0.24),
-            value: model.initialAppOrderAnimationRevision
-        )
         .padding(.horizontal, compactAppHorizontalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: appearance.browserTheme == .classicMac ? 80 : 66)
