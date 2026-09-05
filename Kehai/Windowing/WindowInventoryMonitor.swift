@@ -21,6 +21,7 @@ final class WindowInventoryMonitor {
     /// Ceiling for each synchronous Accessibility round-trip. Without it, a single
     /// unresponsive app can stall a call for the system default (~6s).
     private static let accessibilityMessagingTimeout: Float = 0.5
+    private static let initialEnumerationDelay = Duration.milliseconds(250)
 
     init(
         changed: @escaping @MainActor () -> Void,
@@ -49,9 +50,14 @@ final class WindowInventoryMonitor {
         }
 
         // Observing an app costs several synchronous Accessibility round-trips into
-        // that process. Enumerate off the launch path, yielding between apps, so the
-        // first window can appear without waiting on IPC to every running app.
+        // that process. Leave launch-critical work and the first main-loop turns clear,
+        // then yield between apps so one enumeration does not monopolize the main actor.
         initialEnumerationTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: Self.initialEnumerationDelay)
+            } catch {
+                return
+            }
             for application in NSWorkspace.shared.runningApplications {
                 guard let self, self.isRunning, !Task.isCancelled else { return }
                 self.observe(application)

@@ -18,7 +18,7 @@ final class BrowserPresentationState {
 final class AppCoordinator: NSObject, NSMenuItemValidation {
     let permissionManager = PermissionManager()
     let safari = SafariTabService()
-    private let history = ActivityStore()
+    private let history = ActivityStore(loadsStoredEvents: false)
     let openAIKeyStore = APIKeyStore.openAI(loadsStoredKey: false)
     let anthropicKeyStore = APIKeyStore.anthropic(loadsStoredKey: false)
     let githubRepositoryStore = GitHubRepositoryStore(
@@ -144,12 +144,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         guard !hasStartedServices else { return }
         hasStartedServices = true
         permissionManager.refresh()
+        registerHotKey()
         activityMonitor.setWindowFocusedHandler { [weak self] windowID, date in
             self?.viewModel.recordWindowFocus(windowID: windowID, at: date)
         }
         activityMonitor.start()
         windowInventoryMonitor.start()
-        registerHotKey()
         updateIdleGroupingMonitoring()
         updateGitHubRefreshMonitoring()
         startDeferredServices()
@@ -191,7 +191,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             async let hydrateOpenAI: Void = self.openAIKeyStore.hydrate()
             async let hydrateAnthropic: Void = self.anthropicKeyStore.hydrate()
             async let hydrateGitHub: Void = self.githubRepositoryStore.hydrate()
-            _ = await (hydrateOpenAI, hydrateAnthropic, hydrateGitHub)
+            async let hydrateHistory: Void = self.history.hydrate()
+            _ = await (hydrateOpenAI, hydrateAnthropic, hydrateGitHub, hydrateHistory)
             guard !Task.isCancelled else { return }
 
             self.autoUpdates.start()

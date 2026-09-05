@@ -11,29 +11,64 @@ struct ActivityEvent: Codable, Sendable {
 actor ActivityStore {
     private var events: [ActivityEvent] = []
     private let fileURL: URL
+    private var hasHydratedStoredEvents: Bool
+    private var hydrationTask: Task<[ActivityEvent], Never>?
 
-    init(fileURL: URL? = nil) {
+    init(fileURL: URL? = nil, loadsStoredEvents: Bool = true) {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         self.fileURL = fileURL ?? base.appending(path: "Kehai/activity.json")
-        if let data = try? Data(contentsOf: self.fileURL), let decoded = try? JSONDecoder().decode([ActivityEvent].self, from: data) {
-            events = decoded
+        hasHydratedStoredEvents = loadsStoredEvents
+        if loadsStoredEvents {
+            events = Self.loadEvents(from: self.fileURL)
         }
     }
 
-    func record(_ window: WindowItem, at date: Date = Date()) {
+    func hydrate() async {
+        guard !hasHydratedStoredEvents else { return }
+        let task: Task<[ActivityEvent], Never>
+        if let hydrationTask {
+            task = hydrationTask
+        } else {
+            let fileURL = fileURL
+            task = Task.detached(priority: .utility) {
+                Self.loadEvents(from: fileURL)
+            }
+            hydrationTask = task
+        }
+        let storedEvents = await task.value
+        guard !hasHydratedStoredEvents else { return }
+        events = Array((storedEvents + events).suffix(5_000))
+        hasHydratedStoredEvents = true
+        hydrationTask = nil
+    }
+
+    func record(_ window: WindowItem, at date: Date = Date()) async {
+        await hydrate()
         events.append(ActivityEvent(windowID: window.id, appName: window.appName, title: window.title, date: date))
         events = Array(events.suffix(5_000))
         persist()
     }
 
-    func lastSeen() -> [CGWindowID: Date] {
-        Dictionary(events.map { ($0.windowID, $0.date) }, uniquingKeysWith: max)
+    func lastSeen() async -> [CGWindowID: Date] {
+        await hydrate()
+        return Dictionary(events.map { ($0.windowID, $0.date) }, uniquingKeysWith: max)
     }
 
-    func recentEvents(limit: Int = 100) -> [ActivityEvent] { Array(events.suffix(limit)) }
+    func recentEvents(limit: Int = 100) async -> [ActivityEvent] {
+        await hydrate()
+        return Array(events.suffix(limit))
+    }
 
     private func persist() {
         try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(events) { try? data.write(to: fileURL, options: .atomic) }
+    }
+
+    nonisolated private static func loadEvents(from fileURL: URL) -> [ActivityEvent] {
+        guard let data = try? Data(contentsOf: fileURL),
+              let decoded = try? JSONDecoder().decode([ActivityEvent].self, from: data) else {
+            return []
+        }
+        return decoded
     }
 }
