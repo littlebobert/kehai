@@ -1388,6 +1388,7 @@ final class GitHubRepositoryStore {
     private let userDefaults: UserDefaults
     private let legacyKeyStore: APIKeyStore
     private var localInteractions: [GitHubRepository.ID: GitHubRepositoryLocalInteraction]
+    private var hasPersistedConnections: Bool
     private var hasHydratedStoredState = false
     private var isHydratingStoredState = false
 
@@ -1402,6 +1403,9 @@ final class GitHubRepositoryStore {
         legacyKeyStore = keyStore
         localInteractions = [:]
         connections = []
+        hasPersistedConnections = !(userDefaults.stringArray(
+            forKey: Self.persistedConnectionIDsKey
+        ) ?? []).isEmpty
 
         guard loadsStoredState else { return }
         loadLocalInteractions()
@@ -1457,6 +1461,7 @@ final class GitHubRepositoryStore {
 
         connections = hydratedConnections
         persistConnectionIDsIfChanged(from: persistedIDs)
+        hasPersistedConnections = !connections.isEmpty
         hasHydratedStoredState = true
     }
 
@@ -1501,12 +1506,19 @@ final class GitHubRepositoryStore {
         connections.contains { $0.keyStore.hasSavedKey }
     }
 
+    var shouldShowRepositorySection: Bool {
+        hasPersistedConnections || hasSavedTokens
+    }
+
     var hasLocalInteractionHistory: Bool {
         !localInteractions.isEmpty
     }
 
     var isLoading: Bool {
-        isHydratingStoredState || isAddingConnection || connections.contains(where: \.isLoading)
+        (shouldShowRepositorySection && !hasHydratedStoredState)
+            || isHydratingStoredState
+            || isAddingConnection
+            || connections.contains(where: \.isLoading)
     }
 
     var errorMessage: String? {
@@ -1555,6 +1567,7 @@ final class GitHubRepositoryStore {
             )
             connections.append(connection)
             persistConnectionIDs()
+            hasPersistedConnections = true
             newToken = ""
             recordRefreshDiagnostics(account, event: "connection added")
         } catch {
@@ -1600,6 +1613,7 @@ final class GitHubRepositoryStore {
         connection.keyStore.save()
         operationErrorMessage = connection.keyStore.saveError
         persistConnectionIDs()
+        hasPersistedConnections = !connections.isEmpty
     }
 
     func removeConnection(_ connection: GitHubRepositoryConnection) {

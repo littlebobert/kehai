@@ -184,7 +184,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let width = min(preferredWidth, maximumAnchoredWidth)
         let usesRetrofit = appearance.browserTheme == .classicMac
         let estimatedHeight: CGFloat
-        if model.githubRepositoryStore.hasSavedTokens {
+        if model.githubRepositoryStore.shouldShowRepositorySection {
             estimatedHeight = usesRetrofit ? 408 : 388
         } else {
             estimatedHeight = usesRetrofit ? 312 : 292

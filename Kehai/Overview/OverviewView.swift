@@ -297,7 +297,7 @@ struct OverviewView: View {
                         }
                     }
 
-                    ForEach(Array(displayedAppWindows.enumerated()), id: \.element.id) { index, window in
+                    ForEach(Array(displayedAppWindows.enumerated()), id: \.element.processID) { index, window in
                         RecentAppButton(
                             window: window,
                             isSelected: model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo,
@@ -338,6 +338,10 @@ struct OverviewView: View {
                         )
                     }
                 }
+                .animation(
+                    .easeInOut(duration: 0.24),
+                    value: model.initialAppOrderAnimationRevision
+                )
                 .padding(.horizontal, 4)
                 .padding(.vertical, 9)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -511,7 +515,7 @@ struct OverviewView: View {
     @ViewBuilder
     private var repositorySection: some View {
         let repositories = model.filteredGitHubRepositories
-        if model.githubRepositoryStore.hasSavedTokens {
+        if model.githubRepositoryStore.shouldShowRepositorySection {
             if appearance.browserTheme == .classicMac {
                 Rectangle()
                     .fill(.black)
@@ -810,7 +814,7 @@ struct CompactSwitcherView: View {
             if opensRight {
                 allWindowsButton(itemIndex: 0)
             }
-            ForEach(Array(displayedApps.enumerated()), id: \.element.id) { index, window in
+            ForEach(Array(displayedApps.enumerated()), id: \.element.processID) { index, window in
                 compactAppButton(window, itemIndex: index + (opensRight ? 1 : 0))
             }
             if !opensRight {
@@ -818,6 +822,10 @@ struct CompactSwitcherView: View {
                 allWindowsButton(itemIndex: displayedApps.count)
             }
         }
+        .animation(
+            .easeInOut(duration: 0.24),
+            value: model.initialAppOrderAnimationRevision
+        )
         .padding(.horizontal, compactAppHorizontalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: appearance.browserTheme == .classicMac ? 80 : 66)
@@ -1055,7 +1063,7 @@ struct CompactSwitcherView: View {
 
     @ViewBuilder
     private var compactRepositoryShelf: some View {
-        if model.githubRepositoryStore.hasSavedTokens {
+        if model.githubRepositoryStore.shouldShowRepositorySection {
             Divider()
                 .padding(.horizontal, 12)
                 .padding(.top, 12)
