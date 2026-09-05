@@ -287,7 +287,7 @@ struct OverviewView: View {
                             classicTheme: appearance.browserTheme == .classicMac,
                             activate: {
                                 if model.isAppFocused(window.id) {
-                                    model.activate(window)
+                                    model.activateApp(window)
                                     close()
                                 } else {
                                     withAnimation(.easeInOut(duration: 0.12)) {
@@ -832,7 +832,7 @@ struct CompactSwitcherView: View {
         let selected = model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo
         return Button {
             if model.isAppFocused(window.id) {
-                model.activate(window)
+                model.activateApp(window)
                 close()
             } else {
                 model.focusApp(window.id)

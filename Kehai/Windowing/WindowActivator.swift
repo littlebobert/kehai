@@ -16,6 +16,10 @@ struct WindowMatchCandidate: Sendable {
 
 @MainActor
 final class WindowActivator {
+    /// Ceiling for each synchronous Accessibility round-trip while raising an app's
+    /// full window list, so one unresponsive app can't stall activation for seconds.
+    private static let accessibilityMessagingTimeout: Float = 0.5
+
     func activate(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
         // App-only strip entries (no open windows) just need the app frontmost.
@@ -27,6 +31,17 @@ final class WindowActivator {
         raiseWindow(item)
     }
 
+    /// Open an *app* rather than one of its windows: bring the whole app forward,
+    /// with every one of its unminimized windows, and leave `item` on top.
+    func activateApp(_ item: WindowItem) {
+        guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
+        // A hidden app ignores activation until it is unhidden.
+        if app.isHidden { app.unhide() }
+        app.activate(options: [.activateAllWindows])
+        // A placeholder has no real window to focus, so raise whatever the app has.
+        raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
+    }
+
     /// Raise the target window for a drag-redirect without forcing every app window up first.
     func activateForDragRedirect(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
@@ -36,6 +51,36 @@ final class WindowActivator {
         }
         app.activate(options: [])
         raiseWindow(item)
+    }
+
+    /// `.activateAllWindows` alone is unreliable on modern macOS — it updates the menu
+    /// bar but often leaves windows behind other apps. Raising each window through
+    /// Accessibility forces the whole app's stack forward.
+    private func raiseAllWindows(for item: WindowItem, focusing shouldFocusTarget: Bool) {
+        let application = AXUIElementCreateApplication(item.processID)
+        AXUIElementSetMessagingTimeout(application, Self.accessibilityMessagingTimeout)
+        guard let windows: [AXUIElement] = value(application, attribute: kAXWindowsAttribute) else {
+            if shouldFocusTarget { raiseWindow(item) }
+            return
+        }
+        let target = shouldFocusTarget ? matchingWindow(item, in: application) : nil
+        // AX reports windows front-to-back, so raising in reverse preserves their
+        // relative order. Minimized windows stay in the Dock, as they do in Mission Control.
+        for window in windows.reversed() {
+            if let target, CFEqual(window, target) { continue }
+            // The messaging timeout is per-element, not inherited from the app element.
+            AXUIElementSetMessagingTimeout(window, Self.accessibilityMessagingTimeout)
+            guard !isMinimized(window) else { continue }
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        }
+        guard let target else { return }
+        AXUIElementSetAttributeValue(target, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(target, kAXRaiseAction as CFString)
+        AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, target)
+    }
+
+    private func isMinimized(_ window: AXUIElement) -> Bool {
+        value(window, attribute: kAXMinimizedAttribute) as NSNumber? == true
     }
 
     private func raiseWindow(_ item: WindowItem) {

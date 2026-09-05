@@ -1068,7 +1068,8 @@ final class OverviewViewModel {
         }
         if let focusedAppKey,
            let window = recentAppWindows.first(where: { appKey(for: $0) == focusedAppKey }) {
-            activate(window)
+            // The app strip owns the selection, so open the app and all its windows.
+            activateApp(window)
             return true
         }
         return activateSelectedWindow()
@@ -1432,6 +1433,9 @@ final class OverviewViewModel {
         }
         // Prefer pointer/drag targets, then the app selected by repeated shortcut-key presses.
         let targetID = dragHoverWindowID ?? hoveredSwitcherWindowID ?? selectedAppWindowID
+        // The app strip owns the selection whenever `selectedAppWindowID` matches,
+        // so Command-Tabbing to an app opens it with every window.
+        let isAppStripTarget = targetID != nil && targetID == selectedAppWindowID
         guard !isAllWindowsAppSelected,
               let targetID,
               let window = windowForDragTarget(targetID) else {
@@ -1439,6 +1443,8 @@ final class OverviewViewModel {
         }
         if isExternalDragActive {
             activator.activateForDragRedirect(window)
+        } else if isAppStripTarget {
+            activateApp(window)
         } else {
             activate(window)
         }
@@ -1984,6 +1990,16 @@ final class OverviewViewModel {
             Task { await activate(tab) }
         } else {
             activator.activate(window)
+        }
+    }
+
+    /// Opening an app (app strip, or an app row in search) brings the whole app
+    /// forward — every window, not just the most recent one.
+    func activateApp(_ window: WindowItem) {
+        if let tab = window.safariTab, !tab.isCurrent {
+            Task { await activate(tab) }
+        } else {
+            activator.activateApp(window)
         }
     }
 
