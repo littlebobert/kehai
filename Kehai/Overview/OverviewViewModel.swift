@@ -167,6 +167,8 @@ final class OverviewViewModel {
     var refreshingThumbnailWindowIDs: Set<CGWindowID> = []
     var errorMessage: String?
     var aiErrorMessage: String?
+    private var quittingAppKeys: Set<String> = []
+    private var errorDismissalTask: Task<Void, Never>?
 
     private var hasPerformedInitialRefresh = false
     private var isPerformingInitialRefresh = false
@@ -657,16 +659,50 @@ final class OverviewViewModel {
             SafeDiagnosticLog.shared.record("menu: ignored quit for Finder")
             return
         }
-        guard activator.quit(window) else {
-            errorMessage = L10n.string("Kehai could not quit this app.")
+        let quittingAppKey = appKey(for: window)
+        guard !quittingAppKeys.contains(quittingAppKey) else { return }
+        switch activator.quit(window) {
+        case .requested:
+            quittingAppKeys.insert(quittingAppKey)
+            removeAppFromInventory(window)
+            scheduleQuittingAppCleanup(quittingAppKey)
+        case .alreadyTerminated:
+            removeAppFromInventory(window)
+        case .failed:
+            showTransientError(L10n.string("Kehai could not quit this app."))
             return
         }
+    }
+
+    private func removeAppFromInventory(_ window: WindowItem) {
         windows.removeAll {
             $0.processID == window.processID
                 || (window.bundleIdentifier != nil && $0.bundleIdentifier == window.bundleIdentifier)
         }
+        switcherAppWindows?.removeAll { appKey(for: $0) == appKey(for: window) }
         reconcileCachedGroups()
         preserveSelectionOrSelectFirst()
+    }
+
+    private func scheduleQuittingAppCleanup(_ quittingAppKey: String) {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            self?.quittingAppKeys.remove(quittingAppKey)
+        }
+    }
+
+    private func showTransientError(_ message: String) {
+        errorDismissalTask?.cancel()
+        errorMessage = message
+        errorDismissalTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .seconds(3))
+            } catch {
+                return
+            }
+            guard self?.errorMessage == message else { return }
+            self?.errorMessage = nil
+        }
     }
 
     private func closeWindow(_ window: WindowItem, keepKehaiActive: Bool = true) {
@@ -683,7 +719,7 @@ final class OverviewViewModel {
             }
         }
         if !started {
-            errorMessage = L10n.string("Kehai could not close this window.")
+            showTransientError(L10n.string("Kehai could not close this window."))
         }
     }
 
@@ -1471,13 +1507,20 @@ final class OverviewViewModel {
             SafeDiagnosticLog.shared.record("switcher: ignored quit for Finder")
             return false
         }
-        guard activator.quit(window) else {
-            errorMessage = L10n.string("Kehai could not quit this app.")
+        let quittingAppKey = appKey(for: window)
+        guard !quittingAppKeys.contains(quittingAppKey) else { return true }
+        switch activator.quit(window) {
+        case .requested:
+            quittingAppKeys.insert(quittingAppKey)
+            scheduleQuittingAppCleanup(quittingAppKey)
+        case .alreadyTerminated:
+            break
+        case .failed:
+            showTransientError(L10n.string("Kehai could not quit this app."))
             return false
         }
         let processID = window.processID
         let bundleIdentifier = window.bundleIdentifier
-        let quittingAppKey = appKey(for: window)
         let quittingAppIndex = switcherAppWindows?.firstIndex { appKey(for: $0) == quittingAppKey }
         windows.removeAll {
             $0.processID == processID
@@ -1557,7 +1600,7 @@ final class OverviewViewModel {
                 reconcileCachedGroups()
             }
             selectedWindowID = closedID
-            errorMessage = L10n.string("Kehai could not close this window.")
+            showTransientError(L10n.string("Kehai could not close this window."))
             SafeDiagnosticLog.shared.record("switcher: close window failed to start")
             return false
         }
@@ -1742,10 +1785,14 @@ final class OverviewViewModel {
             // one flaky AX read admits the ghost, and this loop then pins it there
             // for as long as the panel stays key.
             items.removeAll { !WindowInventoryPolicy.isProcessRunning($0.processID) }
+            let runningAppKeys = Set(items.map(appKey(for:)))
+            quittingAppKeys.formIntersection(runningAppKeys)
+            items.removeAll { quittingAppKeys.contains(appKey(for: $0)) }
             if !includeSafariTabs {
                 let newIDs = Set(items.map(\.id))
                 for previous in windows where !newIDs.contains(previous.id) {
                     if WindowInventoryPolicy.isProcessRunning(previous.processID),
+                       !quittingAppKeys.contains(appKey(for: previous)),
                        previous.bundleIdentifier != "com.apple.Safari",
                        !snapshot.accessibilityContradictedWindowIDs.contains(previous.id) {
                         items.append(previous)
@@ -2017,7 +2064,11 @@ final class OverviewViewModel {
     }
 
     func activate(_ tab: SafariTab) async {
-        do { try await safari.activate(tab) } catch { errorMessage = error.localizedDescription }
+        do {
+            try await safari.activate(tab)
+        } catch {
+            showTransientError(error.localizedDescription)
+        }
     }
 
     private var hasConfiguredAIKey: Bool {

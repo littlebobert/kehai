@@ -16,6 +16,12 @@ struct WindowMatchCandidate: Sendable {
 
 @MainActor
 final class WindowActivator {
+    enum QuitOutcome {
+        case requested
+        case alreadyTerminated
+        case failed
+    }
+
     /// Ceiling for each synchronous Accessibility round-trip while raising an app's
     /// full window list, so one unresponsive app can't stall activation for seconds.
     private static let accessibilityMessagingTimeout: Float = 0.5
@@ -139,11 +145,15 @@ final class WindowActivator {
         return true
     }
 
-    @discardableResult
-    func quit(_ item: WindowItem) -> Bool {
+    func quit(_ item: WindowItem) -> QuitOutcome {
         guard let app = NSRunningApplication(processIdentifier: item.processID),
-              !app.isTerminated else { return false }
-        return app.terminate()
+              !app.isTerminated else {
+            return .alreadyTerminated
+        }
+        if app.terminate() {
+            return .requested
+        }
+        return app.isTerminated ? .alreadyTerminated : .failed
     }
 
     private func pressClose(on window: AXUIElement) -> Bool {
