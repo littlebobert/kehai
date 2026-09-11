@@ -210,8 +210,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     private func beginSwitcherMode() {
         if isShortcutSessionActive {
-            SafeDiagnosticLog.shared.record("shortcut: repeated press cycling")
-            viewModel.cycleSelectionByApp(1)
+            let direction = NSEvent.modifierFlags.contains(.shift) ? -1 : 1
+            SafeDiagnosticLog.shared.record("shortcut: repeated press cycling direction=\(direction)")
+            viewModel.cycleSelectionByApp(direction)
             presentShortcutSwitcherIfNeeded()
             return
         }
@@ -262,9 +263,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             SafeDiagnosticLog.shared.record("shortcut: release ignored no session")
             return
         }
-        let shouldFinish = !panelController.isMiniBrowserVisible || shortcutModifierFlags.isEmpty
+        let usesCommandAnchor = shortcutModifierFlags.contains(.command)
+        let commandIsHeld = NSEvent.modifierFlags.contains(.command)
+        let shouldFinish = usesCommandAnchor
+            ? !commandIsHeld
+            : (!panelController.isMiniBrowserVisible || shortcutModifierFlags.isEmpty)
         SafeDiagnosticLog.shared.record(
-            "shortcut: release mini-visible=\(panelController.isMiniBrowserVisible) finish=\(shouldFinish)"
+            "shortcut: release mini-visible=\(panelController.isMiniBrowserVisible) "
+                + "command-held=\(commandIsHeld) finish=\(shouldFinish)"
         )
         if shouldFinish {
             finishSwitcherMode()
@@ -295,12 +301,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         removeModifierMonitor()
         let requiredFlags = shortcutModifierFlags
         guard !requiredFlags.isEmpty else { return }
-        // Stay in switcher while *any* of the shortcut modifiers is still held.
-        // That lets users release Shift from ⌘⇧Space and keep Command for hover + Q/W
-        // (Command-Tab style), then release the last modifier to activate.
+        let sessionAnchorFlags: NSEvent.ModifierFlags = requiredFlags.contains(.command)
+            ? .command
+            : requiredFlags
+        // Command anchors the session like macOS Command-Tab. The user may release
+        // the shortcut letter and every other modifier while continuing to browse.
         let handleFlags: (NSEvent) -> Void = { [weak self] event in
             let heldFlags = event.modifierFlags.intersection([.command, .shift, .option, .control])
-            if heldFlags.intersection(requiredFlags).isEmpty {
+            if heldFlags.intersection(sessionAnchorFlags).isEmpty {
                 Task { @MainActor [weak self] in self?.finishSwitcherMode() }
             }
         }

@@ -49,7 +49,7 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 14) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Switch Apps / Show Mini Browser")
-                        Text("Tap to switch apps, or hold briefly to browse.")
+                        Text("Tap to switch apps, or keep Command held to browse.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -69,7 +69,7 @@ struct SettingsView: View {
                     .disabled(shortcut.isDefault)
                 }
 
-                Text("Quickly press and release to switch to the previous app; repeat to switch back. While holding the modifiers, press the shortcut key again to move forward, or release Shift and press it to move backward. Release the remaining modifiers to activate the selection.")
+                Text("Quickly press and release to switch to the previous app. To browse, invoke the shortcut and keep Command held while releasing the other keys. Press Command plus the shortcut key to move forward, or add Shift to move backward. Release Command to activate the selection.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

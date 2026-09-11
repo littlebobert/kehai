@@ -539,15 +539,18 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 }
                 return nil
             }
-            if self.model.isSwitcherMode, self.isShortcutSessionActive() {
-                let configuredKeyCode = self.shortcutKeyCode()
-                let configuredModifiers = self.shortcutModifierFlags()
-                if event.keyCode == configuredKeyCode {
-                    let reverseModifiers = configuredModifiers.subtracting(.shift)
-                    if configuredModifiers.contains(.shift), modifiers == reverseModifiers {
-                        self.model.cycleSelectionByApp(-1)
-                        return nil
-                    }
+            if self.model.isSwitcherMode,
+               self.isShortcutSessionActive(),
+               event.keyCode == self.shortcutKeyCode() {
+                if modifiers == .command {
+                    self.model.cycleSelectionByApp(1)
+                    SafeDiagnosticLog.shared.record("shortcut: mini cycle direction=1")
+                    return nil
+                }
+                if modifiers == [.command, .shift] {
+                    self.model.cycleSelectionByApp(-1)
+                    SafeDiagnosticLog.shared.record("shortcut: mini cycle direction=-1")
+                    return nil
                 }
             }
 
