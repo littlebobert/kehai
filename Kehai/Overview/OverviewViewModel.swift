@@ -1129,11 +1129,13 @@ final class OverviewViewModel {
         switcherAppWindows = currentRecentAppWindows
         isSwitcherMode = true
         hoveredSwitcherWindowID = nil
+        SafeDiagnosticLog.shared.record("shortcut: candidates count=\(switcherAppWindows?.count ?? 0)")
         selectPreviousApplication(excluding: previousApplicationProcessID)
     }
 
     private func selectPreviousApplication(excluding processID: pid_t?) {
         guard let processID else {
+            SafeDiagnosticLog.shared.record("shortcut: no frontmost app; selected all windows")
             selectAllWindowsApp()
             return
         }
@@ -1141,9 +1143,13 @@ final class OverviewViewModel {
         guard let previousApplication = recentAppWindows.first(where: { application in
             application.processID != ownProcessID && application.processID != processID
         }) else {
+            SafeDiagnosticLog.shared.record("shortcut: no previous-app candidate; selected all windows")
             selectAllWindowsApp()
             return
         }
+        SafeDiagnosticLog.shared.record(
+            "shortcut: selected previous app placeholder=\(previousApplication.isAppPlaceholder)"
+        )
         focusApp(previousApplication.id)
     }
 
@@ -1498,15 +1504,26 @@ final class OverviewViewModel {
         // The app strip owns the selection whenever `selectedAppWindowID` matches,
         // so Command-Tabbing to an app opens it with every window.
         let isAppStripTarget = targetID != nil && targetID == selectedAppWindowID
-        guard !isAllWindowsAppSelected,
-              let targetID,
-              let window = windowForDragTarget(targetID) else {
+        guard !isAllWindowsAppSelected else {
+            SafeDiagnosticLog.shared.record("shortcut: activation skipped all-windows selected")
+            return false
+        }
+        guard let targetID else {
+            SafeDiagnosticLog.shared.record("shortcut: activation skipped no target")
+            return false
+        }
+        guard let window = windowForDragTarget(targetID) else {
+            SafeDiagnosticLog.shared.record("shortcut: activation skipped target unavailable")
             return false
         }
         if isExternalDragActive {
             activator.activateForDragRedirect(window)
         } else if isAppStripTarget {
-            activateApp(window)
+            let accepted = activateApp(window)
+            SafeDiagnosticLog.shared.record(
+                "shortcut: app activation requested accepted=\(accepted) placeholder=\(window.isAppPlaceholder)"
+            )
+            return accepted
         } else {
             activate(window)
         }
@@ -2070,12 +2087,13 @@ final class OverviewViewModel {
 
     /// Opening an app (app strip, or an app row in search) brings the whole app
     /// forward — every window, not just the most recent one.
-    func activateApp(_ window: WindowItem) {
+    @discardableResult
+    func activateApp(_ window: WindowItem) -> Bool {
         if let tab = window.safariTab, !tab.isCurrent {
             Task { await activate(tab) }
-        } else {
-            activator.activateApp(window)
+            return true
         }
+        return activator.activateApp(window)
     }
 
     func activate(_ tab: SafariTab) async {

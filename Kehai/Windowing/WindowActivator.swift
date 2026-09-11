@@ -39,13 +39,46 @@ final class WindowActivator {
 
     /// Open an *app* rather than one of its windows: bring the whole app forward,
     /// with every one of its unminimized windows, and leave `item` on top.
-    func activateApp(_ item: WindowItem) {
-        guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
+    @discardableResult
+    func activateApp(_ item: WindowItem) -> Bool {
+        guard let app = NSRunningApplication(processIdentifier: item.processID), !app.isTerminated else {
+            SafeDiagnosticLog.shared.record("app-activation: target process unavailable")
+            return false
+        }
         // A hidden app ignores activation until it is unhidden.
         if app.isHidden { app.unhide() }
-        app.activate(options: [.activateAllWindows])
+        let accepted = app.activate(options: [.activateAllWindows])
         // A placeholder has no real window to focus, so raise whatever the app has.
         raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
+        SafeDiagnosticLog.shared.record(
+            "app-activation: request accepted=\(accepted) hidden-after=\(app.isHidden)"
+        )
+        verifyActivation(of: app, item: item)
+        return accepted
+    }
+
+    private func verifyActivation(of app: NSRunningApplication, item: WindowItem) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak app] in
+            guard let self, let app, !app.isTerminated else {
+                SafeDiagnosticLog.shared.record("app-activation: verification target unavailable")
+                return
+            }
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier {
+                SafeDiagnosticLog.shared.record("app-activation: verified frontmost")
+                return
+            }
+            SafeDiagnosticLog.shared.record("app-activation: not frontmost; retrying")
+            if app.isHidden { app.unhide() }
+            let retryAccepted = app.activate(options: [.activateAllWindows])
+            self.raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+                    == app.processIdentifier
+                SafeDiagnosticLog.shared.record(
+                    "app-activation: retry accepted=\(retryAccepted) frontmost=\(isFrontmost)"
+                )
+            }
+        }
     }
 
     /// Raise the target window for a drag-redirect without forcing every app window up first.

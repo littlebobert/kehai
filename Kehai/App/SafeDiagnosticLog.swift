@@ -9,14 +9,19 @@ final class SafeDiagnosticLog: @unchecked Sendable {
     private struct Entry {
         let date: Date
         let event: String
+        var repetitionCount: Int
     }
 
     private init() {}
 
     func record(_ event: String) {
         lock.lock()
-        entries.append(Entry(date: Date(), event: event))
-        entries = Array(entries.suffix(200))
+        if entries.last?.event == event {
+            entries[entries.count - 1].repetitionCount += 1
+        } else {
+            entries.append(Entry(date: Date(), event: event, repetitionCount: 1))
+            entries = Array(entries.suffix(200))
+        }
         lock.unlock()
     }
 
@@ -25,6 +30,9 @@ final class SafeDiagnosticLog: @unchecked Sendable {
         let snapshot = entries
         lock.unlock()
         let formatter = ISO8601DateFormatter()
-        return snapshot.map { "\(formatter.string(from: $0.date)) \($0.event)" }.joined(separator: "\n")
+        return snapshot.map { entry in
+            let repetition = entry.repetitionCount > 1 ? " repeated=\(entry.repetitionCount)" : ""
+            return "\(formatter.string(from: entry.date)) \(entry.event)\(repetition)"
+        }.joined(separator: "\n")
     }
 }

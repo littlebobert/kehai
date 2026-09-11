@@ -87,8 +87,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         proceed: { [weak self] in self?.panelController.show() }
     )
     private lazy var hotKey = GlobalHotKey(
-        pressed: { [weak self] in self?.beginSwitcherMode() },
-        released: { [weak self] in self?.shortcutKeyReleased() }
+        pressed: { [weak self] in
+            SafeDiagnosticLog.shared.record("shortcut: hotkey pressed")
+            self?.beginSwitcherMode()
+        },
+        released: { [weak self] in
+            SafeDiagnosticLog.shared.record("shortcut: hotkey released")
+            self?.shortcutKeyReleased()
+        }
     )
     private let diagnosticReports = DiagnosticReportService()
     private lazy var aboutController = AboutWindowController(
@@ -204,6 +210,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     private func beginSwitcherMode() {
         if isShortcutSessionActive {
+            SafeDiagnosticLog.shared.record("shortcut: repeated press cycling")
             viewModel.cycleSelectionByApp(1)
             presentShortcutSwitcherIfNeeded()
             return
@@ -215,6 +222,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             return
         }
         let previousApplicationProcessID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        SafeDiagnosticLog.shared.record(
+            "shortcut: session begin frontmost-known=\(previousApplicationProcessID != nil)"
+        )
         isShortcutSessionActive = true
         installModifierMonitor()
         panelController.prepareSwitcherMode(previousApplicationProcessID: previousApplicationProcessID)
@@ -231,6 +241,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             }
             guard let self, self.isShortcutSessionActive else { return }
             self.shortcutPresentationTask = nil
+            SafeDiagnosticLog.shared.record("shortcut: hold threshold reached")
             self.presentShortcutSwitcherIfNeeded()
         }
     }
@@ -239,6 +250,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         shortcutPresentationTask?.cancel()
         shortcutPresentationTask = nil
         guard isShortcutSessionActive, !panelController.isMiniBrowserVisible else { return }
+        SafeDiagnosticLog.shared.record("shortcut: presenting mini UI")
         if !NSApp.isActive, !panelController.isVisible {
             suppressNextActivationPresentation = true
         }
@@ -246,8 +258,15 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     private func shortcutKeyReleased() {
-        guard isShortcutSessionActive else { return }
-        if !panelController.isMiniBrowserVisible || shortcutModifierFlags.isEmpty {
+        guard isShortcutSessionActive else {
+            SafeDiagnosticLog.shared.record("shortcut: release ignored no session")
+            return
+        }
+        let shouldFinish = !panelController.isMiniBrowserVisible || shortcutModifierFlags.isEmpty
+        SafeDiagnosticLog.shared.record(
+            "shortcut: release mini-visible=\(panelController.isMiniBrowserVisible) finish=\(shouldFinish)"
+        )
+        if shouldFinish {
             finishSwitcherMode()
         }
     }
@@ -258,7 +277,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         shortcutPresentationTask = nil
         isShortcutSessionActive = false
         removeModifierMonitor()
-        panelController.finishSwitcherMode()
+        let activated = panelController.finishSwitcherMode()
+        SafeDiagnosticLog.shared.record("shortcut: session finish activated=\(activated)")
     }
 
     private var shortcutModifierFlags: NSEvent.ModifierFlags {
