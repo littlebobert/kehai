@@ -45,38 +45,58 @@ final class WindowActivator {
             SafeDiagnosticLog.shared.record("app-activation: target process unavailable")
             return false
         }
-        // A hidden app ignores activation until it is unhidden.
-        if app.isHidden { app.unhide() }
-        let accepted = app.activate(options: [.activateAllWindows])
-        // A placeholder has no real window to focus, so raise whatever the app has.
-        raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
-        SafeDiagnosticLog.shared.record(
-            "app-activation: request accepted=\(accepted) hidden-after=\(app.isHidden)"
-        )
-        verifyActivation(of: app, item: item)
-        return accepted
+        guard let applicationURL = app.bundleURL else {
+            SafeDiagnosticLog.shared.record("app-activation: target bundle unavailable")
+            return false
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { [weak self] openedApp, error in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard error == nil, let openedApp else {
+                    SafeDiagnosticLog.shared.record("app-activation: workspace open failed")
+                    return
+                }
+                if openedApp.isHidden { openedApp.unhide() }
+                self.raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
+                SafeDiagnosticLog.shared.record("app-activation: workspace open completed")
+                self.verifyActivation(processID: item.processID, item: item)
+            }
+        }
+        SafeDiagnosticLog.shared.record("app-activation: workspace open requested")
+        return true
     }
 
-    private func verifyActivation(of app: NSRunningApplication, item: WindowItem) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self, weak app] in
-            guard let self, let app, !app.isTerminated else {
+    private func verifyActivation(processID: pid_t, item: WindowItem) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self,
+                  let app = NSRunningApplication(processIdentifier: processID),
+                  !app.isTerminated else {
                 SafeDiagnosticLog.shared.record("app-activation: verification target unavailable")
                 return
             }
-            if NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier {
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == processID {
                 SafeDiagnosticLog.shared.record("app-activation: verified frontmost")
                 return
             }
-            SafeDiagnosticLog.shared.record("app-activation: not frontmost; retrying")
-            if app.isHidden { app.unhide() }
-            let retryAccepted = app.activate(options: [.activateAllWindows])
-            self.raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
-                    == app.processIdentifier
-                SafeDiagnosticLog.shared.record(
-                    "app-activation: retry accepted=\(retryAccepted) frontmost=\(isFrontmost)"
-                )
+            SafeDiagnosticLog.shared.record("app-activation: not frontmost; retrying workspace open")
+            guard let applicationURL = app.bundleURL else {
+                SafeDiagnosticLog.shared.record("app-activation: retry bundle unavailable")
+                return
+            }
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { [weak self] _, error in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
+                    let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == processID
+                    SafeDiagnosticLog.shared.record(
+                        "app-activation: workspace retry error=\(error != nil) frontmost=\(isFrontmost)"
+                    )
+                }
             }
         }
     }

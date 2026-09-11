@@ -141,16 +141,20 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             // Keep switcher interaction active while the compact panel is pinned.
             return false
         }
-        if model.finishSwitcherMode() {
+        let activated = model.finishSwitcherMode()
+        if activated {
             // Always close after a successful activate so a live drag can land on the target.
             closeCompactSwitcher()
             return true
-        } else if wasDragging {
+        }
+        if wasDragging {
             // Keys released mid-drag with no target — end switcher but keep the compact view open.
             model.dragSessionEnded()
-        } else {
-            // Releasing on All Windows pins the mini UI; clicking All Windows opens the browser.
+            return false
         }
+        // The model completed a concrete selection attempt. Do not leave stale mini UI
+        // state behind if the operating system rejected foreground activation.
+        closeCompactSwitcher()
         return false
     }
 
