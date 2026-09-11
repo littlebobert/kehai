@@ -173,6 +173,7 @@ final class OverviewViewModel {
     private var hasPerformedInitialRefresh = false
     private var isPerformingInitialRefresh = false
     private var inventoryReconciliationTask: Task<Void, Never>?
+    private var initialSafariEnrichmentTask: Task<Void, Never>?
     private var isReconcilingInventory = false
     private var activeRefreshCount = 0
     private var isTerminating = false
@@ -800,6 +801,8 @@ final class OverviewViewModel {
         isTerminating = true
         inventoryReconciliationTask?.cancel()
         inventoryReconciliationTask = nil
+        initialSafariEnrichmentTask?.cancel()
+        initialSafariEnrichmentTask = nil
         dragDwellTask?.cancel()
         dragDwellTask = nil
         dragPasteboardPollTask?.cancel()
@@ -1674,10 +1677,75 @@ final class OverviewViewModel {
     func performInitialRefreshIfNeeded() async {
         guard !hasPerformedInitialRefresh, !isPerformingInitialRefresh else { return }
         isPerformingInitialRefresh = true
-        await refresh()
+        await refreshInitialInventory()
         isPerformingInitialRefresh = false
         isInitialAppOrderResolved = true
         hasPerformedInitialRefresh = !windows.isEmpty || errorMessage != nil
+    }
+
+    private func refreshInitialInventory() async {
+        guard !isTerminating else { return }
+        activeRefreshCount += 1
+        defer { activeRefreshCount -= 1 }
+        guard !shouldFreezeInventory else {
+            if windows.isEmpty { isLoading = false }
+            return
+        }
+
+        logger.notice("Initial thumbnail refresh started")
+        SafeDiagnosticLog.shared.record("thumbnail-pipeline: initial refresh started")
+        isLoading = true
+        errorMessage = nil
+
+        guard let pairs = await reconcileInventory(
+            includeSafariTabs: false,
+            showsGlobalLoading: true,
+            usesStoredHistory: false
+        ) else {
+            isLoading = false
+            return
+        }
+
+        isLoading = false
+        scheduleInitialSafariEnrichment()
+        await refreshThumbnails(for: pairs)
+        if let initialSafariEnrichmentTask {
+            await initialSafariEnrichmentTask.value
+        }
+        await generateInitialGroupsIfNeeded()
+    }
+
+    private func scheduleInitialSafariEnrichment() {
+        initialSafariEnrichmentTask?.cancel()
+        initialSafariEnrichmentTask = Task { [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled else { return }
+            await self.enrichSafariTabs()
+            self.initialSafariEnrichmentTask = nil
+        }
+    }
+
+    private func enrichSafariTabs() async {
+        guard !isTerminating, !shouldFreezeInventory else { return }
+        let epochAtStart = inventoryEpoch
+        do {
+            let tabs = try await safari.listTabs()
+            guard !isTerminating,
+                  !Task.isCancelled,
+                  inventoryEpoch == epochAtStart,
+                  !shouldFreezeInventory else { return }
+            var updatedWindows = windows
+            assignSafariTabs(tabs, to: &updatedWindows)
+            guard !inventoryIsEquivalent(windows, updatedWindows) else { return }
+            windows = updatedWindows
+            syncSwitcherAppSnapshot()
+            preserveSelectionOrSelectFirst()
+            activityMonitor.update(windows: updatedWindows)
+        } catch {
+            guard !Task.isCancelled, !isTerminating else { return }
+            errorMessage = L10n.format("Safari tabs are unavailable: %@", error.localizedDescription)
+            SafeDiagnosticLog.shared.record("safari-tabs: enumeration failed")
+        }
     }
 
     func refreshForForeground() async {
@@ -1740,7 +1808,8 @@ final class OverviewViewModel {
     @discardableResult
     private func reconcileInventory(
         includeSafariTabs: Bool,
-        showsGlobalLoading: Bool
+        showsGlobalLoading: Bool,
+        usesStoredHistory: Bool = true
     ) async -> [(WindowItem, SCWindow)]? {
         guard !isTerminating, !shouldFreezeInventory else { return nil }
         guard !isReconcilingInventory else { return nil }
@@ -1748,7 +1817,12 @@ final class OverviewViewModel {
         let epochAtStart = inventoryEpoch
         defer { isReconcilingInventory = false }
         do {
-            let seen = await history.lastSeen()
+            let seen: [CGWindowID: Date]
+            if usesStoredHistory {
+                seen = await history.lastSeen()
+            } else {
+                seen = [:]
+            }
             // Re-check after every await — a drag may have started, or the app may
             // have begun terminating, mid-catalog.
             guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
