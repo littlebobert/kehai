@@ -120,12 +120,16 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func showMiniBrowser() {
-        model.beginSwitcherMode()
+        model.beginSwitcherMode(previousApplicationProcessID: nil)
         showCompactSwitcher()
     }
 
-    func beginSwitcherMode() {
-        model.beginSwitcherMode()
+    func prepareSwitcherMode(previousApplicationProcessID: pid_t?) {
+        model.beginSwitcherMode(previousApplicationProcessID: previousApplicationProcessID)
+    }
+
+    func showPreparedSwitcher() {
+        guard model.isSwitcherMode else { return }
         showCompactSwitcher()
     }
 

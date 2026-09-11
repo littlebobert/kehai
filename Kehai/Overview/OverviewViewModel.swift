@@ -1122,14 +1122,29 @@ final class OverviewViewModel {
         return activateSelectedWindow()
     }
 
-    func beginSwitcherMode() {
+    func beginSwitcherMode(previousApplicationProcessID: pid_t?) {
         // Hotkey switcher should always show the full inventory, not a leftover
         // search, smart-search result set, or Dock-selected task group.
         clearTransientFilters(selectedGroupID: nil)
         switcherAppWindows = currentRecentAppWindows
         isSwitcherMode = true
         hoveredSwitcherWindowID = nil
-        selectAllWindowsApp()
+        selectPreviousApplication(excluding: previousApplicationProcessID)
+    }
+
+    private func selectPreviousApplication(excluding processID: pid_t?) {
+        guard let processID else {
+            selectAllWindowsApp()
+            return
+        }
+        let ownProcessID = ProcessInfo.processInfo.processIdentifier
+        guard let previousApplication = recentAppWindows.first(where: { application in
+            application.processID != ownProcessID && application.processID != processID
+        }) else {
+            selectAllWindowsApp()
+            return
+        }
+        focusApp(previousApplication.id)
     }
 
 

@@ -124,6 +124,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var suppressNextActivationPresentation = false
     private var modifierMonitors: [Any] = []
     private var isShortcutSessionActive = false
+    private var shortcutPresentationTask: Task<Void, Never>?
     private var hasStartedServices = false
     private var deferredStartupTask: Task<Void, Never>?
     private lazy var installationLocationController = InstallationLocationWindowController { [weak self] in
@@ -167,6 +168,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         deferredStartupTask?.cancel()
         deferredStartupTask = nil
         hotKey.unregister()
+        shortcutPresentationTask?.cancel()
+        shortcutPresentationTask = nil
         isShortcutSessionActive = false
         removeModifierMonitor()
         idleTimer?.invalidate()
@@ -207,6 +210,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private func beginSwitcherMode() {
         if isShortcutSessionActive {
             viewModel.cycleSelectionByApp(1)
+            presentShortcutSwitcherIfNeeded()
             return
         }
 
@@ -215,16 +219,41 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             showSettings()
             return
         }
+        let previousApplicationProcessID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        isShortcutSessionActive = true
+        installModifierMonitor()
+        panelController.prepareSwitcherMode(previousApplicationProcessID: previousApplicationProcessID)
+        scheduleShortcutSwitcherPresentation()
+    }
+
+    private func scheduleShortcutSwitcherPresentation() {
+        shortcutPresentationTask?.cancel()
+        shortcutPresentationTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(225))
+            } catch {
+                return
+            }
+            guard let self, self.isShortcutSessionActive else { return }
+            self.shortcutPresentationTask = nil
+            self.presentShortcutSwitcherIfNeeded()
+        }
+    }
+
+    private func presentShortcutSwitcherIfNeeded() {
+        shortcutPresentationTask?.cancel()
+        shortcutPresentationTask = nil
+        guard isShortcutSessionActive, !panelController.isMiniBrowserVisible else { return }
         if !NSApp.isActive, !panelController.isVisible {
             suppressNextActivationPresentation = true
         }
-        isShortcutSessionActive = true
-        installModifierMonitor()
-        panelController.beginSwitcherMode()
+        panelController.showPreparedSwitcher()
     }
 
     private func finishSwitcherMode() {
         guard isShortcutSessionActive else { return }
+        shortcutPresentationTask?.cancel()
+        shortcutPresentationTask = nil
         isShortcutSessionActive = false
         removeModifierMonitor()
         panelController.finishSwitcherMode()
