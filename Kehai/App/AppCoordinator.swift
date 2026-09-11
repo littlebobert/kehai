@@ -124,6 +124,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
     private var modifierMonitors: [Any] = []
+    private var shortcutPointerMonitors: [Any] = []
     private var isShortcutSessionActive = false
     private var shortcutPresentationTask: Task<Void, Never>?
     private var hasStartedServices = false
@@ -173,6 +174,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         shortcutPresentationTask = nil
         isShortcutSessionActive = false
         removeModifierMonitor()
+        removeShortcutPointerMonitor()
         idleTimer?.invalidate()
         idleTimer = nil
         githubRefreshTimer?.invalidate()
@@ -228,6 +230,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         )
         isShortcutSessionActive = true
         installModifierMonitor()
+        installShortcutPointerMonitor()
         panelController.prepareSwitcherMode(previousApplicationProcessID: previousApplicationProcessID)
         scheduleShortcutSwitcherPresentation()
     }
@@ -236,7 +239,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         shortcutPresentationTask?.cancel()
         shortcutPresentationTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(for: .milliseconds(225))
+                try await Task.sleep(for: .milliseconds(200))
             } catch {
                 return
             }
@@ -250,6 +253,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private func presentShortcutSwitcherIfNeeded() {
         shortcutPresentationTask?.cancel()
         shortcutPresentationTask = nil
+        removeShortcutPointerMonitor()
         guard isShortcutSessionActive, !panelController.isMiniBrowserVisible else { return }
         SafeDiagnosticLog.shared.record("shortcut: presenting mini UI")
         if !NSApp.isActive, !panelController.isVisible {
@@ -283,6 +287,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         shortcutPresentationTask = nil
         isShortcutSessionActive = false
         removeModifierMonitor()
+        removeShortcutPointerMonitor()
         let activated = panelController.finishSwitcherMode()
         SafeDiagnosticLog.shared.record("shortcut: session finish activated=\(activated)")
     }
@@ -328,6 +333,35 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             NSEvent.removeMonitor(monitor)
         }
         modifierMonitors.removeAll()
+    }
+
+    private func installShortcutPointerMonitor() {
+        removeShortcutPointerMonitor()
+        let reveal: (NSEvent) -> Void = { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      self.isShortcutSessionActive,
+                      !self.panelController.isMiniBrowserVisible else { return }
+                SafeDiagnosticLog.shared.record("shortcut: pointer movement revealed mini UI")
+                self.presentShortcutSwitcherIfNeeded()
+            }
+        }
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved, handler: reveal) {
+            shortcutPointerMonitors.append(monitor)
+        }
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .mouseMoved, handler: { event in
+            reveal(event)
+            return event
+        }) {
+            shortcutPointerMonitors.append(monitor)
+        }
+    }
+
+    private func removeShortcutPointerMonitor() {
+        for monitor in shortcutPointerMonitors {
+            NSEvent.removeMonitor(monitor)
+        }
+        shortcutPointerMonitors.removeAll()
     }
 
     func dockMenu() -> NSMenu? {
