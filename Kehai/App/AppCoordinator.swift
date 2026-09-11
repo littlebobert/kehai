@@ -88,12 +88,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     )
     private lazy var hotKey = GlobalHotKey(
         pressed: { [weak self] in self?.beginSwitcherMode() },
-        released: { [weak self] in
-            // Only finish on key-up when the shortcut has no modifiers (key alone).
-            // With ⌘⇧Space, Space may release while modifiers stay down for hover/Q/W.
-            guard let self, self.shortcutModifierFlags.isEmpty else { return }
-            self.finishSwitcherMode()
-        }
+        released: { [weak self] in self?.shortcutKeyReleased() }
     )
     private let diagnosticReports = DiagnosticReportService()
     private lazy var aboutController = AboutWindowController(
@@ -248,6 +243,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             suppressNextActivationPresentation = true
         }
         panelController.showPreparedSwitcher()
+    }
+
+    private func shortcutKeyReleased() {
+        guard isShortcutSessionActive else { return }
+        if !panelController.isMiniBrowserVisible || shortcutModifierFlags.isEmpty {
+            finishSwitcherMode()
+        }
     }
 
     private func finishSwitcherMode() {
