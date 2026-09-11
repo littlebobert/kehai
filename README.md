@@ -4,7 +4,7 @@ A faster way to switch apps, find windows, and open GitHub repositories.
 
 ## Download
 
-[Download Kehai 0.5.4 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.5.4/Kehai-0.5.4-mac.zip)
+[Download Kehai 0.5.5 for Apple Silicon](https://github.com/littlebobert/kehai/releases/download/0.5.5/Kehai-0.5.5-mac.zip)
 
 ## Build and run
 
