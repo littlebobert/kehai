@@ -1699,8 +1699,7 @@ final class OverviewViewModel {
 
         guard let pairs = await reconcileInventory(
             includeSafariTabs: false,
-            showsGlobalLoading: true,
-            usesStoredHistory: false
+            showsGlobalLoading: true
         ) else {
             isLoading = false
             return
@@ -1808,8 +1807,7 @@ final class OverviewViewModel {
     @discardableResult
     private func reconcileInventory(
         includeSafariTabs: Bool,
-        showsGlobalLoading: Bool,
-        usesStoredHistory: Bool = true
+        showsGlobalLoading: Bool
     ) async -> [(WindowItem, SCWindow)]? {
         guard !isTerminating, !shouldFreezeInventory else { return nil }
         guard !isReconcilingInventory else { return nil }
@@ -1817,12 +1815,7 @@ final class OverviewViewModel {
         let epochAtStart = inventoryEpoch
         defer { isReconcilingInventory = false }
         do {
-            let seen: [CGWindowID: Date]
-            if usesStoredHistory {
-                seen = await history.lastSeen()
-            } else {
-                seen = [:]
-            }
+            let seen = await history.lastSeen()
             // Re-check after every await — a drag may have started, or the app may
             // have begun terminating, mid-catalog.
             guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {
