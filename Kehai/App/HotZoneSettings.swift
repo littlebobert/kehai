@@ -31,6 +31,49 @@ enum HotZone: String, CaseIterable, Identifiable {
         }
     }
 
+    var opensRight: Bool {
+        switch self {
+        case .upperRight, .lowerRight, .right:
+            false
+        case .upperLeft, .lowerLeft, .bottom, .left:
+            true
+        }
+    }
+
+    var opensUp: Bool {
+        switch self {
+        case .lowerLeft, .lowerRight, .bottom:
+            true
+        case .upperLeft, .upperRight, .left, .right:
+            false
+        }
+    }
+
+    func windowFrameOrigin(windowSize: CGSize, in screenFrame: CGRect) -> CGPoint {
+        let centeredOriginX = screenFrame.midX - windowSize.width / 2
+        let centeredOriginY = screenFrame.midY - windowSize.height / 2
+
+        switch self {
+        case .upperLeft:
+            return CGPoint(x: screenFrame.minX, y: screenFrame.maxY - windowSize.height)
+        case .upperRight:
+            return CGPoint(
+                x: screenFrame.maxX - windowSize.width,
+                y: screenFrame.maxY - windowSize.height
+            )
+        case .lowerLeft:
+            return CGPoint(x: screenFrame.minX, y: screenFrame.minY)
+        case .lowerRight:
+            return CGPoint(x: screenFrame.maxX - windowSize.width, y: screenFrame.minY)
+        case .bottom:
+            return CGPoint(x: centeredOriginX, y: screenFrame.minY)
+        case .left:
+            return CGPoint(x: screenFrame.minX, y: centeredOriginY)
+        case .right:
+            return CGPoint(x: screenFrame.maxX - windowSize.width, y: centeredOriginY)
+        }
+    }
+
     func contains(pointer: CGPoint, in screenFrame: CGRect, tolerance: CGFloat) -> Bool {
         let isWithinHorizontalBounds = pointer.x >= screenFrame.minX - tolerance
             && pointer.x <= screenFrame.maxX + tolerance

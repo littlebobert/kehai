@@ -428,6 +428,24 @@ final class KehaiTests: XCTestCase {
         ))
     }
 
+    func testHotZoneWindowPlacementPinsAndCentersTheMiniUI() {
+        let screenFrame = CGRect(x: -100, y: 50, width: 1_000, height: 700)
+        let windowSize = CGSize(width: 600, height: 300)
+
+        XCTAssertEqual(
+            HotZone.bottom.windowFrameOrigin(windowSize: windowSize, in: screenFrame),
+            CGPoint(x: 100, y: 50)
+        )
+        XCTAssertEqual(
+            HotZone.left.windowFrameOrigin(windowSize: windowSize, in: screenFrame),
+            CGPoint(x: -100, y: 250)
+        )
+        XCTAssertEqual(
+            HotZone.lowerLeft.windowFrameOrigin(windowSize: windowSize, in: screenFrame),
+            CGPoint(x: -100, y: 50)
+        )
+    }
+
     func testGitHubRepositoryDecodingMapsNestedAndSnakeCaseFields() throws {
         let repository = try JSONDecoder().decode(GitHubRepository.self, from: githubRepositoryJSON(
             id: 9,

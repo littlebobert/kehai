@@ -310,13 +310,8 @@ struct OverviewView: View {
                             badgeLabel: model.badgeLabel(for: window),
                             classicTheme: appearance.browserTheme == .classicMac,
                             activate: {
-                                if model.isAppFocused(window.id) {
-                                    model.activateApp(window)
+                                if model.activateApp(window) {
                                     close()
-                                } else {
-                                    withAnimation(.easeInOut(duration: 0.12)) {
-                                        model.focusApp(window.id)
-                                    }
                                 }
                             },
                             hoverChanged: { isHovering in

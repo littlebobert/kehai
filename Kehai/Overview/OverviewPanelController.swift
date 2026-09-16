@@ -124,6 +124,11 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         showCompactSwitcher()
     }
 
+    func showMiniBrowser(anchoredTo hotZone: HotZone, on screen: NSScreen) {
+        model.beginSwitcherMode(previousApplicationProcessID: nil)
+        showCompactSwitcher(anchoredTo: hotZone, on: screen)
+    }
+
     func prepareSwitcherMode(previousApplicationProcessID: pid_t?) {
         model.beginSwitcherMode(previousApplicationProcessID: previousApplicationProcessID)
     }
@@ -158,14 +163,17 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         return false
     }
 
-    private func showCompactSwitcher() {
+    private func showCompactSwitcher(anchoredTo hotZone: HotZone? = nil, on targetScreen: NSScreen? = nil) {
         closeCompactSwitcher()
         window?.orderOut(nil)
         let pointer = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) } ?? NSScreen.main
+        let screen = targetScreen
+            ?? NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) }
+            ?? NSScreen.main
         guard let screen else { return }
 
         let visibleFrame = screen.visibleFrame
+        let anchorPoint = pointer
         let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
         let threeThumbnailWidth: CGFloat = 676
         let oneThumbnailMinimumWidth: CGFloat = 244
@@ -176,21 +184,25 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let leftFrameInset = referenceContentRect.minX - referenceFrameRect.minX
         let rightFrameInset = referenceFrameRect.maxX - referenceContentRect.maxX
         let maximumRightWidth = visibleFrame.maxX
-            - (pointer.x - allWindowsIconHorizontalInset)
+            - (anchorPoint.x - allWindowsIconHorizontalInset)
             - rightFrameInset
-        let maximumLeftWidth = pointer.x
+        let maximumLeftWidth = anchorPoint.x
             + allWindowsIconHorizontalInset
             - visibleFrame.minX
             - leftFrameInset
         let opensRight: Bool
-        if maximumRightWidth >= preferredWidth {
+        if let hotZone {
+            opensRight = hotZone.opensRight
+        } else if maximumRightWidth >= preferredWidth {
             opensRight = true
         } else if maximumLeftWidth >= preferredWidth {
             opensRight = false
         } else {
             opensRight = maximumRightWidth >= maximumLeftWidth
         }
-        let maximumAnchoredWidth = floor(max(1, opensRight ? maximumRightWidth : maximumLeftWidth))
+        let maximumAnchoredWidth = hotZone == nil
+            ? floor(max(1, opensRight ? maximumRightWidth : maximumLeftWidth))
+            : floor(visibleFrame.width)
         let minimumWidth = min(oneThumbnailMinimumWidth, maximumAnchoredWidth)
         let width = min(preferredWidth, maximumAnchoredWidth)
         let usesRetrofit = appearance.browserTheme == .classicMac
@@ -203,12 +215,12 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let height = min(estimatedHeight, visibleFrame.height)
         let topStripIconInset: CGFloat = 65.5
         let bottomStripIconInset: CGFloat = 41
-        let opensUp = pointer.y - (height - topStripIconInset) < visibleFrame.minY
+        let opensUp = hotZone?.opensUp ?? (pointer.y - (height - topStripIconInset) < visibleFrame.minY)
         compactWindowsAboveAppStrip = opensUp
         let iconCenterX = opensRight ? allWindowsIconHorizontalInset : width - allWindowsIconHorizontalInset
         let iconCenterY = opensUp ? bottomStripIconInset : height - topStripIconInset
-        let proposedOriginX = pointer.x - iconCenterX
-        let proposedOriginY = pointer.y - iconCenterY
+        let proposedOriginX = anchorPoint.x - iconCenterX
+        let proposedOriginY = anchorPoint.y - iconCenterY
         let originX = min(max(proposedOriginX, visibleFrame.minX), visibleFrame.maxX - width)
         let originY = min(max(proposedOriginY, visibleFrame.minY), visibleFrame.maxY - height)
 
@@ -218,6 +230,12 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
+        if let hotZone {
+            panel.setFrameOrigin(hotZone.windowFrameOrigin(
+                windowSize: panel.frame.size,
+                in: visibleFrame
+            ))
+        }
         panel.title = "Kehai mini"
         panel.titleVisibility = .visible
         panel.tabbingMode = .disallowed

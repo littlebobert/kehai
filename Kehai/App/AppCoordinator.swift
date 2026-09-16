@@ -573,7 +573,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     private func checkHotZone() {
         let pointer = NSEvent.mouseLocation
-        let isInConfiguredZone = NSScreen.screens.contains { screen in
+        let matchingScreen = NSScreen.screens.first { screen in
             hotZoneSettings.zone.contains(
                 pointer: pointer,
                 in: screen.frame,
@@ -581,7 +581,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             )
         }
 
-        guard isInConfiguredZone else {
+        guard let matchingScreen else {
             hotZoneEntryDate = nil
             hotZoneIsArmed = true
             return
@@ -609,7 +609,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         }
 
         SafeDiagnosticLog.shared.record("hot-zone: presenting mini UI zone=\(hotZoneSettings.zone.rawValue)")
-        panelController.showMiniBrowser()
+        panelController.showMiniBrowser(
+            anchoredTo: hotZoneSettings.zone,
+            on: matchingScreen
+        )
     }
 
     func updateGitHubRefreshMonitoring() {
