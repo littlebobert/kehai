@@ -360,49 +360,69 @@ final class KehaiTests: XCTestCase {
     }
 
     @MainActor
-    func testHotCornerSettingsDefaultOffLowerLeftAndPersistChanges() {
-        let suiteName = "KehaiTests.HotCorner.\(UUID().uuidString)"
+    func testHotZoneSettingsDefaultOffLowerLeftAndPersistChanges() {
+        let suiteName = "KehaiTests.HotZone.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let settings = HotCornerSettings(defaults: defaults)
+        let settings = HotZoneSettings(defaults: defaults)
         XCTAssertFalse(settings.isEnabled)
-        XCTAssertEqual(settings.corner, .lowerLeft)
+        XCTAssertEqual(settings.zone, .lowerLeft)
 
         settings.isEnabled = true
-        settings.corner = .upperRight
+        settings.zone = .upperRight
 
-        let restoredSettings = HotCornerSettings(defaults: defaults)
+        let restoredSettings = HotZoneSettings(defaults: defaults)
         XCTAssertTrue(restoredSettings.isEnabled)
-        XCTAssertEqual(restoredSettings.corner, .upperRight)
+        XCTAssertEqual(restoredSettings.zone, .upperRight)
     }
 
-    func testHotCornerHitRegionsMatchConfiguredCorners() {
+    func testHotZoneHitRegionsMatchConfiguredEdgesAndCorners() {
         let screenFrame = CGRect(x: -100, y: 50, width: 800, height: 600)
         let tolerance: CGFloat = 5
 
-        XCTAssertTrue(HotCorner.upperLeft.contains(
+        XCTAssertTrue(HotZone.upperLeft.contains(
             pointer: CGPoint(x: -98, y: 648),
             in: screenFrame,
             tolerance: tolerance
         ))
-        XCTAssertTrue(HotCorner.upperRight.contains(
+        XCTAssertTrue(HotZone.upperRight.contains(
             pointer: CGPoint(x: 698, y: 648),
             in: screenFrame,
             tolerance: tolerance
         ))
-        XCTAssertTrue(HotCorner.lowerLeft.contains(
+        XCTAssertTrue(HotZone.lowerLeft.contains(
             pointer: CGPoint(x: -98, y: 52),
             in: screenFrame,
             tolerance: tolerance
         ))
-        XCTAssertTrue(HotCorner.lowerRight.contains(
+        XCTAssertTrue(HotZone.lowerRight.contains(
             pointer: CGPoint(x: 698, y: 52),
             in: screenFrame,
             tolerance: tolerance
         ))
-        XCTAssertFalse(HotCorner.lowerLeft.contains(
+        XCTAssertTrue(HotZone.bottom.contains(
+            pointer: CGPoint(x: 300, y: 52),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertTrue(HotZone.left.contains(
+            pointer: CGPoint(x: -98, y: 350),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertTrue(HotZone.right.contains(
+            pointer: CGPoint(x: 698, y: 350),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertFalse(HotZone.lowerLeft.contains(
             pointer: CGPoint(x: -90, y: 52),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertFalse(HotZone.bottom.contains(
+            pointer: CGPoint(x: 300, y: 60),
             in: screenFrame,
             tolerance: tolerance
         ))

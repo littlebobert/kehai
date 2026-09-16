@@ -31,7 +31,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     let autoUpdates = AutoUpdateService()
     let appearanceSettings = AppearanceSettings()
     let idleGroupingSettings = IdleGroupingSettings()
-    let hotCornerSettings = HotCornerSettings()
+    let hotZoneSettings = HotZoneSettings()
     let browserPresentationState = BrowserPresentationState()
     private lazy var activityMonitor = ActivityMonitor(store: history)
     private lazy var dockBadgeMonitor: DockBadgeMonitor = {
@@ -104,7 +104,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private lazy var settingsController = SettingsWindowController(
         shortcut: shortcutSettings,
         idleGrouping: idleGroupingSettings,
-        hotCorner: hotCornerSettings,
+        hotZone: hotZoneSettings,
         excludedApps: excludedAppStore,
         aiExcludedApps: aiExcludedAppStore,
         permissionManager: permissionManager,
@@ -115,22 +115,22 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         safariService: safari,
         shortcutChanged: { [weak self] in self?.registerHotKey() },
         idleGroupingChanged: { [weak self] in self?.updateIdleGroupingMonitoring() },
-        hotCornerChanged: { [weak self] in self?.updateHotCornerMonitoring() },
+        hotZoneChanged: { [weak self] in self?.updateHotZoneMonitoring() },
         githubRefreshIntervalChanged: { [weak self] in self?.updateGitHubRefreshMonitoring() },
         exclusionsChanged: { [weak self] in
             Task { await self?.viewModel.refresh() }
         }
     )
-    private static let hotCornerPollingInterval: TimeInterval = 0.1
-    private static let hotCornerDwellDuration: TimeInterval = 0
-    private static let hotCornerTolerance: CGFloat = 5
+    private static let hotZonePollingInterval: TimeInterval = 0.1
+    private static let hotZoneDwellDuration: TimeInterval = 0
+    private static let hotZoneTolerance: CGFloat = 5
 
     private var activationObserver: NSObjectProtocol?
     private var idleTimer: Timer?
-    private var hotCornerTimer: Timer?
+    private var hotZoneTimer: Timer?
     private var githubRefreshTimer: Timer?
-    private var hotCornerEntryDate: Date?
-    private var hotCornerIsArmed = true
+    private var hotZoneEntryDate: Date?
+    private var hotZoneIsArmed = true
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
     private var modifierMonitors: [Any] = []
@@ -163,7 +163,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         activityMonitor.start()
         windowInventoryMonitor.start()
         updateIdleGroupingMonitoring()
-        updateHotCornerMonitoring()
+        updateHotZoneMonitoring()
         updateGitHubRefreshMonitoring()
         startDeferredServices()
         activationObserver = NotificationCenter.default.addObserver(
@@ -190,10 +190,10 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         removeShortcutPointerMonitor()
         idleTimer?.invalidate()
         idleTimer = nil
-        hotCornerTimer?.invalidate()
-        hotCornerTimer = nil
-        hotCornerEntryDate = nil
-        hotCornerIsArmed = true
+        hotZoneTimer?.invalidate()
+        hotZoneTimer = nil
+        hotZoneEntryDate = nil
+        hotZoneIsArmed = true
         githubRefreshTimer?.invalidate()
         githubRefreshTimer = nil
         activityMonitor.stop()
@@ -549,66 +549,66 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         checkIdleGrouping()
     }
 
-    func updateHotCornerMonitoring() {
-        hotCornerTimer?.invalidate()
-        hotCornerTimer = nil
-        hotCornerEntryDate = nil
-        hotCornerIsArmed = true
+    func updateHotZoneMonitoring() {
+        hotZoneTimer?.invalidate()
+        hotZoneTimer = nil
+        hotZoneEntryDate = nil
+        hotZoneIsArmed = true
 
-        guard hotCornerSettings.isEnabled else {
-            SafeDiagnosticLog.shared.record("hot-corner: monitoring disabled")
+        guard hotZoneSettings.isEnabled else {
+            SafeDiagnosticLog.shared.record("hot-zone: monitoring disabled")
             return
         }
 
         SafeDiagnosticLog.shared.record(
-            "hot-corner: monitoring started corner=\(hotCornerSettings.corner.rawValue) screens=\(NSScreen.screens.count)"
+            "hot-zone: monitoring started zone=\(hotZoneSettings.zone.rawValue) screens=\(NSScreen.screens.count)"
         )
-        let timer = Timer(timeInterval: Self.hotCornerPollingInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.checkHotCorner() }
+        let timer = Timer(timeInterval: Self.hotZonePollingInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.checkHotZone() }
         }
-        hotCornerTimer = timer
+        hotZoneTimer = timer
         RunLoop.main.add(timer, forMode: .common)
-        checkHotCorner()
+        checkHotZone()
     }
 
-    private func checkHotCorner() {
+    private func checkHotZone() {
         let pointer = NSEvent.mouseLocation
-        let isInConfiguredCorner = NSScreen.screens.contains { screen in
-            hotCornerSettings.corner.contains(
+        let isInConfiguredZone = NSScreen.screens.contains { screen in
+            hotZoneSettings.zone.contains(
                 pointer: pointer,
                 in: screen.frame,
-                tolerance: Self.hotCornerTolerance
+                tolerance: Self.hotZoneTolerance
             )
         }
 
-        guard isInConfiguredCorner else {
-            hotCornerEntryDate = nil
-            hotCornerIsArmed = true
+        guard isInConfiguredZone else {
+            hotZoneEntryDate = nil
+            hotZoneIsArmed = true
             return
         }
-        guard hotCornerIsArmed else { return }
+        guard hotZoneIsArmed else { return }
 
-        if Self.hotCornerDwellDuration > 0 {
-            guard let hotCornerEntryDate else {
-                self.hotCornerEntryDate = Date()
-                SafeDiagnosticLog.shared.record("hot-corner: pointer entered configured corner")
+        if Self.hotZoneDwellDuration > 0 {
+            guard let hotZoneEntryDate else {
+                self.hotZoneEntryDate = Date()
+                SafeDiagnosticLog.shared.record("hot-zone: pointer entered configured zone")
                 return
             }
-            guard Date().timeIntervalSince(hotCornerEntryDate) >= Self.hotCornerDwellDuration else { return }
+            guard Date().timeIntervalSince(hotZoneEntryDate) >= Self.hotZoneDwellDuration else { return }
         }
 
-        self.hotCornerEntryDate = nil
-        hotCornerIsArmed = false
+        self.hotZoneEntryDate = nil
+        hotZoneIsArmed = false
         guard permissionManager.hasCorePermissions else {
-            SafeDiagnosticLog.shared.record("hot-corner: presentation blocked missing core permissions")
+            SafeDiagnosticLog.shared.record("hot-zone: presentation blocked missing core permissions")
             return
         }
         guard !NSApp.isActive || !panelController.isMiniBrowserVisible else {
-            SafeDiagnosticLog.shared.record("hot-corner: presentation skipped active mini UI already visible")
+            SafeDiagnosticLog.shared.record("hot-zone: presentation skipped active mini UI already visible")
             return
         }
 
-        SafeDiagnosticLog.shared.record("hot-corner: presenting mini UI corner=\(hotCornerSettings.corner.rawValue)")
+        SafeDiagnosticLog.shared.record("hot-zone: presenting mini UI zone=\(hotZoneSettings.zone.rawValue)")
         panelController.showMiniBrowser()
     }
 

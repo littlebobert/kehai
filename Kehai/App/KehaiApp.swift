@@ -9,7 +9,7 @@ struct KehaiApp: App {
             SettingsView(
                 shortcut: appDelegate.coordinator.shortcutSettings,
                 idleGrouping: appDelegate.coordinator.idleGroupingSettings,
-                hotCorner: appDelegate.coordinator.hotCornerSettings,
+                hotZone: appDelegate.coordinator.hotZoneSettings,
                 excludedApps: appDelegate.coordinator.excludedAppStore,
                 aiExcludedApps: appDelegate.coordinator.aiExcludedAppStore,
                 permissionManager: appDelegate.coordinator.permissionManager,
@@ -20,7 +20,7 @@ struct KehaiApp: App {
                 safariService: appDelegate.coordinator.safari,
                 shortcutChanged: appDelegate.coordinator.registerHotKey,
                 idleGroupingChanged: appDelegate.coordinator.updateIdleGroupingMonitoring,
-                hotCornerChanged: appDelegate.coordinator.updateHotCornerMonitoring,
+                hotZoneChanged: appDelegate.coordinator.updateHotZoneMonitoring,
                 githubRefreshIntervalChanged: appDelegate.coordinator.updateGitHubRefreshMonitoring,
                 exclusionsChanged: appDelegate.coordinator.refreshBrowser
             )

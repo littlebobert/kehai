@@ -6,7 +6,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
     init(
         shortcut: ShortcutSettings,
         idleGrouping: IdleGroupingSettings,
-        hotCorner: HotCornerSettings,
+        hotZone: HotZoneSettings,
         excludedApps: ExcludedAppStore,
         aiExcludedApps: AIExcludedAppStore,
         permissionManager: PermissionManager,
@@ -17,7 +17,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         safariService: SafariTabService,
         shortcutChanged: @escaping () -> Void,
         idleGroupingChanged: @escaping () -> Void,
-        hotCornerChanged: @escaping () -> Void,
+        hotZoneChanged: @escaping () -> Void,
         githubRefreshIntervalChanged: @escaping () -> Void,
         exclusionsChanged: @escaping () -> Void
     ) {
@@ -34,7 +34,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: SettingsView(
             shortcut: shortcut,
             idleGrouping: idleGrouping,
-            hotCorner: hotCorner,
+            hotZone: hotZone,
             excludedApps: excludedApps,
             aiExcludedApps: aiExcludedApps,
             permissionManager: permissionManager,
@@ -45,7 +45,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
             safariService: safariService,
             shortcutChanged: shortcutChanged,
             idleGroupingChanged: idleGroupingChanged,
-            hotCornerChanged: hotCornerChanged,
+            hotZoneChanged: hotZoneChanged,
             githubRefreshIntervalChanged: githubRefreshIntervalChanged,
             exclusionsChanged: exclusionsChanged
         ))

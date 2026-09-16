@@ -5,7 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var shortcut: ShortcutSettings
     @Bindable var idleGrouping: IdleGroupingSettings
-    @Bindable var hotCorner: HotCornerSettings
+    @Bindable var hotZone: HotZoneSettings
     @Bindable var excludedApps: ExcludedAppStore
     @Bindable var aiExcludedApps: AIExcludedAppStore
     @Bindable var permissionManager: PermissionManager
@@ -16,7 +16,7 @@ struct SettingsView: View {
     let safariService: SafariTabService
     let shortcutChanged: () -> Void
     let idleGroupingChanged: () -> Void
-    let hotCornerChanged: () -> Void
+    let hotZoneChanged: () -> Void
     let githubRefreshIntervalChanged: () -> Void
     let exclusionsChanged: () -> Void
     @State private var selectedProvider = AIProvider.current
@@ -25,6 +25,8 @@ struct SettingsView: View {
         TabView {
             generalSettings
                 .tabItem { Label("General", systemImage: "gearshape") }
+            groupSettings
+                .tabItem { Label("Groups", systemImage: "rectangle.3.group") }
             aiSettings
                 .tabItem { Label("AI", systemImage: "sparkles") }
             integrationsSettings
@@ -82,46 +84,52 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Hot Corner") {
+            Section("Hot Zones") {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Show Mini Browser")
-                        Text("Move the pointer into a screen corner and pause briefly.")
+                        Text("Move the pointer to the selected screen edge or corner.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 20)
                     Toggle("", isOn: Binding(
-                        get: { hotCorner.isEnabled },
+                        get: { hotZone.isEnabled },
                         set: {
-                            hotCorner.isEnabled = $0
-                            hotCornerChanged()
+                            hotZone.isEnabled = $0
+                            hotZoneChanged()
                         }
                     ))
                     .labelsHidden()
                     .toggleStyle(.switch)
                 }
                 HStack {
-                    Text("Corner")
+                    Text("Zone")
                     Spacer(minLength: 20)
-                    Picker("Corner", selection: Binding(
-                        get: { hotCorner.corner },
+                    Picker("Zone", selection: Binding(
+                        get: { hotZone.zone },
                         set: {
-                            hotCorner.corner = $0
-                            hotCornerChanged()
+                            hotZone.zone = $0
+                            hotZoneChanged()
                         }
                     )) {
-                        ForEach(HotCorner.allCases) { corner in
-                            Text(corner.displayName).tag(corner)
+                        ForEach(HotZone.allCases) { zone in
+                            Text(zone.displayName).tag(zone)
                         }
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
                     .fixedSize()
                 }
-                .disabled(!hotCorner.isEnabled)
+                .disabled(!hotZone.isEnabled)
             }
 
+        }
+        .formStyle(.grouped)
+    }
+
+    private var groupSettings: some View {
+        Form {
             Section("Task Groups") {
                 HStack {
                     Text("Regenerate automatically when idle")
