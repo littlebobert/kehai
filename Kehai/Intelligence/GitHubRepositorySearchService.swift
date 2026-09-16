@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-struct GitHubRepository: Decodable, Identifiable, Sendable {
+struct GitHubRepository: Codable, Identifiable, Sendable {
     let id: Int64
     let name: String
     let fullName: String
@@ -22,7 +22,7 @@ struct GitHubRepository: Decodable, Identifiable, Sendable {
         case pushedAt = "pushed_at"
     }
 
-    private struct Owner: Decodable {
+    private struct Owner: Codable {
         let login: String
         let avatarURL: URL?
 
@@ -30,6 +30,32 @@ struct GitHubRepository: Decodable, Identifiable, Sendable {
             case login
             case avatarURL = "avatar_url"
         }
+    }
+
+    init(
+        id: Int64,
+        name: String,
+        fullName: String,
+        ownerLogin: String,
+        ownerAvatarURL: URL?,
+        description: String?,
+        htmlURL: URL,
+        isPrivate: Bool,
+        isFork: Bool,
+        isArchived: Bool,
+        pushedAt: Date?
+    ) {
+        self.id = id
+        self.name = name
+        self.fullName = fullName
+        self.ownerLogin = ownerLogin
+        self.ownerAvatarURL = ownerAvatarURL
+        self.description = description
+        self.htmlURL = htmlURL
+        self.isPrivate = isPrivate
+        self.isFork = isFork
+        self.isArchived = isArchived
+        self.pushedAt = pushedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -52,6 +78,25 @@ struct GitHubRepository: Decodable, Identifiable, Sendable {
             pushedAt = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
         } else {
             pushedAt = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(fullName, forKey: .fullName)
+        try container.encode(
+            Owner(login: ownerLogin, avatarURL: ownerAvatarURL),
+            forKey: .owner
+        )
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encode(htmlURL, forKey: .htmlURL)
+        try container.encode(isPrivate, forKey: .isPrivate)
+        try container.encode(isFork, forKey: .fork)
+        try container.encode(isArchived, forKey: .archived)
+        if let pushedAt {
+            try container.encode(ISO8601DateFormatter().string(from: pushedAt), forKey: .pushedAt)
         }
     }
 }
@@ -1378,6 +1423,15 @@ final class GitHubRepositoryStore {
     private static let connectionServicePrefix = "com.justin.Kehai.github.connection."
     private static let persistedConnectionIDsKey = "com.justin.Kehai.github.connectionIDs"
     private static let localInteractionsKey = "com.justin.Kehai.github.localInteractions"
+    private static let repositoryCacheKey = "com.justin.Kehai.github.repositoryCache.v1"
+
+    private struct CachedConnectionState: Codable {
+        let username: String?
+        let repositories: [GitHubRepository]
+        let contributionActivity: [GitHubRepository.ID: GitHubRepositoryContributionActivity]
+        let contributionWarning: String?
+        let lastRefreshedAt: Date?
+    }
 
     var newToken = ""
     private(set) var connections: [GitHubRepositoryConnection]
@@ -1389,6 +1443,8 @@ final class GitHubRepositoryStore {
     private let legacyKeyStore: APIKeyStore
     private var localInteractions: [GitHubRepository.ID: GitHubRepositoryLocalInteraction]
     private var hasPersistedConnections: Bool
+    private var repositoriesDuringFullRefresh: [GitHubRepository]?
+    private var personalActivityDuringFullRefresh: [GitHubRepository.ID: GitHubRepositoryPersonalActivity]?
     private var hasHydratedStoredState = false
     private var isHydratingStoredState = false
 
@@ -1403,13 +1459,25 @@ final class GitHubRepositoryStore {
         legacyKeyStore = keyStore
         localInteractions = [:]
         connections = []
+        repositoriesDuringFullRefresh = nil
+        personalActivityDuringFullRefresh = nil
         hasPersistedConnections = !(userDefaults.stringArray(
             forKey: Self.persistedConnectionIDsKey
         ) ?? []).isEmpty
 
-        guard loadsStoredState else { return }
         loadLocalInteractions()
+        let cachedStates = loadRepositoryCache()
         var persistedIDs = userDefaults.stringArray(forKey: Self.persistedConnectionIDsKey) ?? []
+
+        if !loadsStoredState {
+            connections = cachedConnections(
+                persistedIDs: persistedIDs,
+                cachedStates: cachedStates
+            )
+            recordCacheHydration()
+            return
+        }
+
         if keyStore.hasSavedKey, !persistedIDs.contains(Self.legacyConnectionID) {
             persistedIDs.insert(Self.legacyConnectionID, at: 0)
         }
@@ -1421,7 +1489,11 @@ final class GitHubRepositoryStore {
                 ? keyStore
                 : APIKeyStore(service: Self.connectionServicePrefix + id)
             guard connectionKeyStore.hasSavedKey else { return nil }
-            return GitHubRepositoryConnection(id: id, keyStore: connectionKeyStore)
+            return makeConnection(
+                id: id,
+                keyStore: connectionKeyStore,
+                cachedState: cachedStates[id]
+            )
         }
 
         persistConnectionIDsIfChanged(from: persistedIDs)
@@ -1434,6 +1506,7 @@ final class GitHubRepositoryStore {
         defer { isHydratingStoredState = false }
 
         loadLocalInteractions()
+        let cachedStates = loadRepositoryCache()
         await legacyKeyStore.hydrate()
 
         var persistedIDs = userDefaults.stringArray(forKey: Self.persistedConnectionIDsKey) ?? []
@@ -1456,17 +1529,25 @@ final class GitHubRepositoryStore {
                 await connectionKeyStore.hydrate()
             }
             guard connectionKeyStore.hasSavedKey else { continue }
-            hydratedConnections.append(GitHubRepositoryConnection(id: id, keyStore: connectionKeyStore))
+            hydratedConnections.append(makeConnection(
+                id: id,
+                keyStore: connectionKeyStore,
+                cachedState: cachedStates[id]
+            ))
         }
 
         connections = hydratedConnections
         persistConnectionIDsIfChanged(from: persistedIDs)
         hasPersistedConnections = !connections.isEmpty
         hasHydratedStoredState = true
+        recordCacheHydration()
     }
 
     var repositories: [GitHubRepository] {
-        service.search(mergedRepositories, query: "", personalActivity: personalActivity)
+        if let repositoriesDuringFullRefresh {
+            return repositoriesDuringFullRefresh
+        }
+        return service.search(mergedRepositories, query: "", personalActivity: personalActivity)
     }
 
     var contributionActivity: [GitHubRepository.ID: GitHubRepositoryContributionActivity] {
@@ -1567,6 +1648,7 @@ final class GitHubRepositoryStore {
             )
             connections.append(connection)
             persistConnectionIDs()
+            persistRepositoryCache()
             hasPersistedConnections = true
             newToken = ""
             recordRefreshDiagnostics(account, event: "connection added")
@@ -1576,8 +1658,19 @@ final class GitHubRepositoryStore {
     }
 
     func refreshAll() async {
-        guard !isAddingConnection else { return }
+        guard !isAddingConnection, repositoriesDuringFullRefresh == nil else { return }
         operationErrorMessage = nil
+        repositoriesDuringFullRefresh = service.search(
+            mergedRepositories,
+            query: "",
+            personalActivity: personalActivity
+        )
+        personalActivityDuringFullRefresh = personalActivity
+        defer {
+            repositoriesDuringFullRefresh = nil
+            personalActivityDuringFullRefresh = nil
+        }
+
         let connectionIDs = connections.map(\.id)
         for id in connectionIDs {
             await refresh(connectionID: id)
@@ -1594,6 +1687,7 @@ final class GitHubRepositoryStore {
             let account = try await service.loadAuthenticatedRepositories(token: token)
             guard connections.contains(where: { $0.id == connectionID }) else { return }
             connection.update(with: account, refreshedAt: Date())
+            persistRepositoryCache()
             recordRefreshDiagnostics(account, event: "refresh completed")
         } catch {
             guard connections.contains(where: { $0.id == connectionID }) else { return }
@@ -1613,6 +1707,7 @@ final class GitHubRepositoryStore {
         connection.keyStore.save()
         operationErrorMessage = connection.keyStore.saveError
         persistConnectionIDs()
+        persistRepositoryCache()
         hasPersistedConnections = !connections.isEmpty
     }
 
@@ -1621,7 +1716,11 @@ final class GitHubRepositoryStore {
     }
 
     func search(_ query: String) -> [GitHubRepository] {
-        service.search(mergedRepositories, query: query, personalActivity: personalActivity)
+        service.search(
+            repositoriesDuringFullRefresh ?? mergedRepositories,
+            query: query,
+            personalActivity: personalActivityDuringFullRefresh ?? personalActivity
+        )
     }
 
     func recordInteraction(repositoryID: GitHubRepository.ID) {
@@ -1689,6 +1788,77 @@ final class GitHubRepositoryStore {
             }
         }
         return Array(repositoriesByID.values)
+    }
+
+    private func cachedConnections(
+        persistedIDs: [String],
+        cachedStates: [String: CachedConnectionState]
+    ) -> [GitHubRepositoryConnection] {
+        var seenIDs = Set<String>()
+        return persistedIDs.compactMap { id in
+            guard seenIDs.insert(id).inserted,
+                  Self.isValidConnectionID(id),
+                  let cachedState = cachedStates[id] else { return nil }
+            let keyStore = id == Self.legacyConnectionID
+                ? legacyKeyStore
+                : APIKeyStore(
+                    service: Self.connectionServicePrefix + id,
+                    loadsStoredKey: false
+                )
+            return makeConnection(id: id, keyStore: keyStore, cachedState: cachedState)
+        }
+    }
+
+    private func recordCacheHydration() {
+        let cachedRepositoryCount = connections.reduce(0) { count, connection in
+            count + connection.repositories.count
+        }
+        guard cachedRepositoryCount > 0 else { return }
+        SafeDiagnosticLog.shared.record(
+            "github: cache hydrated connections=\(connections.count) repos=\(cachedRepositoryCount)"
+        )
+    }
+
+    private func makeConnection(
+        id: String,
+        keyStore: APIKeyStore,
+        cachedState: CachedConnectionState?
+    ) -> GitHubRepositoryConnection {
+        GitHubRepositoryConnection(
+            id: id,
+            keyStore: keyStore,
+            username: cachedState?.username,
+            repositories: cachedState?.repositories ?? [],
+            contributionActivity: cachedState?.contributionActivity ?? [:],
+            contributionWarning: cachedState?.contributionWarning,
+            lastRefreshedAt: cachedState?.lastRefreshedAt
+        )
+    }
+
+    private func loadRepositoryCache() -> [String: CachedConnectionState] {
+        guard let data = userDefaults.data(forKey: Self.repositoryCacheKey),
+              let cachedStates = try? JSONDecoder().decode(
+                [String: CachedConnectionState].self,
+                from: data
+              ) else { return [:] }
+        return cachedStates
+    }
+
+    private func persistRepositoryCache() {
+        let cachedStates = Dictionary(uniqueKeysWithValues: connections.map { connection in
+            (
+                connection.id,
+                CachedConnectionState(
+                    username: connection.username,
+                    repositories: connection.repositories,
+                    contributionActivity: connection.contributionActivity,
+                    contributionWarning: connection.contributionWarning,
+                    lastRefreshedAt: connection.lastRefreshedAt
+                )
+            )
+        })
+        guard let data = try? JSONEncoder().encode(cachedStates) else { return }
+        userDefaults.set(data, forKey: Self.repositoryCacheKey)
     }
 
     private func loadLocalInteractions() {

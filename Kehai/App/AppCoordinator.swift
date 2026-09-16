@@ -601,8 +601,8 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             SafeDiagnosticLog.shared.record("hot-corner: presentation blocked missing core permissions")
             return
         }
-        guard !panelController.isMiniBrowserVisible else {
-            SafeDiagnosticLog.shared.record("hot-corner: presentation skipped mini UI already visible")
+        guard !NSApp.isActive || !panelController.isMiniBrowserVisible else {
+            SafeDiagnosticLog.shared.record("hot-corner: presentation skipped active mini UI already visible")
             return
         }
 
