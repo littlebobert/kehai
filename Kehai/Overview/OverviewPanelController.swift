@@ -13,8 +13,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var mouseMonitor: Any?
     private var globalDragMonitor: Any?
     private var accessibilityDisplayOptionsObserver: NSObjectProtocol?
+    private var applicationDeactivationObserver: NSObjectProtocol?
     private var menuTrackingObservers: [NSObjectProtocol] = []
     private var menuTrackingDepth = 0
+    private var dismissesCompactWindowWhenApplicationDeactivates = false
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
     private let isShortcutSessionActive: () -> Bool
@@ -44,6 +46,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in self?.updateAppearance() }
         }
+        applicationDeactivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.applicationDidDeactivate() }
+        }
         menuTrackingObservers = [
             NotificationCenter.default.addObserver(
                 forName: NSMenu.didBeginTrackingNotification,
@@ -69,6 +78,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     var isVisible: Bool { isFullBrowserVisible || isMiniBrowserVisible }
     var isFullBrowserVisible: Bool { window?.isVisible == true }
     var isMiniBrowserVisible: Bool { compactWindow?.isVisible == true }
+
+    private func applicationDidDeactivate() {
+        guard dismissesCompactWindowWhenApplicationDeactivates,
+              compactWindow?.isVisible == true else { return }
+        SafeDiagnosticLog.shared.record("hot-zone: mini UI dismissed after application switch")
+        closeCompactSwitcher()
+    }
 
     private func menuTrackingDidBegin() {
         menuTrackingDepth += 1
@@ -120,6 +136,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func showMiniBrowser() {
+        dismissesCompactWindowWhenApplicationDeactivates = false
         model.beginSwitcherMode(previousApplicationProcessID: nil)
         showCompactSwitcher()
     }
@@ -127,6 +144,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     func showMiniBrowser(anchoredTo hotZone: HotZone, on screen: NSScreen) {
         model.beginSwitcherMode(previousApplicationProcessID: nil)
         showCompactSwitcher(anchoredTo: hotZone, on: screen)
+        dismissesCompactWindowWhenApplicationDeactivates = compactWindow?.isVisible == true
     }
 
     func prepareSwitcherMode(previousApplicationProcessID: pid_t?) {
@@ -135,6 +153,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     func showPreparedSwitcher() {
         guard model.isSwitcherMode else { return }
+        dismissesCompactWindowWhenApplicationDeactivates = false
         showCompactSwitcher()
     }
 
@@ -299,6 +318,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     private func closeCompactSwitcher() {
+        dismissesCompactWindowWhenApplicationDeactivates = false
         compactWindow?.orderOut(nil)
         compactWindow?.contentView = nil
         compactWindow = nil
