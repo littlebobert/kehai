@@ -359,6 +359,55 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(GitHubRefreshSettings(defaults: defaults).intervalMinutes, 60)
     }
 
+    @MainActor
+    func testHotCornerSettingsDefaultOffLowerLeftAndPersistChanges() {
+        let suiteName = "KehaiTests.HotCorner.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = HotCornerSettings(defaults: defaults)
+        XCTAssertFalse(settings.isEnabled)
+        XCTAssertEqual(settings.corner, .lowerLeft)
+
+        settings.isEnabled = true
+        settings.corner = .upperRight
+
+        let restoredSettings = HotCornerSettings(defaults: defaults)
+        XCTAssertTrue(restoredSettings.isEnabled)
+        XCTAssertEqual(restoredSettings.corner, .upperRight)
+    }
+
+    func testHotCornerHitRegionsMatchConfiguredCorners() {
+        let screenFrame = CGRect(x: -100, y: 50, width: 800, height: 600)
+        let tolerance: CGFloat = 5
+
+        XCTAssertTrue(HotCorner.upperLeft.contains(
+            pointer: CGPoint(x: -98, y: 648),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertTrue(HotCorner.upperRight.contains(
+            pointer: CGPoint(x: 698, y: 648),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertTrue(HotCorner.lowerLeft.contains(
+            pointer: CGPoint(x: -98, y: 52),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertTrue(HotCorner.lowerRight.contains(
+            pointer: CGPoint(x: 698, y: 52),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+        XCTAssertFalse(HotCorner.lowerLeft.contains(
+            pointer: CGPoint(x: -90, y: 52),
+            in: screenFrame,
+            tolerance: tolerance
+        ))
+    }
+
     func testGitHubRepositoryDecodingMapsNestedAndSnakeCaseFields() throws {
         let repository = try JSONDecoder().decode(GitHubRepository.self, from: githubRepositoryJSON(
             id: 9,

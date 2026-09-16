@@ -5,6 +5,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var shortcut: ShortcutSettings
     @Bindable var idleGrouping: IdleGroupingSettings
+    @Bindable var hotCorner: HotCornerSettings
     @Bindable var excludedApps: ExcludedAppStore
     @Bindable var aiExcludedApps: AIExcludedAppStore
     @Bindable var permissionManager: PermissionManager
@@ -15,6 +16,7 @@ struct SettingsView: View {
     let safariService: SafariTabService
     let shortcutChanged: () -> Void
     let idleGroupingChanged: () -> Void
+    let hotCornerChanged: () -> Void
     let githubRefreshIntervalChanged: () -> Void
     let exclusionsChanged: () -> Void
     @State private var selectedProvider = AIProvider.current
@@ -78,6 +80,46 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+            }
+
+            Section("Hot Corner") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Show Mini Browser")
+                        Text("Move the pointer into a screen corner and pause briefly.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 20)
+                    Toggle("", isOn: Binding(
+                        get: { hotCorner.isEnabled },
+                        set: {
+                            hotCorner.isEnabled = $0
+                            hotCornerChanged()
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                HStack {
+                    Text("Corner")
+                    Spacer(minLength: 20)
+                    Picker("Corner", selection: Binding(
+                        get: { hotCorner.corner },
+                        set: {
+                            hotCorner.corner = $0
+                            hotCornerChanged()
+                        }
+                    )) {
+                        ForEach(HotCorner.allCases) { corner in
+                            Text(corner.displayName).tag(corner)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
+                .disabled(!hotCorner.isEnabled)
             }
 
             Section("Task Groups") {
