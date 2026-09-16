@@ -928,7 +928,11 @@ final class OverviewViewModel {
         windowsAboveAppStrip: Bool = false
     ) {
         if selectedRepositoryID != nil {
-            moveRepositorySelection(horizontal: horizontal, vertical: vertical)
+            moveRepositorySelection(
+                horizontal: horizontal,
+                vertical: vertical,
+                windowsAboveAppStrip: windowsAboveAppStrip
+            )
             return
         }
         if selectedAppWindowID != nil || isAllWindowsAppSelected {
@@ -985,30 +989,52 @@ final class OverviewViewModel {
         return true
     }
 
-    private func moveRepositorySelection(horizontal: Int, vertical: Int) {
+    private func moveRepositorySelection(
+        horizontal: Int,
+        vertical: Int,
+        windowsAboveAppStrip: Bool
+    ) {
         let repositories = filteredGitHubRepositories
         guard !repositories.isEmpty else {
             selectedRepositoryID = nil
             preserveSelectionOrSelectFirst()
             return
         }
+
         if vertical < 0 {
             if let previousWindowID = windowIDBeforeEnteringRepositories,
                orderedFilteredWindows.contains(where: { $0.id == previousWindowID }) {
                 selectedWindowID = previousWindowID
             } else if let window = orderedFilteredWindows.first {
                 selectedWindowID = window.id
-            } else if let app = filteredRecentAppWindows.first {
-                focusApp(app.id)
+            } else {
+                restoreAppStripSelection()
             }
             windowIDBeforeEnteringRepositories = nil
             return
         }
+
+        if vertical > 0, windowsAboveAppStrip {
+            restoreAppStripSelection()
+            windowIDBeforeEnteringRepositories = nil
+            return
+        }
+
         guard vertical == 0,
               let selectedRepositoryID,
               let currentIndex = repositories.firstIndex(where: { $0.id == selectedRepositoryID }) else { return }
         let targetIndex = min(max(currentIndex + horizontal, 0), repositories.count - 1)
         self.selectedRepositoryID = repositories[targetIndex].id
+    }
+
+    private func restoreAppStripSelection() {
+        if let appWindowIDBeforeEnteringWindows,
+           navigableRecentAppWindows.contains(where: { $0.id == appWindowIDBeforeEnteringWindows }) {
+            focusApp(appWindowIDBeforeEnteringWindows)
+        } else {
+            selectAllWindowsApp()
+        }
+        appWindowIDBeforeEnteringWindows = nil
     }
 
     private func moveAppSelection(horizontal: Int, vertical: Int, windowsAboveAppStrip: Bool) {
@@ -1021,10 +1047,12 @@ final class OverviewViewModel {
         let currentIndex = isAllWindowsAppSelected
             ? 0
             : (focusedAppKey.flatMap { key in apps.firstIndex { appKey(for: $0) == key } }.map { $0 + 1 } ?? 1)
-        let entersWindows = windowsAboveAppStrip ? vertical < 0 : vertical > 0
-        if entersWindows {
+        let entersContent = windowsAboveAppStrip ? vertical < 0 : vertical > 0
+        if entersContent {
             appWindowIDBeforeEnteringWindows = selectedAppWindowID
-            if let mostRecentWindow = orderedFilteredWindows.first {
+            if windowsAboveAppStrip, let repository = filteredGitHubRepositories.first {
+                selectedRepositoryID = repository.id
+            } else if let mostRecentWindow = orderedFilteredWindows.first {
                 isAllWindowsAppSelected = false
                 selectedAppWindowID = nil
                 selectedWindowID = mostRecentWindow.id
