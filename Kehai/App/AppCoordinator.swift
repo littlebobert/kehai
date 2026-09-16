@@ -122,7 +122,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         }
     )
     private static let hotCornerPollingInterval: TimeInterval = 0.1
-    private static let hotCornerDwellDuration: TimeInterval = 0.1
+    private static let hotCornerDwellDuration: TimeInterval = 0
     private static let hotCornerTolerance: CGFloat = 5
 
     private var activationObserver: NSObjectProtocol?
@@ -588,12 +588,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         }
         guard hotCornerIsArmed else { return }
 
-        guard let hotCornerEntryDate else {
-            self.hotCornerEntryDate = Date()
-            SafeDiagnosticLog.shared.record("hot-corner: pointer entered configured corner")
-            return
+        if Self.hotCornerDwellDuration > 0 {
+            guard let hotCornerEntryDate else {
+                self.hotCornerEntryDate = Date()
+                SafeDiagnosticLog.shared.record("hot-corner: pointer entered configured corner")
+                return
+            }
+            guard Date().timeIntervalSince(hotCornerEntryDate) >= Self.hotCornerDwellDuration else { return }
         }
-        guard Date().timeIntervalSince(hotCornerEntryDate) >= Self.hotCornerDwellDuration else { return }
 
         self.hotCornerEntryDate = nil
         hotCornerIsArmed = false
