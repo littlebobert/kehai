@@ -555,8 +555,14 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         hotCornerEntryDate = nil
         hotCornerIsArmed = true
 
-        guard hotCornerSettings.isEnabled else { return }
+        guard hotCornerSettings.isEnabled else {
+            SafeDiagnosticLog.shared.record("hot-corner: monitoring disabled")
+            return
+        }
 
+        SafeDiagnosticLog.shared.record(
+            "hot-corner: monitoring started corner=\(hotCornerSettings.corner.rawValue) screens=\(NSScreen.screens.count)"
+        )
         let timer = Timer(timeInterval: Self.hotCornerPollingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.checkHotCorner() }
         }
@@ -567,16 +573,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
     private func checkHotCorner() {
         let pointer = NSEvent.mouseLocation
-        let pointerScreen = NSScreen.screens.first { screen in
-            NSMouseInRect(pointer, screen.frame, false)
-        }
-        let isInConfiguredCorner = pointerScreen.map { screen in
+        let isInConfiguredCorner = NSScreen.screens.contains { screen in
             hotCornerSettings.corner.contains(
                 pointer: pointer,
                 in: screen.frame,
                 tolerance: Self.hotCornerTolerance
             )
-        } ?? false
+        }
 
         guard isInConfiguredCorner else {
             hotCornerEntryDate = nil
@@ -587,13 +590,21 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
         guard let hotCornerEntryDate else {
             self.hotCornerEntryDate = Date()
+            SafeDiagnosticLog.shared.record("hot-corner: pointer entered configured corner")
             return
         }
         guard Date().timeIntervalSince(hotCornerEntryDate) >= Self.hotCornerDwellDuration else { return }
 
         self.hotCornerEntryDate = nil
         hotCornerIsArmed = false
-        guard permissionManager.hasCorePermissions, !panelController.isVisible else { return }
+        guard permissionManager.hasCorePermissions else {
+            SafeDiagnosticLog.shared.record("hot-corner: presentation blocked missing core permissions")
+            return
+        }
+        guard !panelController.isVisible else {
+            SafeDiagnosticLog.shared.record("hot-corner: presentation skipped browser already visible")
+            return
+        }
 
         SafeDiagnosticLog.shared.record("hot-corner: presenting mini UI corner=\(hotCornerSettings.corner.rawValue)")
         panelController.showMiniBrowser()
