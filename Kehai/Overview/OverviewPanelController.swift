@@ -152,6 +152,18 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         presentationChanged(isFullBrowserVisible, isMiniBrowserVisible)
     }
 
+    var preferredMiniBrowserContentSize: CGSize {
+        let preferredWidth: CGFloat = 676
+        let usesRetrofit = appearance.browserTheme == .classicMac
+        let preferredHeight: CGFloat
+        if model.githubRepositoryStore.shouldShowRepositorySection {
+            preferredHeight = usesRetrofit ? 408 : 388
+        } else {
+            preferredHeight = usesRetrofit ? 312 : 292
+        }
+        return CGSize(width: preferredWidth, height: preferredHeight)
+    }
+
     private var minimumContentSize: NSSize {
         // One default-width thumbnail plus the browser's horizontal insets and scrollbar.
         NSSize(width: 356, height: 490)
@@ -245,10 +257,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         let visibleFrame = screen.visibleFrame
         let anchorPoint = pointer
         let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
-        let threeThumbnailWidth: CGFloat = 676
         let oneThumbnailMinimumWidth: CGFloat = 244
         let allWindowsIconHorizontalInset: CGFloat = 41.5
-        let preferredWidth = threeThumbnailWidth
+        let preferredSize = preferredMiniBrowserContentSize
+        let preferredWidth = preferredSize.width
         let referenceContentRect = NSRect(x: 0, y: 0, width: 1, height: 1)
         let referenceFrameRect = NSWindow.frameRect(forContentRect: referenceContentRect, styleMask: styleMask)
         let leftFrameInset = referenceContentRect.minX - referenceFrameRect.minX
@@ -275,14 +287,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             : floor(visibleFrame.width)
         let minimumWidth = min(oneThumbnailMinimumWidth, maximumAnchoredWidth)
         let width = min(preferredWidth, maximumAnchoredWidth)
-        let usesRetrofit = appearance.browserTheme == .classicMac
-        let estimatedHeight: CGFloat
-        if model.githubRepositoryStore.shouldShowRepositorySection {
-            estimatedHeight = usesRetrofit ? 408 : 388
-        } else {
-            estimatedHeight = usesRetrofit ? 312 : 292
-        }
-        let height = min(estimatedHeight, visibleFrame.height)
+        let height = min(preferredSize.height, visibleFrame.height)
         let topStripIconInset: CGFloat = 65.5
         let bottomStripIconInset: CGFloat = 41
         let opensUp = hotZone?.opensUp ?? (pointer.y - (height - topStripIconInset) < visibleFrame.minY)

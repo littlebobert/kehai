@@ -74,11 +74,25 @@ enum HotZone: String, CaseIterable, Identifiable {
         }
     }
 
-    func contains(pointer: CGPoint, in screenFrame: CGRect, tolerance: CGFloat) -> Bool {
-        let isWithinHorizontalBounds = pointer.x >= screenFrame.minX - tolerance
-            && pointer.x <= screenFrame.maxX + tolerance
-        let isWithinVerticalBounds = pointer.y >= screenFrame.minY - tolerance
-            && pointer.y <= screenFrame.maxY + tolerance
+    func contains(
+        pointer: CGPoint,
+        in screenFrame: CGRect,
+        tolerance: CGFloat,
+        miniBrowserSize: CGSize? = nil,
+        edgePadding: CGFloat = 0
+    ) -> Bool {
+        let horizontalActivationHalfLength = min(
+            screenFrame.width / 2,
+            (miniBrowserSize?.width ?? screenFrame.width) / 2 + edgePadding
+        )
+        let verticalActivationHalfLength = min(
+            screenFrame.height / 2,
+            (miniBrowserSize?.height ?? screenFrame.height) / 2 + edgePadding
+        )
+        let isWithinHorizontalActivationSegment = abs(pointer.x - screenFrame.midX)
+            <= horizontalActivationHalfLength
+        let isWithinVerticalActivationSegment = abs(pointer.y - screenFrame.midY)
+            <= verticalActivationHalfLength
 
         switch self {
         case .upperLeft:
@@ -94,13 +108,13 @@ enum HotZone: String, CaseIterable, Identifiable {
             return abs(pointer.x - screenFrame.maxX) <= tolerance
                 && abs(pointer.y - screenFrame.minY) <= tolerance
         case .bottom:
-            return isWithinHorizontalBounds
+            return isWithinHorizontalActivationSegment
                 && abs(pointer.y - screenFrame.minY) <= tolerance
         case .left:
-            return isWithinVerticalBounds
+            return isWithinVerticalActivationSegment
                 && abs(pointer.x - screenFrame.minX) <= tolerance
         case .right:
-            return isWithinVerticalBounds
+            return isWithinVerticalActivationSegment
                 && abs(pointer.x - screenFrame.maxX) <= tolerance
         }
     }

@@ -378,51 +378,65 @@ final class KehaiTests: XCTestCase {
     }
 
     func testHotZoneHitRegionsMatchConfiguredEdgesAndCorners() {
-        let screenFrame = CGRect(x: -100, y: 50, width: 800, height: 600)
+        let screenFrame = CGRect(x: -100, y: 50, width: 1_200, height: 800)
+        let miniBrowserSize = CGSize(width: 600, height: 300)
         let tolerance: CGFloat = 5
+        let edgePadding: CGFloat = 24
 
         XCTAssertTrue(HotZone.upperLeft.contains(
-            pointer: CGPoint(x: -98, y: 648),
-            in: screenFrame,
-            tolerance: tolerance
-        ))
-        XCTAssertTrue(HotZone.upperRight.contains(
-            pointer: CGPoint(x: 698, y: 648),
-            in: screenFrame,
-            tolerance: tolerance
-        ))
-        XCTAssertTrue(HotZone.lowerLeft.contains(
-            pointer: CGPoint(x: -98, y: 52),
+            pointer: CGPoint(x: -98, y: 848),
             in: screenFrame,
             tolerance: tolerance
         ))
         XCTAssertTrue(HotZone.lowerRight.contains(
-            pointer: CGPoint(x: 698, y: 52),
+            pointer: CGPoint(x: 1_098, y: 52),
             in: screenFrame,
             tolerance: tolerance
         ))
         XCTAssertTrue(HotZone.bottom.contains(
-            pointer: CGPoint(x: 300, y: 52),
+            pointer: CGPoint(x: 500, y: 52),
             in: screenFrame,
-            tolerance: tolerance
+            tolerance: tolerance,
+            miniBrowserSize: miniBrowserSize,
+            edgePadding: edgePadding
+        ))
+        XCTAssertTrue(HotZone.bottom.contains(
+            pointer: CGPoint(x: 824, y: 52),
+            in: screenFrame,
+            tolerance: tolerance,
+            miniBrowserSize: miniBrowserSize,
+            edgePadding: edgePadding
+        ))
+        XCTAssertFalse(HotZone.bottom.contains(
+            pointer: CGPoint(x: 825, y: 52),
+            in: screenFrame,
+            tolerance: tolerance,
+            miniBrowserSize: miniBrowserSize,
+            edgePadding: edgePadding
         ))
         XCTAssertTrue(HotZone.left.contains(
-            pointer: CGPoint(x: -98, y: 350),
+            pointer: CGPoint(x: -98, y: 276),
             in: screenFrame,
-            tolerance: tolerance
+            tolerance: tolerance,
+            miniBrowserSize: miniBrowserSize,
+            edgePadding: edgePadding
+        ))
+        XCTAssertFalse(HotZone.left.contains(
+            pointer: CGPoint(x: -98, y: 275),
+            in: screenFrame,
+            tolerance: tolerance,
+            miniBrowserSize: miniBrowserSize,
+            edgePadding: edgePadding
         ))
         XCTAssertTrue(HotZone.right.contains(
-            pointer: CGPoint(x: 698, y: 350),
+            pointer: CGPoint(x: 1_098, y: 450),
             in: screenFrame,
-            tolerance: tolerance
+            tolerance: tolerance,
+            miniBrowserSize: miniBrowserSize,
+            edgePadding: edgePadding
         ))
         XCTAssertFalse(HotZone.lowerLeft.contains(
             pointer: CGPoint(x: -90, y: 52),
-            in: screenFrame,
-            tolerance: tolerance
-        ))
-        XCTAssertFalse(HotZone.bottom.contains(
-            pointer: CGPoint(x: 300, y: 60),
             in: screenFrame,
             tolerance: tolerance
         ))

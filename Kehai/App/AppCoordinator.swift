@@ -124,6 +124,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private static let hotZonePollingInterval: TimeInterval = 0.1
     private static let hotZoneDwellDuration: TimeInterval = 0
     private static let hotZoneTolerance: CGFloat = 5
+    private static let hotZoneEdgePadding: CGFloat = 24
 
     private var activationObserver: NSObjectProtocol?
     private var idleTimer: Timer?
@@ -577,7 +578,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             hotZoneSettings.zone.contains(
                 pointer: pointer,
                 in: screen.frame,
-                tolerance: Self.hotZoneTolerance
+                tolerance: Self.hotZoneTolerance,
+                miniBrowserSize: panelController.preferredMiniBrowserContentSize,
+                edgePadding: Self.hotZoneEdgePadding
             )
         }
 
