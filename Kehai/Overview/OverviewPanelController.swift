@@ -4,6 +4,9 @@ import SwiftUI
 @MainActor
 final class OverviewPanelController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "KehaiBrowserWindow"
+    private static let hotZonePointerExitMargin: CGFloat = 32
+    private static let hotZonePointerPollingInterval: TimeInterval = 0.1
+
     private var window: NSWindow?
     private var compactWindow: NSWindow?
     private var compactWindowFrameHeight: CGFloat?
@@ -12,11 +15,14 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private var globalDragMonitor: Any?
+    private var hotZonePointerExitTimer: Timer?
     private var accessibilityDisplayOptionsObserver: NSObjectProtocol?
     private var applicationDeactivationObserver: NSObjectProtocol?
     private var menuTrackingObservers: [NSObjectProtocol] = []
     private var menuTrackingDepth = 0
     private var dismissesCompactWindowWhenApplicationDeactivates = false
+    private var hasPointerEnteredHotZoneCompactWindow = false
+    private var hasInteractedWithHotZoneCompactWindow = false
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
     private let isShortcutSessionActive: () -> Bool
@@ -86,6 +92,48 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         closeCompactSwitcher()
     }
 
+    private func startHotZonePointerExitMonitoring() {
+        hotZonePointerExitTimer?.invalidate()
+        hasPointerEnteredHotZoneCompactWindow = false
+        hasInteractedWithHotZoneCompactWindow = false
+
+        let timer = Timer(
+            timeInterval: Self.hotZonePointerPollingInterval,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.checkHotZonePointerExit() }
+        }
+        hotZonePointerExitTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        checkHotZonePointerExit()
+    }
+
+    private func checkHotZonePointerExit() {
+        guard dismissesCompactWindowWhenApplicationDeactivates,
+              let compactWindow,
+              compactWindow.isVisible else { return }
+
+        let pointer = NSEvent.mouseLocation
+        if compactWindow.frame.contains(pointer) {
+            hasPointerEnteredHotZoneCompactWindow = true
+            return
+        }
+
+        guard hasPointerEnteredHotZoneCompactWindow,
+              !hasInteractedWithHotZoneCompactWindow,
+              NSEvent.pressedMouseButtons == 0,
+              menuTrackingDepth == 0 else { return }
+
+        let dismissalFrame = compactWindow.frame.insetBy(
+            dx: -Self.hotZonePointerExitMargin,
+            dy: -Self.hotZonePointerExitMargin
+        )
+        guard !dismissalFrame.contains(pointer) else { return }
+
+        SafeDiagnosticLog.shared.record("hot-zone: mini UI dismissed after pointer exit")
+        closeCompactSwitcher()
+    }
+
     private func menuTrackingDidBegin() {
         menuTrackingDepth += 1
         if menuTrackingDepth == 1 {
@@ -145,6 +193,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         model.beginSwitcherMode(previousApplicationProcessID: nil)
         showCompactSwitcher(anchoredTo: hotZone, on: screen)
         dismissesCompactWindowWhenApplicationDeactivates = compactWindow?.isVisible == true
+        if dismissesCompactWindowWhenApplicationDeactivates {
+            startHotZonePointerExitMonitoring()
+        }
     }
 
     func prepareSwitcherMode(previousApplicationProcessID: pid_t?) {
@@ -319,6 +370,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
 
     private func closeCompactSwitcher() {
         dismissesCompactWindowWhenApplicationDeactivates = false
+        hasPointerEnteredHotZoneCompactWindow = false
+        hasInteractedWithHotZoneCompactWindow = false
+        hotZonePointerExitTimer?.invalidate()
+        hotZonePointerExitTimer = nil
         compactWindow?.orderOut(nil)
         compactWindow?.contentView = nil
         compactWindow = nil
@@ -473,10 +528,20 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private func installMouseMonitor() {
         guard mouseMonitor == nil else { return }
         let dragMask: NSEvent.EventTypeMask = [.leftMouseDragged, .rightMouseDragged, .otherMouseDragged]
+        let interactionMask: NSEvent.EventTypeMask = [
+            .leftMouseDown,
+            .rightMouseDown,
+            .otherMouseDown,
+            .scrollWheel
+        ]
 
         // Local: drag events while Kehai is key, plus click/scroll handling.
-        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: dragMask.union([.leftMouseDown, .scrollWheel])) { [weak self] event in
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: dragMask.union(interactionMask)) { [weak self] event in
             guard let self else { return event }
+
+            if event.window === self.compactWindow {
+                self.hasInteractedWithHotZoneCompactWindow = true
+            }
 
             // Freeze inventory as soon as a system drag is underway — before the
             // cursor hits a card DropDelegate (which is too late to stop SCK thrash).
@@ -560,6 +625,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self,
                   event.window === self.window || event.window === self.compactWindow else { return event }
+
+            if event.window === self.compactWindow {
+                self.hasInteractedWithHotZoneCompactWindow = true
+            }
 
             let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
             if self.model.actionChooserStage != nil {
