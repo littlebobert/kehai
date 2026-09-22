@@ -5,3 +5,5 @@ DerivedData/
 Kehai.xcodeproj/xcuserdata/
 *.xcuserstate
 .DS_Store
+node_modules/
+.npm-cache/
