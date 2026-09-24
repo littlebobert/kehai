@@ -125,6 +125,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private static let hotZoneDwellDuration: TimeInterval = 0
     private static let hotZoneTolerance: CGFloat = 5
     private static let hotZoneEdgePadding: CGFloat = 24
+    private static let hotZonePollDelayLogThreshold: TimeInterval = 0.25
 
     private var activationObserver: NSObjectProtocol?
     private var idleTimer: Timer?
@@ -132,6 +133,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var githubRefreshTimer: Timer?
     private var hotZoneEntryDate: Date?
     private var hotZoneIsArmed = true
+    private var hotZoneDisarmedDate: Date?
+    private var lastHotZoneCheckDate: Date?
+    private var isPointerInHotZoneNearMiss = false
     private var handledCurrentIdlePeriod = false
     private var suppressNextActivationPresentation = false
     private var modifierMonitors: [Any] = []
@@ -555,6 +559,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         hotZoneTimer = nil
         hotZoneEntryDate = nil
         hotZoneIsArmed = true
+        hotZoneDisarmedDate = nil
+        lastHotZoneCheckDate = nil
+        isPointerInHotZoneNearMiss = false
 
         guard hotZoneSettings.isEnabled else {
             SafeDiagnosticLog.shared.record("hot-zone: monitoring disabled")
@@ -573,22 +580,44 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     }
 
     private func checkHotZone() {
+        let now = Date()
+        if let lastHotZoneCheckDate {
+            let gap = now.timeIntervalSince(lastHotZoneCheckDate)
+            if gap > Self.hotZonePollDelayLogThreshold {
+                SafeDiagnosticLog.shared.record(
+                    "hot-zone: poll delayed ms=\(Int(gap * 1000)) appActive=\(NSApp.isActive)"
+                )
+            }
+        }
+        lastHotZoneCheckDate = now
+
         let pointer = NSEvent.mouseLocation
+        let miniBrowserSize = panelController.preferredMiniBrowserContentSize
         let matchingScreen = NSScreen.screens.first { screen in
             hotZoneSettings.zone.contains(
                 pointer: pointer,
                 in: screen.frame,
                 tolerance: Self.hotZoneTolerance,
-                miniBrowserSize: panelController.preferredMiniBrowserContentSize,
+                miniBrowserSize: miniBrowserSize,
                 edgePadding: Self.hotZoneEdgePadding
             )
         }
 
         guard let matchingScreen else {
+            recordHotZoneNearMissIfNeeded(pointer: pointer, miniBrowserSize: miniBrowserSize)
             hotZoneEntryDate = nil
+            if !hotZoneIsArmed {
+                let disarmedMilliseconds = hotZoneDisarmedDate.map { Int(now.timeIntervalSince($0) * 1000) } ?? -1
+                SafeDiagnosticLog.shared.record(
+                    "hot-zone: re-armed after pointer left zone disarmedMs=\(disarmedMilliseconds) " +
+                        "miniVisible=\(panelController.isMiniBrowserVisible)"
+                )
+            }
             hotZoneIsArmed = true
+            hotZoneDisarmedDate = nil
             return
         }
+        isPointerInHotZoneNearMiss = false
         guard hotZoneIsArmed else { return }
 
         if Self.hotZoneDwellDuration > 0 {
@@ -602,6 +631,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
 
         self.hotZoneEntryDate = nil
         hotZoneIsArmed = false
+        hotZoneDisarmedDate = now
         guard permissionManager.hasCorePermissions else {
             SafeDiagnosticLog.shared.record("hot-zone: presentation blocked missing core permissions")
             return
@@ -611,10 +641,48 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             return
         }
 
-        SafeDiagnosticLog.shared.record("hot-zone: presenting mini UI zone=\(hotZoneSettings.zone.rawValue)")
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: presenting mini UI zone=\(hotZoneSettings.zone.rawValue) " +
+                "appActive=\(NSApp.isActive) miniVisible=\(panelController.isMiniBrowserVisible)"
+        )
         panelController.showMiniBrowser(
             anchoredTo: hotZoneSettings.zone,
             on: matchingScreen
+        )
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: showMiniBrowser returned ms=\(Int(Date().timeIntervalSince(now) * 1000)) " +
+                "appActive=\(NSApp.isActive) miniVisible=\(panelController.isMiniBrowserVisible)"
+        )
+    }
+
+    /// Logs once per edge touch when the pointer reaches the zone's screen edge
+    /// but lands outside the activation segment, so missed triggers are visible.
+    private func recordHotZoneNearMissIfNeeded(pointer: CGPoint, miniBrowserSize: CGSize) {
+        let zone = hotZoneSettings.zone
+        let edgeScreen = NSScreen.screens.first { screen in
+            zone.contains(pointer: pointer, in: screen.frame, tolerance: Self.hotZoneTolerance)
+        }
+        guard let edgeScreen else {
+            isPointerInHotZoneNearMiss = false
+            return
+        }
+        guard !isPointerInHotZoneNearMiss else { return }
+        isPointerInHotZoneNearMiss = true
+
+        let frame = edgeScreen.frame
+        let offsetFromCenter: CGFloat
+        let activationHalfLength: CGFloat
+        switch zone {
+        case .left, .right:
+            offsetFromCenter = abs(pointer.y - frame.midY)
+            activationHalfLength = min(frame.height / 2, miniBrowserSize.height / 2 + Self.hotZoneEdgePadding)
+        default:
+            offsetFromCenter = abs(pointer.x - frame.midX)
+            activationHalfLength = min(frame.width / 2, miniBrowserSize.width / 2 + Self.hotZoneEdgePadding)
+        }
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: pointer at edge outside activation segment " +
+                "offsetFromCenter=\(Int(offsetFromCenter)) activationHalfLength=\(Int(activationHalfLength))"
         )
     }
 

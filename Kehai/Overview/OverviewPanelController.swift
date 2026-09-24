@@ -23,6 +23,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var dismissesCompactWindowWhenApplicationDeactivates = false
     private var hasPointerEnteredHotZoneCompactWindow = false
     private var hasInteractedWithHotZoneCompactWindow = false
+    private var hotZonePresentationDate: Date?
+    private var hasLoggedHotZoneBecameKey = false
+    private var applicationActivationObserver: NSObjectProtocol?
     private let model: OverviewViewModel
     private let appearance: AppearanceSettings
     private let isShortcutSessionActive: () -> Bool
@@ -59,6 +62,13 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in self?.applicationDidDeactivate() }
         }
+        applicationActivationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: NSApp,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.recordHotZoneApplicationActivation() }
+        }
         menuTrackingObservers = [
             NotificationCenter.default.addObserver(
                 forName: NSMenu.didBeginTrackingNotification,
@@ -88,8 +98,36 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private func applicationDidDeactivate() {
         guard dismissesCompactWindowWhenApplicationDeactivates,
               compactWindow?.isVisible == true else { return }
-        SafeDiagnosticLog.shared.record("hot-zone: mini UI dismissed after application switch")
+        let pointerInside = compactWindow.map { $0.frame.contains(NSEvent.mouseLocation) } ?? false
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: mini UI dismissed after application switch " +
+                "visibleMs=\(Self.millisecondsSince(hotZonePresentationDate)) " +
+                "sinceUserInput=\(Self.secondsSinceLastUserInputDescription()) " +
+                "pointerInside=\(pointerInside) pointerEntered=\(hasPointerEnteredHotZoneCompactWindow)"
+        )
         closeCompactSwitcher()
+    }
+
+    private func recordHotZoneApplicationActivation() {
+        guard let hotZonePresentationDate, compactWindow?.isVisible == true else { return }
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: app became active ms=\(Self.millisecondsSince(hotZonePresentationDate))"
+        )
+    }
+
+    private static func millisecondsSince(_ date: Date?) -> Int {
+        guard let date else { return -1 }
+        return Int(Date().timeIntervalSince(date) * 1000)
+    }
+
+    /// Time since the last physical key press or click, used to tell a user-driven
+    /// app switch apart from another process taking focus.
+    private static func secondsSinceLastUserInputDescription() -> String {
+        let eventTypes: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        let seconds = eventTypes
+            .map { CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: $0) }
+            .min() ?? .infinity
+        return String(format: "%.2fs", seconds)
     }
 
     private func startHotZonePointerExitMonitoring() {
@@ -130,7 +168,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
         guard !dismissalFrame.contains(pointer) else { return }
 
-        SafeDiagnosticLog.shared.record("hot-zone: mini UI dismissed after pointer exit")
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: mini UI dismissed after pointer exit visibleMs=\(Self.millisecondsSince(hotZonePresentationDate))"
+        )
         closeCompactSwitcher()
     }
 
@@ -204,6 +244,12 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     func showMiniBrowser(anchoredTo hotZone: HotZone, on screen: NSScreen) {
         model.beginSwitcherMode(previousApplicationProcessID: nil)
         showCompactSwitcher(anchoredTo: hotZone, on: screen)
+        hotZonePresentationDate = Date()
+        hasLoggedHotZoneBecameKey = false
+        SafeDiagnosticLog.shared.record(
+            "hot-zone: mini UI ordered front visible=\(compactWindow?.isVisible == true) " +
+                "key=\(compactWindow?.isKeyWindow == true) appActive=\(NSApp.isActive)"
+        )
         dismissesCompactWindowWhenApplicationDeactivates = compactWindow?.isVisible == true
         if dismissesCompactWindowWhenApplicationDeactivates {
             startHotZonePointerExitMonitoring()
@@ -377,6 +423,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         dismissesCompactWindowWhenApplicationDeactivates = false
         hasPointerEnteredHotZoneCompactWindow = false
         hasInteractedWithHotZoneCompactWindow = false
+        hotZonePresentationDate = nil
         hotZonePointerExitTimer?.invalidate()
         hotZonePointerExitTimer = nil
         compactWindow?.orderOut(nil)
@@ -510,6 +557,14 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        if let hotZonePresentationDate,
+           !hasLoggedHotZoneBecameKey,
+           (notification.object as? NSWindow) === compactWindow {
+            hasLoggedHotZoneBecameKey = true
+            SafeDiagnosticLog.shared.record(
+                "hot-zone: mini UI became key ms=\(Self.millisecondsSince(hotZonePresentationDate))"
+            )
+        }
         model.setLiveThumbnailEnabled(true)
         Task { await model.refreshForForeground() }
     }

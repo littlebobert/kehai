@@ -20,7 +20,7 @@ final class SafeDiagnosticLog: @unchecked Sendable {
             entries[entries.count - 1].repetitionCount += 1
         } else {
             entries.append(Entry(date: Date(), event: event, repetitionCount: 1))
-            entries = Array(entries.suffix(200))
+            entries = Array(entries.suffix(1000))
         }
         lock.unlock()
     }
@@ -30,6 +30,7 @@ final class SafeDiagnosticLog: @unchecked Sendable {
         let snapshot = entries
         lock.unlock()
         let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return snapshot.map { entry in
             let repetition = entry.repetitionCount > 1 ? " repeated=\(entry.repetitionCount)" : ""
             return "\(formatter.string(from: entry.date)) \(entry.event)\(repetition)"
