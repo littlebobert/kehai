@@ -642,6 +642,7 @@ struct CompactSwitcherView: View {
     @State private var pointerIntentLockedAppID: String?
     @State private var pointerIntentLockExpiresAt = Date.distantPast
     @State private var deferredAppHoverTask: Task<Void, Never>?
+    @State private var deferredAppHoverAction: (@MainActor () -> Void)?
 
     private let compactAppCellWidth: CGFloat = 55
     private let compactAppSpacing: CGFloat = 2
@@ -986,7 +987,7 @@ struct CompactSwitcherView: View {
         let isTraversingAppStrip = horizontalDistance > max(directionalY, 0) * 1.4
 
         if isTraversingAppStrip {
-            clearPointerIntentLock()
+            releasePointerIntentLock()
         } else if isClearlyMovingTowardWindows, let activeHoveredAppID {
             pointerIntentLockedAppID = activeHoveredAppID
             pointerIntentLockExpiresAt = Date().addingTimeInterval(0.24)
@@ -1009,6 +1010,7 @@ struct CompactSwitcherView: View {
            remainingLockDuration > 0 {
             cancelDeferredAppHover()
             pendingHoveredAppID = appID
+            deferredAppHoverAction = action
             deferredAppHoverTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(remainingLockDuration))
                 guard !Task.isCancelled, pendingHoveredAppID == appID else { return }
@@ -1035,9 +1037,20 @@ struct CompactSwitcherView: View {
         cancelDeferredAppHover()
     }
 
+    /// The pointer is moving along the strip, so it is no longer heading for the
+    /// locked app's windows. Apply any deferred hover now: the pointer is still over
+    /// that icon, and its onHover will not fire again while it stays there.
+    private func releasePointerIntentLock() {
+        pointerIntentLockedAppID = nil
+        pointerIntentLockExpiresAt = .distantPast
+        guard let pendingHoveredAppID, let deferredAppHoverAction else { return }
+        selectHoveredCompactApp(appID: pendingHoveredAppID, action: deferredAppHoverAction)
+    }
+
     private func cancelDeferredAppHover() {
         deferredAppHoverTask?.cancel()
         deferredAppHoverTask = nil
+        deferredAppHoverAction = nil
         pendingHoveredAppID = nil
     }
 
