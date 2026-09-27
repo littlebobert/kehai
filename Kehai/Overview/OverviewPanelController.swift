@@ -599,17 +599,21 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: dragMask.union(interactionMask)) { [weak self] event in
             guard let self else { return event }
 
-            if event.window === self.compactWindow {
-                self.hasInteractedWithHotZoneCompactWindow = true
-            }
-
             // Freeze inventory as soon as a system drag is underway — before the
             // cursor hits a card DropDelegate (which is too late to stop SCK thrash).
+            // A drag is not an interaction: one that began outside the mini UI (a
+            // screenshot selection, say) can still be routed to it once it is key,
+            // and would otherwise disable pointer-exit dismissal for good. Drags that
+            // start inside the mini UI were already counted by their mouse-down.
             if event.type == .leftMouseDragged
                 || event.type == .rightMouseDragged
                 || event.type == .otherMouseDragged {
                 self.model.notePotentialSystemDrag()
                 return event
+            }
+
+            if event.window === self.compactWindow {
+                self.hasInteractedWithHotZoneCompactWindow = true
             }
 
             guard event.window === self.window || event.window === self.compactWindow else { return event }

@@ -119,7 +119,7 @@ final class OverviewViewModel {
         dragDisplayTaskGroups ?? taskGroups
     }
 
-    private static var isSystemDragPasteboardActive: Bool {
+    static var isSystemDragPasteboardActive: Bool {
         !(NSPasteboard(name: .drag).pasteboardItems ?? []).isEmpty
     }
     var searchFocusRequest = 0

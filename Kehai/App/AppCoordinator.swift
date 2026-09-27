@@ -632,6 +632,13 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         self.hotZoneEntryDate = nil
         hotZoneIsArmed = false
         hotZoneDisarmedDate = now
+        // A held button with nothing on the drag pasteboard is a selection, window
+        // move, or screenshot marquee reaching the edge, not a request for Kehai.
+        // File drags still present so they can be dropped onto a window.
+        if NSEvent.pressedMouseButtons != 0, !OverviewViewModel.isSystemDragPasteboardActive {
+            SafeDiagnosticLog.shared.record("hot-zone: presentation skipped mouse button held without drag")
+            return
+        }
         guard permissionManager.hasCorePermissions else {
             SafeDiagnosticLog.shared.record("hot-zone: presentation blocked missing core permissions")
             return
