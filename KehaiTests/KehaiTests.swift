@@ -329,6 +329,25 @@ final class KehaiTests: XCTestCase {
         XCTAssertGreaterThan(exact, geometry)
     }
 
+    @MainActor
+    func testFocusOnUninventoriedWindowIsNotCreditedToASibling() {
+        let existing = WindowItem(id: 1, processID: 1, appName: "Safari", bundleIdentifier: nil, title: "Home / X", frame: CGRect(x: 0, y: 0, width: 1200, height: 800), isOnScreen: true, lastSeen: nil)
+        let newWindow = WindowMatchCandidate(title: "weather tokyo - Google Search", frame: CGRect(x: 600, y: 300, width: 900, height: 600))
+        XCTAssertNil(ActivityMonitor.focusedWindow(matching: newWindow, in: [existing]))
+        XCTAssertNil(ActivityMonitor.focusedWindow(matching: newWindow, in: []))
+
+        let inventoried = WindowItem(id: 2, processID: 1, appName: "Safari", bundleIdentifier: nil, title: "weather tokyo - Google Search", frame: newWindow.frame, isOnScreen: true, lastSeen: nil)
+        XCTAssertEqual(ActivityMonitor.focusedWindow(matching: newWindow, in: [existing, inventoried])?.id, 2)
+    }
+
+    @MainActor
+    func testFocusMatchToleratesTitleChangeOnSameFrame() {
+        let terminal = WindowItem(id: 1, processID: 1, appName: "Terminal", bundleIdentifier: nil, title: "justin — -zsh", frame: CGRect(x: 10, y: 10, width: 800, height: 500), isOnScreen: true, lastSeen: nil)
+        let focused = WindowMatchCandidate(title: "justin — sudo ▸ log", frame: terminal.frame)
+        XCTAssertEqual(ActivityMonitor.focusedWindow(matching: focused, in: [terminal])?.id, 1)
+        XCTAssertEqual(ActivityMonitor.focusedWindow(matching: nil, in: [terminal])?.id, 1)
+    }
+
     func testModelGroupsDiscardUnknownWindowIDs() {
         let groups = TaskGroupingService.sanitize([(" Research ", [2, 999]), ("", [2])], validWindowIDs: [1, 2])
         XCTAssertEqual(groups, [TaskGroup(name: "Research", windowIDs: [2])])

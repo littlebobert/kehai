@@ -2,6 +2,9 @@ import AppKit
 import ApplicationServices
 
 struct WindowMatchCandidate: Sendable {
+    /// A partial title match, or a frame within ~100pt of total drift.
+    static let minimumConfidentScore = 40.0
+
     let title: String
     let frame: CGRect
 

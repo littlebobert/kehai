@@ -296,7 +296,7 @@ final class OverviewViewModel {
         guard !shouldFreezeInventory else { return }
         guard let index = windows.firstIndex(where: { $0.id == windowID }) else { return }
         var updatedWindows = windows
-        updatedWindows[index].lastSeen = date
+        updatedWindows[index].lastSeen = max(updatedWindows[index].lastSeen ?? date, date)
         windows = WindowItem.orderedByRecency(updatedWindows)
     }
 
