@@ -21,6 +21,27 @@ OPENAI_REASONING_EFFORT="${OPENAI_REASONING_EFFORT:-high}"
 ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-5}"
 PUBLIC_LANDING_URL="${PUBLIC_LANDING_URL:-https://kehai.jp/}"
 PUBLIC_APPCAST_URL="${PUBLIC_APPCAST_URL:-https://kehai.jp/kehai-appcast.xml}"
+
+# Fast-forward both repositories before reading any versions, so a release made
+# from another machine doesn't leave this checkout behind origin.
+sync_repository() {
+  local dir="$1" label="$2" branch
+  branch="$(git -C "$dir" branch --show-current)"
+  [[ -n "$branch" ]] || { echo "error: $label is on a detached HEAD" >&2; exit 1; }
+  [[ -z "$(git -C "$dir" status --porcelain)" ]] || { echo "error: $label working tree must be clean before deployment" >&2; exit 1; }
+  git -C "$dir" pull --ff-only origin "$branch" || { echo "error: could not fast-forward $label; resolve it manually" >&2; exit 1; }
+}
+
+if [[ "${KEHAI_DEPLOY_SYNCED:-}" != 1 && " $* " != *" -h "* && " $* " != *" --help "* ]]; then
+  KEHAI_HEAD_BEFORE_SYNC="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+  sync_repository "$ROOT_DIR" "Kehai"
+  sync_repository "$WEBSITE_DIR" "website"
+  if [[ "$(git -C "$ROOT_DIR" rev-parse HEAD)" != "$KEHAI_HEAD_BEFORE_SYNC" ]]; then
+    # The pull may have changed this script or project.yml; restart from the new copy.
+    KEHAI_DEPLOY_SYNCED=1 exec "$ROOT_DIR/Scripts/deploy-github-release.sh" "$@"
+  fi
+fi
+
 CURRENT_VERSION="$(ruby -e 'puts File.read(ARGV[0])[/MARKETING_VERSION: "([^"]+)"/, 1]' "$ROOT_DIR/project.yml")"
 CURRENT_BUILD="$(ruby -e 'puts File.read(ARGV[0])[/CURRENT_PROJECT_VERSION: "([0-9]+)"/, 1]' "$ROOT_DIR/project.yml")"
 VERSION_ARG=""
@@ -109,8 +130,6 @@ WEBSITE_BRANCH="$(git -C "$WEBSITE_DIR" branch --show-current)"
 [[ -f "$LANDING_PAGE" ]] || { echo "error: landing page not found: $LANDING_PAGE" >&2; exit 1; }
 [[ -z "$(git -C "$ROOT_DIR" status --porcelain)" ]] || { echo "error: Kehai working tree must be clean before deployment" >&2; exit 1; }
 [[ -z "$(git -C "$WEBSITE_DIR" status --porcelain)" ]] || { echo "error: website working tree must be clean before deployment" >&2; exit 1; }
-git -C "$ROOT_DIR" fetch origin "$KEHAI_BRANCH"
-git -C "$WEBSITE_DIR" fetch origin "$WEBSITE_BRANCH"
 [[ "$(git -C "$ROOT_DIR" rev-parse HEAD)" == "$(git -C "$ROOT_DIR" rev-parse "origin/$KEHAI_BRANCH")" ]] || { echo "error: Kehai branch is not synchronized with origin" >&2; exit 1; }
 [[ "$(git -C "$WEBSITE_DIR" rev-parse HEAD)" == "$(git -C "$WEBSITE_DIR" rev-parse "origin/$WEBSITE_BRANCH")" ]] || { echo "error: website branch is not synchronized with origin" >&2; exit 1; }
 gh auth status >/dev/null
