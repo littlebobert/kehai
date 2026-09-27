@@ -1387,6 +1387,20 @@ final class OverviewViewModel {
         // Still mid-session until mouse-up ends the drag.
     }
 
+    /// Files or links dropped straight onto a window card or app icon open in that app.
+    func dropItems(_ urls: [URL], onto windowID: CGWindowID) {
+        guard let window = windowForDragTarget(windowID) else {
+            SafeDiagnosticLog.shared.record("drop-open: target window unavailable")
+            return
+        }
+        activator.open(urls, with: window)
+        isSwitcherMode = false
+        switcherAppWindows = nil
+        hoveredSwitcherWindowID = nil
+        clearDragSessionState()
+        onDragRedirectActivated?()
+    }
+
     func dragSessionEnded() {
         let wasDragging = isExternalDragActive
         clearDragSessionState()

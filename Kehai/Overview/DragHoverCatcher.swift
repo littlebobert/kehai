@@ -3,11 +3,13 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Marks a view as a Command-Tab-style drag hover target.
-/// Does not accept the drop into Kehai; it only reports enter/exit so the app can
-/// select and dwell-activate the underlying window or app icon.
+/// Reports enter/exit so the app can select and dwell-activate the underlying
+/// window or app icon. Dropping files or links right away hands them to `onDrop`,
+/// which opens them in the target's app; other payloads are rejected.
 struct DragHoverCatcher: ViewModifier {
     var onEntered: () -> Void
     var onExited: () -> Void
+    var onDrop: ([URL]) -> Void
 
     private static let acceptedTypes: [UTType] = [
         .item,
@@ -31,7 +33,8 @@ struct DragHoverCatcher: ViewModifier {
             of: Self.acceptedTypes,
             delegate: DragHoverDropDelegate(
                 onEntered: onEntered,
-                onExited: onExited
+                onExited: onExited,
+                onDrop: onDrop
             )
         )
     }
@@ -40,19 +43,25 @@ struct DragHoverCatcher: ViewModifier {
 extension View {
     func dragHoverCatcher(
         onEntered: @escaping () -> Void,
-        onExited: @escaping () -> Void
+        onExited: @escaping () -> Void,
+        onDrop: @escaping ([URL]) -> Void
     ) -> some View {
-        modifier(DragHoverCatcher(onEntered: onEntered, onExited: onExited))
+        modifier(DragHoverCatcher(onEntered: onEntered, onExited: onExited, onDrop: onDrop))
     }
 }
 
 private struct DragHoverDropDelegate: DropDelegate {
+    /// Payloads Kehai can hand to another app. Files win over links, since a
+    /// Finder drag often carries both.
+    private static let openableTypes: [UTType] = [.fileURL, .url]
+
     let onEntered: () -> Void
     let onExited: () -> Void
+    let onDrop: ([URL]) -> Void
 
     func validateDrop(info: DropInfo) -> Bool {
-        // Advertise as a valid target so the system keeps sending hover updates.
-        // We still reject the actual drop in performDrop.
+        // Advertise as a valid target so the system keeps sending hover updates,
+        // even for payloads performDrop will reject.
         true
     }
 
@@ -61,8 +70,9 @@ private struct DragHoverDropDelegate: DropDelegate {
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        // .move keeps the drag alive without promising Kehai will consume files.
-        DropProposal(operation: .move)
+        // .copy for openable payloads shows the green "+" badge; .move keeps other
+        // drags alive without promising Kehai will consume them.
+        DropProposal(operation: info.hasItemsConforming(to: Self.openableTypes) ? .copy : .move)
     }
 
     func dropExited(info: DropInfo) {
@@ -70,8 +80,28 @@ private struct DragHoverDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
-        // Never ingest the payload. If dwell already activated a target and hid
-        // Kehai, the drop lands on that app; if not, rejecting here is correct.
-        false
+        let fileProviders = info.itemProviders(for: [.fileURL])
+        let providers = fileProviders.isEmpty ? info.itemProviders(for: [.url]) : fileProviders
+        guard !providers.isEmpty else { return false }
+        let onDrop = onDrop
+        Task { @MainActor in
+            var urls: [URL] = []
+            for provider in providers {
+                if let url = await Self.loadURL(from: provider) {
+                    urls.append(url)
+                }
+            }
+            guard !urls.isEmpty else { return }
+            onDrop(urls)
+        }
+        return true
+    }
+
+    private static func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                continuation.resume(returning: url)
+            }
+        }
     }
 }

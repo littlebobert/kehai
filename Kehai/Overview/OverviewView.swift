@@ -326,6 +326,9 @@ struct OverviewView: View {
                             dragExited: {
                                 model.dragHoverExited(windowID: window.id)
                             },
+                            dropped: { urls in
+                                model.dropItems(urls, onto: window.id)
+                            },
                             quitApp: { model.quitApp(window) },
                             canExcludeFromAI: model.canExcludeAppFromAI(window),
                             canExcludeEntirely: model.canExcludeApp(window),
@@ -489,6 +492,7 @@ struct OverviewView: View {
             hoverChanged: { isHovering in model.hoverWindowInSwitcherMode(isHovering ? window.id : nil) },
             dragEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
             dragExited: { model.dragHoverExited(windowID: window.id) },
+            dropped: { urls in model.dropItems(urls, onto: window.id) },
             closeWindow: { model.closeWindowFromMenu(window) },
             toggleHidden: { model.toggleHidden(window) },
             excludeApp: {
@@ -889,7 +893,8 @@ struct CompactSwitcherView: View {
         }
         .dragHoverCatcher(
             onEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: true) },
-            onExited: { model.dragHoverExited(windowID: window.id) }
+            onExited: { model.dragHoverExited(windowID: window.id) },
+            onDrop: { urls in model.dropItems(urls, onto: window.id) }
         )
     }
 
@@ -1211,7 +1216,8 @@ struct CompactSwitcherView: View {
         .onHover { hovering in model.hoverWindowInSwitcherMode(hovering ? window.id : nil) }
         .dragHoverCatcher(
             onEntered: { model.dragHoverEntered(windowID: window.id, isAppStrip: false) },
-            onExited: { model.dragHoverExited(windowID: window.id) }
+            onExited: { model.dragHoverExited(windowID: window.id) },
+            onDrop: { urls in model.dropItems(urls, onto: window.id) }
         )
     }
 
@@ -1461,6 +1467,7 @@ private struct RecentAppButton: View {
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
+    let dropped: ([URL]) -> Void
     let quitApp: () -> Void
     let canExcludeFromAI: Bool
     let canExcludeEntirely: Bool
@@ -1549,7 +1556,7 @@ private struct RecentAppButton: View {
             .disabled(!canExcludeFromAI && !canExcludeEntirely)
         }
         .onHover(perform: hoverChanged)
-        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
+        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onDrop: dropped)
     }
 }
 
@@ -1683,6 +1690,7 @@ private struct WindowCard: View {
     let hoverChanged: (Bool) -> Void
     let dragEntered: () -> Void
     let dragExited: () -> Void
+    let dropped: ([URL]) -> Void
     let closeWindow: () -> Void
     let toggleHidden: () -> Void
     let excludeApp: () -> Void
@@ -1849,7 +1857,7 @@ private struct WindowCard: View {
             .disabled(!canExcludeFromAI && !canExcludeApp)
         }
         .onHover(perform: hoverChanged)
-        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited)
+        .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onDrop: dropped)
         .opacity(dusty ? 0.62 : 1)
     }
 }

@@ -104,6 +104,22 @@ final class WindowActivator {
         }
     }
 
+    /// Hand dropped files or links to the app that owns `item`, as if they were
+    /// dropped on its Dock icon. The app decides which window opens them.
+    func open(_ urls: [URL], with item: WindowItem) {
+        guard let app = NSRunningApplication(processIdentifier: item.processID),
+              !app.isTerminated,
+              let applicationURL = app.bundleURL else {
+            SafeDiagnosticLog.shared.record("drop-open: target app unavailable")
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.open(urls, withApplicationAt: applicationURL, configuration: configuration) { _, error in
+            SafeDiagnosticLog.shared.record("drop-open: count=\(urls.count) error=\(error != nil)")
+        }
+    }
+
     /// Raise the target window for a drag-redirect without forcing every app window up first.
     func activateForDragRedirect(_ item: WindowItem) {
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
