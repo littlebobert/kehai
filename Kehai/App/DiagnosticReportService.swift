@@ -30,6 +30,7 @@ final class DiagnosticReportService {
 
     private func reportText(snapshot: DiagnosticSnapshot) -> String {
         let bundle = Bundle.main
+        let recentEvents = SafeDiagnosticLog.shared.recentText()
         let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
         let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
         let report = """
@@ -56,7 +57,7 @@ final class DiagnosticReportService {
         Generating groups: \(snapshot.isGrouping)
 
         Recent Sanitized Events
-        \(SafeDiagnosticLog.shared.recentText().isEmpty ? "No events recorded." : SafeDiagnosticLog.shared.recentText())
+        \(recentEvents.isEmpty ? "No events recorded." : recentEvents)
 
         Privacy
         This report intentionally excludes names, email addresses, app names, bundle identifiers,

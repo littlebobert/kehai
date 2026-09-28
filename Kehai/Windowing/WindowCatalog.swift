@@ -77,7 +77,14 @@ final class WindowCatalog {
                accessibilityWindows[app.processID] != nil,
                !validatedSafariWindowIDs.contains(window.windowID) {
                 logger.notice("Excluded ScreenCaptureKit Safari window without a unique Accessibility match")
-                SafeDiagnosticLog.shared.record("window-catalog: excluded unmatched Safari window")
+                SafeDiagnosticLog.shared.record(
+                    "window-catalog: excluded unmatched Safari window " + safariExclusionReason(
+                        for: window,
+                        title: title,
+                        signatures: accessibilityWindows[app.processID] ?? [],
+                        liveWindowIDs: liveWindowIDs
+                    )
+                )
                 accessibilityContradictedWindowIDs.insert(window.windowID)
                 return nil
             }
@@ -181,6 +188,34 @@ private func validatedSafariWindowIDs(
     return validated
 }
 
+/// Privacy-safe evidence for why a Safari window failed validation: booleans,
+/// counts, and distances only — never titles or window IDs.
+private func safariExclusionReason(
+    for window: SCWindow,
+    title: String,
+    signatures: [AccessibilityWindowSignature],
+    liveWindowIDs: Set<CGWindowID>
+) -> String {
+    let titleMatches = signatures.filter { $0.titleMatches(title) }
+    let nearestDistance = (titleMatches.isEmpty ? signatures : titleMatches)
+        .map { $0.matchDistance(title: title, frame: window.frame) }
+        .min()
+    let fullScreenSized = NSScreen.screens.contains { screen in
+        abs(screen.frame.width - window.frame.width) < 2 && abs(screen.frame.height - window.frame.height) < 2
+    }
+    return [
+        "onScreen=\(window.isOnScreen)",
+        "inCGList=\(liveWindowIDs.contains(window.windowID))",
+        "fullScreenSized=\(fullScreenSized)",
+        "axCount=\(signatures.count)",
+        "axWithIDs=\(signatures.filter { $0.windowID != nil }.count)",
+        "idMatch=\(signatures.contains { $0.windowID == window.windowID })",
+        "titleEmpty=\(title.isEmpty)",
+        "titleMatches=\(titleMatches.count)",
+        "nearestFrameDist=\(nearestDistance.map { String(Int($0.rounded())) } ?? "none")"
+    ].joined(separator: " ")
+}
+
 private func currentCoreGraphicsWindowIDs() -> Set<CGWindowID> {
     guard let windowInfo = CGWindowListCopyWindowInfo([.optionAll, .excludeDesktopElements], kCGNullWindowID)
         as? [[CFString: Any]] else { return [] }
@@ -238,11 +273,14 @@ private struct AccessibilityWindowSignature: Sendable {
     let frame: CGRect
 
     func matches(title candidateTitle: String, frame candidateFrame: CGRect) -> Bool {
-        let titleMatches = title == candidateTitle
+        titleMatches(candidateTitle) && matchDistance(title: candidateTitle, frame: candidateFrame) <= 24
+    }
+
+    func titleMatches(_ candidateTitle: String) -> Bool {
+        title == candidateTitle
             || (!title.isEmpty && !candidateTitle.isEmpty
                 && (title.localizedCaseInsensitiveContains(candidateTitle)
                     || candidateTitle.localizedCaseInsensitiveContains(title)))
-        return titleMatches && matchDistance(title: candidateTitle, frame: candidateFrame) <= 24
     }
 
     func matchDistance(title candidateTitle: String, frame candidateFrame: CGRect) -> CGFloat {
