@@ -13,6 +13,7 @@
 		10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */; };
 		231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */; };
 		29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */; };
+		3426FF3F3C0E976E3EEC3113 /* AppContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 636BE7D907FA953CF30AFD6A /* AppContextMenu.swift */; };
 		3640ADB8CDEBD61BDD4779E1 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */; };
 		377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */; };
 		37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CC03ED2EE921354B0BBDE44 /* SettingsView.swift */; };
@@ -95,6 +96,7 @@
 		5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskGroupCache.swift; sourceTree = "<group>"; };
 		5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivator.swift; sourceTree = "<group>"; };
 		621EE2F9EC9738189063682A /* KehaiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiApp.swift; sourceTree = "<group>"; };
+		636BE7D907FA953CF30AFD6A /* AppContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContextMenu.swift; sourceTree = "<group>"; };
 		6EEF963F2217DDBE06F29587 /* ActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStore.swift; sourceTree = "<group>"; };
 		70EFEF0B56A45347356BE54D /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInventoryMonitor.swift; sourceTree = "<group>"; };
@@ -168,6 +170,7 @@
 		6CE99583433845D1AA21E63C /* Overview */ = {
 			isa = PBXGroup;
 			children = (
+				636BE7D907FA953CF30AFD6A /* AppContextMenu.swift */,
 				DE1A696C398C1FF32425EAC9 /* DragHoverCatcher.swift */,
 				0AC7924D91828565EFF66DC0 /* OverviewPanelController.swift */,
 				0C46B9739FA349D4380DDBBC /* OverviewToolbarViews.swift */,
@@ -380,6 +383,7 @@
 				10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */,
 				0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */,
 				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
+				3426FF3F3C0E976E3EEC3113 /* AppContextMenu.swift in Sources */,
 				BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */,
 				F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */,
 				4E108C5F456DC66D01C41DDB /* AppearanceSettings.swift in Sources */,

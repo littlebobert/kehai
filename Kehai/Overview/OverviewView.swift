@@ -877,17 +877,14 @@ struct CompactSwitcherView: View {
             )
         }
         .buttonStyle(.plain)
-        .contextMenu {
-            Button(L10n.string("Quit App")) { model.quitApp(window) }
-            Button(L10n.string("Force Quit App")) { model.forceQuitApp(window) }
-            Menu(L10n.string("Exclude App…")) {
-                Button(L10n.string("From AI Queries")) { model.excludeAppFromAI(window) }
-                    .disabled(!model.canExcludeAppFromAI(window))
-                Button(L10n.string("From Kehai Entirely")) { model.excludeApp(for: window) }
-                    .disabled(!model.canExcludeApp(window))
-            }
-            .disabled(!model.canExcludeAppFromAI(window) && !model.canExcludeApp(window))
-        }
+        .appContextMenu(AppContextMenuActions(
+            quit: { model.quitApp(window) },
+            forceQuit: { model.forceQuitApp(window) },
+            canExcludeFromAI: model.canExcludeAppFromAI(window),
+            canExcludeEntirely: model.canExcludeApp(window),
+            excludeFromAI: { model.excludeAppFromAI(window) },
+            excludeEntirely: { model.excludeApp(for: window) }
+        ))
         .onHover { hovering in
             handleCompactAppHover(appID: compactAppHoverID(window), hovering: hovering) {
                 model.hoverAppInSwitcherMode(window.id)
@@ -1548,17 +1545,14 @@ private struct RecentAppButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
-        .contextMenu {
-            Button(L10n.string("Quit App"), action: quitApp)
-            Button(L10n.string("Force Quit App"), action: forceQuitApp)
-            Menu(L10n.string("Exclude App…")) {
-                Button(L10n.string("From AI Queries"), action: excludeFromAI)
-                    .disabled(!canExcludeFromAI)
-                Button(L10n.string("From Kehai Entirely"), action: excludeEntirely)
-                    .disabled(!canExcludeEntirely)
-            }
-            .disabled(!canExcludeFromAI && !canExcludeEntirely)
-        }
+        .appContextMenu(AppContextMenuActions(
+            quit: quitApp,
+            forceQuit: forceQuitApp,
+            canExcludeFromAI: canExcludeFromAI,
+            canExcludeEntirely: canExcludeEntirely,
+            excludeFromAI: excludeFromAI,
+            excludeEntirely: excludeEntirely
+        ))
         .onHover(perform: hoverChanged)
         .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onDrop: dropped)
     }
