@@ -330,6 +330,7 @@ struct OverviewView: View {
                                 model.dropItems(urls, onto: window.id)
                             },
                             quitApp: { model.quitApp(window) },
+                            forceQuitApp: { model.forceQuitApp(window) },
                             canExcludeFromAI: model.canExcludeAppFromAI(window),
                             canExcludeEntirely: model.canExcludeApp(window),
                             excludeFromAI: { model.excludeAppFromAI(window) },
@@ -878,6 +879,7 @@ struct CompactSwitcherView: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button(L10n.string("Quit App")) { model.quitApp(window) }
+            Button(L10n.string("Force Quit App")) { model.forceQuitApp(window) }
             Menu(L10n.string("Exclude App…")) {
                 Button(L10n.string("From AI Queries")) { model.excludeAppFromAI(window) }
                     .disabled(!model.canExcludeAppFromAI(window))
@@ -1469,6 +1471,7 @@ private struct RecentAppButton: View {
     let dragExited: () -> Void
     let dropped: ([URL]) -> Void
     let quitApp: () -> Void
+    let forceQuitApp: () -> Void
     let canExcludeFromAI: Bool
     let canExcludeEntirely: Bool
     let excludeFromAI: () -> Void
@@ -1547,6 +1550,7 @@ private struct RecentAppButton: View {
         .contentShape(Rectangle())
         .contextMenu {
             Button(L10n.string("Quit App"), action: quitApp)
+            Button(L10n.string("Force Quit App"), action: forceQuitApp)
             Menu(L10n.string("Exclude App…")) {
                 Button(L10n.string("From AI Queries"), action: excludeFromAI)
                     .disabled(!canExcludeFromAI)

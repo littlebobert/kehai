@@ -228,6 +228,18 @@ final class WindowActivator {
         return app.isTerminated ? .alreadyTerminated : .failed
     }
 
+    /// Like Force Quit in the Dock: kills the app without letting it save or ask.
+    func forceQuit(_ item: WindowItem) -> QuitOutcome {
+        guard let app = NSRunningApplication(processIdentifier: item.processID),
+              !app.isTerminated else {
+            return .alreadyTerminated
+        }
+        if app.forceTerminate() {
+            return .requested
+        }
+        return app.isTerminated ? .alreadyTerminated : .failed
+    }
+
     private func pressClose(on window: AXUIElement) -> Bool {
         if let closeButton: AXUIElement = value(window, attribute: kAXCloseButtonAttribute),
            AXUIElementPerformAction(closeButton, kAXPressAction as CFString) == .success {

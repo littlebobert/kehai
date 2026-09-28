@@ -70,6 +70,19 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             Task { @MainActor [weak self] in self?.recordHotZoneApplicationActivation() }
         }
         menuTrackingObservers = [
+            // Synchronous (no queue hop) so the items change before the menu draws.
+            NotificationCenter.default.addObserver(
+                forName: NSMenu.didBeginTrackingNotification,
+                object: nil,
+                queue: nil
+            ) { notification in
+                // Menu tracking notifications are posted on the main thread.
+                nonisolated(unsafe) let menu = notification.object as? NSMenu
+                MainActor.assumeIsolated {
+                    guard let menu else { return }
+                    Self.makeForceQuitAnOptionAlternate(in: menu)
+                }
+            },
             NotificationCenter.default.addObserver(
                 forName: NSMenu.didBeginTrackingNotification,
                 object: nil,
@@ -178,6 +191,23 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         menuTrackingDepth += 1
         if menuTrackingDepth == 1 {
             model.setMenuTrackingActive(true)
+        }
+    }
+
+    /// SwiftUI context menus can't declare alternate items, so, like the Dock,
+    /// swap "Quit App" for "Force Quit App" only while Option is held.
+    private static func makeForceQuitAnOptionAlternate(in menu: NSMenu) {
+        let quitTitle = L10n.string("Quit App")
+        let forceQuitTitle = L10n.string("Force Quit App")
+        for (index, item) in menu.items.enumerated() where item.title == forceQuitTitle {
+            guard index > 0, menu.items[index - 1].title == quitTitle else { continue }
+            let quitItem = menu.items[index - 1]
+            // Alternates must share the key equivalent and differ only by modifiers.
+            quitItem.keyEquivalent = ""
+            quitItem.keyEquivalentModifierMask = []
+            item.keyEquivalent = ""
+            item.keyEquivalentModifierMask = [.option]
+            item.isAlternate = true
         }
     }
 

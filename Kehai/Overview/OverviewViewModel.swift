@@ -178,6 +178,8 @@ final class OverviewViewModel {
     private var activeRefreshCount = 0
     private var isTerminating = false
     private var thumbnailCapturedAt: [CGWindowID: Date] = [:]
+    /// Persisted per-app recency, so a windowless app keeps its place after Kehai relaunches.
+    private var storedAppLastSeen: [String: Date] = [:]
     private var sparseSnapshotStreak = SparseSnapshotStreak()
     private static let thumbnailStaleInterval: TimeInterval = 5 * 60
     private let catalog: WindowCatalog
@@ -404,10 +406,13 @@ final class OverviewViewModel {
                 return nil
             }
 
+            // Activation dates only cover this Kehai session; fall back to recorded
+            // focus history before launch date, which can be days old.
+            let activationDate = activityMonitor.activationDate(for: application.processIdentifier)
+            let storedDate = application.localizedName.flatMap { storedAppLastSeen[$0] }
             return WindowItem.appPlaceholder(
                 for: application,
-                lastSeen: activityMonitor.activationDate(for: application.processIdentifier)
-                    ?? application.launchDate
+                lastSeen: [activationDate, storedDate].compactMap { $0 }.max() ?? application.launchDate
             )
         }
     }
@@ -672,6 +677,28 @@ final class OverviewViewModel {
         case .failed:
             showTransientError(L10n.string("Kehai could not quit this app."))
             return
+        }
+    }
+
+    /// Allowed even while a normal quit is pending — that's usually why it's needed.
+    func forceQuitApp(_ window: WindowItem) {
+        guard window.bundleIdentifier?.caseInsensitiveCompare("com.apple.finder") != .orderedSame,
+              window.appName.caseInsensitiveCompare("Finder") != .orderedSame else {
+            SafeDiagnosticLog.shared.record("menu: ignored force quit for Finder")
+            return
+        }
+        let quittingAppKey = appKey(for: window)
+        switch activator.forceQuit(window) {
+        case .requested:
+            SafeDiagnosticLog.shared.record("menu: force quit requested")
+            quittingAppKeys.insert(quittingAppKey)
+            removeAppFromInventory(window)
+            scheduleQuittingAppCleanup(quittingAppKey)
+        case .alreadyTerminated:
+            removeAppFromInventory(window)
+        case .failed:
+            SafeDiagnosticLog.shared.record("menu: force quit failed")
+            showTransientError(L10n.string("Kehai could not force quit this app."))
         }
     }
 
@@ -1858,6 +1885,7 @@ final class OverviewViewModel {
         defer { isReconcilingInventory = false }
         do {
             let seen = await history.lastSeen()
+            storedAppLastSeen = await history.lastSeenByAppName()
             // Re-check after every await — a drag may have started, or the app may
             // have begun terminating, mid-catalog.
             guard !isTerminating, inventoryEpoch == epochAtStart, !shouldFreezeInventory else {

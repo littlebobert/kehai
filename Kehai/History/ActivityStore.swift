@@ -54,6 +54,12 @@ actor ActivityStore {
         return Dictionary(events.map { ($0.windowID, $0.date) }, uniquingKeysWith: max)
     }
 
+    /// Latest recorded focus per app, which outlives the app's windows and Kehai relaunches.
+    func lastSeenByAppName() async -> [String: Date] {
+        await hydrate()
+        return Dictionary(events.map { ($0.appName, $0.date) }, uniquingKeysWith: max)
+    }
+
     func recentEvents(limit: Int = 100) async -> [ActivityEvent] {
         await hydrate()
         return Array(events.suffix(limit))
