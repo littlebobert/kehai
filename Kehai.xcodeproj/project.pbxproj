@@ -11,6 +11,7 @@
 		0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */; };
 		0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */; };
 		10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */; };
+		1EE53AAFD3831D747BA4B7E6 /* RunningAppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510CF938B3EBB8E6AF8A7827 /* RunningAppCatalog.swift */; };
 		231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */; };
 		29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */; };
 		3426FF3F3C0E976E3EEC3113 /* AppContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 636BE7D907FA953CF30AFD6A /* AppContextMenu.swift */; };
@@ -89,6 +90,7 @@
 		40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIKeyStore.swift; sourceTree = "<group>"; };
 		4997A750AC9A5A6444F8EFEA /* HotZoneSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotZoneSettings.swift; sourceTree = "<group>"; };
 		4AF36828CD74B41607115C48 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
+		510CF938B3EBB8E6AF8A7827 /* RunningAppCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningAppCatalog.swift; sourceTree = "<group>"; };
 		584098EB25E73AD7A58C80FE /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
 		598FF21B2EBC0162DC30A091 /* DockBadgeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockBadgeMonitor.swift; sourceTree = "<group>"; };
 		5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCatalog.swift; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 				3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */,
 				8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */,
 				865A4CDAE30766F2FF9893C5 /* LiveThumbnailService.swift */,
+				510CF938B3EBB8E6AF8A7827 /* RunningAppCatalog.swift */,
 				82A2694A32A4197AFA761F2B /* ThumbnailService.swift */,
 				5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */,
 				5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */,
@@ -408,6 +411,7 @@
 				9F033371CC4A42572498CB77 /* OverviewViewModel.swift in Sources */,
 				231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */,
 				FC2B452E547397F857A41B8C /* PermissionView.swift in Sources */,
+				1EE53AAFD3831D747BA4B7E6 /* RunningAppCatalog.swift in Sources */,
 				7E737B2A17D9781F37E42E52 /* SafariTabService.swift in Sources */,
 				5237186877B286D004B95E8F /* SafeDiagnosticLog.swift in Sources */,
 				37AA098304EDF3F353D3E808 /* SettingsView.swift in Sources */,

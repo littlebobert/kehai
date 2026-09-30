@@ -59,14 +59,14 @@ struct WindowItem: Identifiable, Hashable, Sendable {
     }
 
     static func appPlaceholder(
-        for application: NSRunningApplication,
+        for application: RunningAppInfo,
         lastSeen: Date?
     ) -> WindowItem {
         let name = application.localizedName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let appName = (name?.isEmpty == false) ? name! : "App"
         return WindowItem(
-            id: appPlaceholderID(processID: application.processIdentifier),
-            processID: application.processIdentifier,
+            id: appPlaceholderID(processID: application.processID),
+            processID: application.processID,
             appName: appName,
             bundleIdentifier: application.bundleIdentifier,
             title: appName,

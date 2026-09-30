@@ -22,6 +22,7 @@ final class WindowInventoryMonitor {
     /// unresponsive app can stall a call for the system default (~6s).
     private static let accessibilityMessagingTimeout: Float = 0.5
     private static let initialEnumerationDelay = Duration.milliseconds(250)
+    private static let slowAccessibilityRefreshThreshold: TimeInterval = 0.25
 
     init(
         changed: @escaping @MainActor () -> Void,
@@ -162,7 +163,15 @@ final class WindowInventoryMonitor {
 
     private func handleAXChange(processID: pid_t, focusedWindowDidChange: Bool) {
         if processID != 0 {
+            let started = Date()
             refreshWindowObservations(for: processID)
+            let elapsed = Date().timeIntervalSince(started)
+            if elapsed > Self.slowAccessibilityRefreshThreshold {
+                SafeDiagnosticLog.shared.record(
+                    "window-inventory: slow AX observation refresh ms=\(Int(elapsed * 1000)) " +
+                        "windows=\(applicationObservations[processID]?.windowElements.count ?? 0)"
+                )
+            }
             if focusedWindowDidChange { focusedWindowChanged(processID) }
         }
         scheduleChange()

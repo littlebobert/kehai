@@ -202,6 +202,7 @@ final class OverviewViewModel {
     private var smartSearchWindowIDs: [CGWindowID]?
     private let taskGroupCache = TaskGroupCache()
     private let hiddenWindowStore = HiddenWindowStore()
+    private let runningApps = RunningAppCatalog()
     private static let excludeHiddenWindowsKey = "overview.excludeHiddenWindows"
     private static let thumbnailCardWidthKey = "overview.thumbnailCardWidth"
     private static let viewModeKey = "overview.viewMode"
@@ -229,6 +230,8 @@ final class OverviewViewModel {
         self.activityMonitor = activityMonitor
         hasGeneratedGroups = taskGroupCache.hasCache
         groupsGeneratedAt = taskGroupCache.generatedAt
+        runningApps.onChange = { [weak self] in self?.syncSwitcherAppSnapshot() }
+        runningApps.start()
     }
 
     private func appKey(for window: WindowItem) -> String {
@@ -383,21 +386,16 @@ final class OverviewViewModel {
     }
 
     /// Regular, user-switchable apps that aren't already represented by an open window in the strip.
+    /// Reads the background-maintained catalog; this runs while presenting the mini UI,
+    /// so it must not touch LaunchServices or the disk.
     private func windowlessRunningApps(excluding represented: [WindowItem]) -> [WindowItem] {
-        let ownPID = ProcessInfo.processInfo.processIdentifier
         let presentKeys = Set(represented.map { $0.bundleIdentifier ?? "pid:\($0.processID)" })
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return NSWorkspace.shared.runningApplications.compactMap { application in
-            guard application.activationPolicy == .regular,
-                  !application.isTerminated,
-                  application.processIdentifier != ownPID,
-                  isUserSwitchableApplication(application),
+        return runningApps.apps.compactMap { application in
+            guard !presentKeys.contains(application.appKey),
                   !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier)
             else { return nil }
-
-            let appKey = application.bundleIdentifier ?? "pid:\(application.processIdentifier)"
-            guard !presentKeys.contains(appKey) else { return nil }
 
             let name = application.localizedName ?? ""
             if !trimmedQuery.isEmpty,
@@ -408,25 +406,13 @@ final class OverviewViewModel {
 
             // Activation dates only cover this Kehai session; fall back to recorded
             // focus history before launch date, which can be days old.
-            let activationDate = activityMonitor.activationDate(for: application.processIdentifier)
+            let activationDate = activityMonitor.activationDate(for: application.processID)
             let storedDate = application.localizedName.flatMap { storedAppLastSeen[$0] }
             return WindowItem.appPlaceholder(
                 for: application,
                 lastSeen: [activationDate, storedDate].compactMap { $0 }.max() ?? application.launchDate
             )
         }
-    }
-
-    private func isUserSwitchableApplication(_ application: NSRunningApplication) -> Bool {
-        guard let executableURL = application.executableURL else { return false }
-        let pathComponents = executableURL.pathComponents
-        guard !pathComponents.contains(where: { $0.hasSuffix(".appex") }) else { return false }
-
-        guard let bundleURL = application.bundleURL,
-              let bundle = Bundle(url: bundleURL) else { return true }
-        return (bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool) != true
-            && (bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool) != true
-            && bundle.object(forInfoDictionaryKey: "NSExtension") == nil
     }
 
     var windowSections: [BrowserWindowSection] {
@@ -1189,6 +1175,9 @@ final class OverviewViewModel {
         hoveredSwitcherWindowID = nil
         SafeDiagnosticLog.shared.record("shortcut: candidates count=\(switcherAppWindows?.count ?? 0)")
         selectPreviousApplication(excluding: previousApplicationProcessID)
+        // Show the strip from the cached app list now; apps the refresh finds are
+        // merged in by syncSwitcherAppSnapshot when it lands.
+        runningApps.refresh()
     }
 
     private func selectPreviousApplication(excluding processID: pid_t?) {
