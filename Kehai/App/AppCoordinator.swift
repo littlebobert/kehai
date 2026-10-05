@@ -130,6 +130,9 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
     private var activationObserver: NSObjectProtocol?
     private var idleTimer: Timer?
     private var hotZoneTimer: Timer?
+    /// Held while hot-zone monitoring is on. Kehai is usually a windowless background
+    /// app, so without it App Nap throttles the poll timer for seconds at a time.
+    private var hotZoneActivity: NSObjectProtocol?
     private var githubRefreshTimer: Timer?
     private var hotZoneEntryDate: Date?
     private var hotZoneIsArmed = true
@@ -197,6 +200,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         idleTimer = nil
         hotZoneTimer?.invalidate()
         hotZoneTimer = nil
+        endHotZoneActivity()
         hotZoneEntryDate = nil
         hotZoneIsArmed = true
         githubRefreshTimer?.invalidate()
@@ -564,8 +568,15 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         isPointerInHotZoneNearMiss = false
 
         guard hotZoneSettings.isEnabled else {
+            endHotZoneActivity()
             SafeDiagnosticLog.shared.record("hot-zone: monitoring disabled")
             return
+        }
+        if hotZoneActivity == nil {
+            hotZoneActivity = ProcessInfo.processInfo.beginActivity(
+                options: .userInitiatedAllowingIdleSystemSleep,
+                reason: "Hot zone pointer monitoring"
+            )
         }
 
         SafeDiagnosticLog.shared.record(
@@ -577,6 +588,12 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
         hotZoneTimer = timer
         RunLoop.main.add(timer, forMode: .common)
         checkHotZone()
+    }
+
+    private func endHotZoneActivity() {
+        guard let hotZoneActivity else { return }
+        ProcessInfo.processInfo.endActivity(hotZoneActivity)
+        self.hotZoneActivity = nil
     }
 
     private func checkHotZone() {

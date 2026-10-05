@@ -6,6 +6,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private static let frameAutosaveName = "KehaiBrowserWindow"
     private static let hotZonePointerExitMargin: CGFloat = 32
     private static let hotZonePointerPollingInterval: TimeInterval = 0.1
+    private static let slowCompactPresentationThreshold: TimeInterval = 0.25
 
     private var window: NSWindow?
     private var compactWindow: NSWindow?
@@ -292,8 +293,17 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     private func showCompactSwitcher(anchoredTo hotZone: HotZone? = nil, on targetScreen: NSScreen? = nil) {
+        let started = Date()
+        var stepStarted = started
+        var stepTimings: [String] = []
+        func mark(_ step: String) {
+            let now = Date()
+            stepTimings.append("\(step)=\(Int(now.timeIntervalSince(stepStarted) * 1000))")
+            stepStarted = now
+        }
         closeCompactSwitcher()
         window?.orderOut(nil)
+        mark("close")
         let pointer = NSEvent.mouseLocation
         let screen = targetScreen
             ?? NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) }
@@ -351,6 +361,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
+        mark("window")
         if let hotZone {
             panel.setFrameOrigin(hotZone.windowFrameOrigin(
                 windowSize: panel.frame.size,
@@ -385,6 +396,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         )
         hostingView.sizingOptions = []
         panel.contentView = hostingView
+        mark("content")
         panel.delegate = self
         compactWindow = panel
         compactWindowFrameHeight = fixedFrameHeight
@@ -395,9 +407,19 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.zoomButton)?.toolTip = "Open Full Browser"
         installKeyMonitor()
         installMouseMonitor()
+        mark("setup")
         NSApp.activate(ignoringOtherApps: true)
+        mark("activate")
         panel.makeKeyAndOrderFront(nil)
+        mark("orderFront")
         notifyPresentationChanged()
+        mark("notify")
+        let elapsed = Date().timeIntervalSince(started)
+        if elapsed > Self.slowCompactPresentationThreshold {
+            SafeDiagnosticLog.shared.record(
+                "mini-ui: slow presentation ms=\(Int(elapsed * 1000)) " + stepTimings.joined(separator: " ")
+            )
+        }
         Task { await model.performInitialRefreshIfNeeded() }
     }
 
