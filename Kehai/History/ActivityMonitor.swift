@@ -143,6 +143,15 @@ final class ActivityMonitor {
         activationDatesByProcessID[processID]
     }
 
+    /// The app the user was in before Kehai came forward, if Kehai observed it this session.
+    var lastActiveProcessID: pid_t? {
+        let ownProcessID = ProcessInfo.processInfo.processIdentifier
+        return activationDatesByProcessID
+            .filter { $0.key != ownProcessID }
+            .max { $0.value < $1.value }?
+            .key
+    }
+
     func stop() {
         if let observer { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
         observer = nil

@@ -2211,15 +2211,19 @@ final class OverviewViewModel {
         }
     }
 
-    /// Opening an app (app strip, or an app row in search) brings the whole app
-    /// forward — every window, not just the most recent one.
+    /// Opening an app (app strip, or an app row in search) works like its Dock icon:
+    /// the most recent window comes forward first, and opening the app the user was
+    /// already in brings all of its windows forward.
     @discardableResult
     func activateApp(_ window: WindowItem) -> Bool {
         if let tab = window.safariTab, !tab.isCurrent {
             Task { await activate(tab) }
             return true
         }
-        return activator.activateApp(window)
+        return activator.activateApp(
+            window,
+            raisingAllWindows: activityMonitor.lastActiveProcessID == window.processID
+        )
     }
 
     func activate(_ tab: SafariTab) async {

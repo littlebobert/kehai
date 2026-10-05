@@ -25,7 +25,7 @@ final class WindowActivator {
         case failed
     }
 
-    /// Ceiling for each synchronous Accessibility round-trip while raising a window
+    /// Ceiling for each synchronous Accessibility round-trip while raising windows
     /// after app activation, so one unresponsive app can't stall it for seconds.
     private static let accessibilityMessagingTimeout: Float = 0.5
 
@@ -40,10 +40,11 @@ final class WindowActivator {
         raiseWindow(item)
     }
 
-    /// Open an *app* rather than one of its windows: bring the whole app forward
-    /// the way a Dock click does, and leave `item` on top.
+    /// Open an *app* rather than one of its windows, like clicking its Dock icon:
+    /// the app comes forward with `item` on top, and opening an app that was already
+    /// frontmost (`raisingAllWindows`) brings every unminimized window with it.
     @discardableResult
-    func activateApp(_ item: WindowItem) -> Bool {
+    func activateApp(_ item: WindowItem, raisingAllWindows: Bool) -> Bool {
         guard let app = NSRunningApplication(processIdentifier: item.processID), !app.isTerminated else {
             SafeDiagnosticLog.shared.record("app-activation: target process unavailable")
             return false
@@ -63,16 +64,16 @@ final class WindowActivator {
                     return
                 }
                 if openedApp.isHidden { openedApp.unhide() }
-                self.raiseTargetWindowAfterAppActivation(item)
-                SafeDiagnosticLog.shared.record("app-activation: workspace open completed")
-                self.verifyActivation(processID: item.processID, item: item)
+                self.raiseWindowsAfterAppActivation(item, all: raisingAllWindows)
+                SafeDiagnosticLog.shared.record("app-activation: workspace open completed all=\(raisingAllWindows)")
+                self.verifyActivation(processID: item.processID, item: item, raisingAllWindows: raisingAllWindows)
             }
         }
         SafeDiagnosticLog.shared.record("app-activation: workspace open requested")
         return true
     }
 
-    private func verifyActivation(processID: pid_t, item: WindowItem) {
+    private func verifyActivation(processID: pid_t, item: WindowItem, raisingAllWindows: Bool) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self,
                   let app = NSRunningApplication(processIdentifier: processID),
@@ -94,7 +95,7 @@ final class WindowActivator {
             NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { [weak self] _, error in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.raiseTargetWindowAfterAppActivation(item)
+                    self.raiseWindowsAfterAppActivation(item, all: raisingAllWindows)
                     let isFrontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == processID
                     SafeDiagnosticLog.shared.record(
                         "app-activation: workspace retry error=\(error != nil) frontmost=\(isFrontmost)"
@@ -131,12 +132,44 @@ final class WindowActivator {
         raiseWindow(item)
     }
 
-    /// The workspace open already brings the app's windows forward together; raising
-    /// each one through Accessibility on top of that restacks them visibly one by one.
-    /// Only the strip's representative window needs putting on top.
-    private func raiseTargetWindowAfterAppActivation(_ item: WindowItem) {
-        guard !item.isAppPlaceholder else { return }
-        raiseWindow(item, messagingTimeout: Self.accessibilityMessagingTimeout)
+    /// Raising every window through Accessibility restacks them visibly one by one,
+    /// so that is kept for re-opening the app the user was already in. Otherwise only
+    /// the strip's representative window needs putting on top.
+    private func raiseWindowsAfterAppActivation(_ item: WindowItem, all: Bool) {
+        if all {
+            raiseAllWindows(for: item, focusing: !item.isAppPlaceholder)
+        } else if !item.isAppPlaceholder {
+            raiseWindow(item, messagingTimeout: Self.accessibilityMessagingTimeout)
+        }
+    }
+
+    /// Activation alone leaves an app's other windows behind other apps. Raising each
+    /// window through Accessibility forces the whole app's stack forward.
+    private func raiseAllWindows(for item: WindowItem, focusing shouldFocusTarget: Bool) {
+        let application = AXUIElementCreateApplication(item.processID)
+        AXUIElementSetMessagingTimeout(application, Self.accessibilityMessagingTimeout)
+        guard let windows: [AXUIElement] = value(application, attribute: kAXWindowsAttribute) else {
+            if shouldFocusTarget { raiseWindow(item) }
+            return
+        }
+        let target = shouldFocusTarget ? matchingWindow(item, in: application) : nil
+        // AX reports windows front-to-back, so raising in reverse preserves their
+        // relative order. Minimized windows stay in the Dock, as they do in Mission Control.
+        for window in windows.reversed() {
+            if let target, CFEqual(window, target) { continue }
+            // The messaging timeout is per-element, not inherited from the app element.
+            AXUIElementSetMessagingTimeout(window, Self.accessibilityMessagingTimeout)
+            guard !isMinimized(window) else { continue }
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        }
+        guard let target else { return }
+        AXUIElementSetAttributeValue(target, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(target, kAXRaiseAction as CFString)
+        AXUIElementSetAttributeValue(application, kAXFocusedWindowAttribute as CFString, target)
+    }
+
+    private func isMinimized(_ window: AXUIElement) -> Bool {
+        value(window, attribute: kAXMinimizedAttribute) as NSNumber? == true
     }
 
     private func raiseWindow(_ item: WindowItem, messagingTimeout: Float? = nil) {
