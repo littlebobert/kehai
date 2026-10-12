@@ -149,6 +149,7 @@
 "Kehai could not quit this app." = "Kehaiでこのアプリを終了できませんでした。";
 "Quit App" = "アプリを終了";
 "Force Quit App" = "アプリを強制終了";
+"Open %@" = "%@を開く";
 "Kehai could not force quit this app." = "Kehaiでこのアプリを強制終了できませんでした。";
 "Analyzing %lld of %lld thumbnails…" = "%lld/%lld個のサムネイルを解析中…";
 "Refreshing windows and Safari tabs…" = "ウインドウとSafariのタブを更新中…";

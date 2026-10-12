@@ -5,6 +5,8 @@ import SwiftUI
 /// menus can't declare alternate items, and "Force Quit App" should replace
 /// "Quit App" only while Option is held — live, like the Dock.
 struct AppContextMenuActions {
+    /// False for an app that is not running: there is nothing to quit.
+    var canQuit = true
     var quit: () -> Void
     var forceQuit: () -> Void
     var canExcludeFromAI: Bool
@@ -17,15 +19,17 @@ struct AppContextMenuActions {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        let quitItem = ClosureMenuItem(title: L10n.string("Quit App"), handler: quit)
-        quitItem.keyEquivalentModifierMask = []
-        menu.addItem(quitItem)
+        if canQuit {
+            let quitItem = ClosureMenuItem(title: L10n.string("Quit App"), handler: quit)
+            quitItem.keyEquivalentModifierMask = []
+            menu.addItem(quitItem)
 
-        // Alternates must share the key equivalent and differ only by modifiers.
-        let forceQuitItem = ClosureMenuItem(title: L10n.string("Force Quit App"), handler: forceQuit)
-        forceQuitItem.keyEquivalentModifierMask = [.option]
-        forceQuitItem.isAlternate = true
-        menu.addItem(forceQuitItem)
+            // Alternates must share the key equivalent and differ only by modifiers.
+            let forceQuitItem = ClosureMenuItem(title: L10n.string("Force Quit App"), handler: forceQuit)
+            forceQuitItem.keyEquivalentModifierMask = [.option]
+            forceQuitItem.isAlternate = true
+            menu.addItem(forceQuitItem)
+        }
 
         let excludeMenu = NSMenu()
         excludeMenu.autoenablesItems = false

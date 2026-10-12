@@ -77,6 +77,82 @@ final class KehaiTests: XCTestCase {
         )
     }
 
+    func testLaunchableAppRanksAfterEveryRunningMatch() {
+        let installed = InstalledAppInfo(bundleIdentifier: "com.apple.dt.Xcode", localizedName: "Xcode", url: URL(fileURLWithPath: "/Applications/Xcode.app"), icon: nil)
+        let launchable = WindowItem.launchableApp(for: installed, lastSeen: Date())
+        let runningTitleMatch = WindowItem(id: 7, processID: 7, appName: "Safari", bundleIdentifier: "com.apple.Safari", title: "Xcode release notes", frame: .zero, isOnScreen: true, lastSeen: Date().addingTimeInterval(-3_600))
+
+        XCTAssertTrue(launchable.isLaunchableApp)
+        XCTAssertFalse(launchable.isAppPlaceholder)
+        XCTAssertEqual(launchable.searchRank(for: "xc"), WindowItem.launchableAppRankOffset)
+        XCTAssertEqual(launchable.searchRank(for: "code"), WindowItem.launchableAppRankOffset + 1)
+        XCTAssertNil(launchable.searchRank(for: "safari"))
+
+        let ordered = WindowItem.orderedBySearchRelevance([launchable, runningTitleMatch], query: "xc")
+        XCTAssertEqual(ordered.map(\.id), [runningTitleMatch.id, launchable.id])
+    }
+
+    func testLaunchableAppIDIsStableAndStaysInItsReservedRange() {
+        let first = WindowItem.launchableAppID(bundleIdentifier: "com.example.one")
+        XCTAssertEqual(first, WindowItem.launchableAppID(bundleIdentifier: "com.example.one"))
+        XCTAssertNotEqual(first, WindowItem.launchableAppID(bundleIdentifier: "com.example.two"))
+        XCTAssertGreaterThanOrEqual(first, WindowItem.launchableAppIDBase)
+        XCTAssertLessThan(first, WindowItem.safariTabIDBase)
+    }
+
+    func testInstalledAppScanKeepsUserFacingAppsAndSkipsBackgroundOnesAndDuplicates() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appending(path: "kehai-installed-apps-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let primary = root.appending(path: "Applications", directoryHint: .isDirectory)
+        let secondary = root.appending(path: "System Applications", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        func makeApp(in directory: URL, name: String, bundleIdentifier: String, extra: [String: Any] = [:]) throws {
+            let bundle = directory.appending(path: "\(name).app", directoryHint: .isDirectory)
+            let macOS = bundle.appending(path: "Contents/MacOS", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
+            FileManager.default.createFile(atPath: macOS.appending(path: name).path, contents: Data())
+            var plist: [String: Any] = [
+                "CFBundleIdentifier": bundleIdentifier,
+                "CFBundleExecutable": name,
+                "CFBundlePackageType": "APPL"
+            ]
+            plist.merge(extra) { _, new in new }
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try data.write(to: bundle.appending(path: "Contents/Info.plist"))
+        }
+
+        try makeApp(in: primary, name: "Zebra", bundleIdentifier: "com.example.zebra")
+        try makeApp(in: primary, name: "Menu Extra", bundleIdentifier: "com.example.menuextra", extra: ["LSUIElement": true])
+        try makeApp(in: primary, name: "Daemon", bundleIdentifier: "com.example.daemon", extra: ["LSBackgroundOnly": "1"])
+        try makeApp(in: primary, name: "Kehai", bundleIdentifier: "com.justin.Kehai")
+        try makeApp(in: primary.appending(path: "Utilities"), name: "Nested", bundleIdentifier: "com.example.nested")
+        try makeApp(in: primary.appending(path: "Too/Deep"), name: "Buried", bundleIdentifier: "com.example.buried")
+        try makeApp(in: secondary, name: "Zebra Copy", bundleIdentifier: "com.example.zebra")
+        try makeApp(in: secondary, name: "Alpha", bundleIdentifier: "com.example.alpha")
+        // Like /Applications/Safari.app: a hidden symlink to a bundle that lives somewhere unscanned.
+        let cryptex = root.appending(path: "Cryptex", directoryHint: .isDirectory)
+        try makeApp(in: cryptex, name: "Linked", bundleIdentifier: "com.example.linked")
+        var hiddenValues = URLResourceValues()
+        hiddenValues.isHidden = true
+        var linkedTarget = cryptex.appending(path: "Linked.app", directoryHint: .isDirectory)
+        try linkedTarget.setResourceValues(hiddenValues)
+        try FileManager.default.createSymbolicLink(
+            at: primary.appending(path: "Linked.app"),
+            withDestinationURL: linkedTarget
+        )
+        try makeApp(in: primary, name: ".Hidden Helper", bundleIdentifier: "com.example.dotprefixed")
+
+        let apps = InstalledAppCatalog.scan(
+            directories: [primary, secondary],
+            excludingBundleIdentifier: "com.justin.Kehai",
+            includeIcons: false
+        )
+
+        XCTAssertEqual(apps.map(\.localizedName), ["Alpha", "Linked", "Nested", "Zebra"])
+        XCTAssertEqual(apps.first(where: { $0.bundleIdentifier == "com.example.zebra" })?.url.lastPathComponent, "Zebra.app")
+    }
+
     func testSearchRankingUsesRecencyWithinSameTier() {
         let older = WindowItem(id: 1, processID: 1, appName: "Messages", bundleIdentifier: nil, title: "Older", frame: .zero, isOnScreen: true, lastSeen: Date(timeIntervalSince1970: 100))
         let newer = WindowItem(id: 2, processID: 2, appName: "Memory", bundleIdentifier: nil, title: "Newer", frame: .zero, isOnScreen: true, lastSeen: Date(timeIntervalSince1970: 200))

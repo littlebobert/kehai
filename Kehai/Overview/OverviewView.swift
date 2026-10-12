@@ -870,14 +870,16 @@ struct CompactSwitcherView: View {
         } label: {
             compactIconLabel(
                 icon: window.appIcon.map { Image(nsImage: $0) } ?? Image(systemName: "app"),
-                title: window.appName,
+                title: window.isLaunchableApp ? L10n.format("Open %@", window.appName) : window.appName,
                 selected: selected,
                 itemIndex: itemIndex,
-                badgeLabel: model.badgeLabel(for: window)
+                badgeLabel: model.badgeLabel(for: window),
+                isLaunchable: window.isLaunchableApp
             )
         }
         .buttonStyle(.plain)
         .appContextMenu(AppContextMenuActions(
+            canQuit: !window.isLaunchableApp,
             quit: { model.quitApp(window) },
             forceQuit: { model.forceQuitApp(window) },
             canExcludeFromAI: model.canExcludeAppFromAI(window),
@@ -902,7 +904,8 @@ struct CompactSwitcherView: View {
         title: String,
         selected: Bool,
         itemIndex: Int,
-        badgeLabel: String?
+        badgeLabel: String?,
+        isLaunchable: Bool = false
     ) -> some View {
         let isAllWindows = title == "All Windows"
         let itemCenterX = !opensRight && isAllWindows
@@ -917,6 +920,7 @@ struct CompactSwitcherView: View {
                 .scaledToFit()
                 .padding(isAllWindows ? 5 : 0)
                 .frame(width: 36, height: 36)
+                .opacity(isLaunchable ? 0.55 : 1)
                 .overlay(alignment: .topTrailing) {
                     AppBadgeView(label: badgeLabel)
                         .offset(
@@ -1474,11 +1478,16 @@ private struct RecentAppButton: View {
     let excludeFromAI: () -> Void
     let excludeEntirely: () -> Void
 
+    /// A launchable app is labelled "Open X" so it reads as a launch, not a switch.
+    private var displayTitle: String {
+        window.isLaunchableApp ? L10n.format("Open %@", window.appName) : window.appName
+    }
+
     private var appNameWidth: CGFloat {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
         ]
-        return ceil((window.appName as NSString).size(withAttributes: attributes).width)
+        return ceil((displayTitle as NSString).size(withAttributes: attributes).width)
     }
 
     private var labelAlignment: Alignment {
@@ -1504,6 +1513,7 @@ private struct RecentAppButton: View {
                     }
                 }
                 .frame(width: iconSize, height: iconSize)
+                .opacity(window.isLaunchableApp ? 0.55 : 1)
                 .overlay(alignment: .topTrailing) {
                     AppBadgeView(label: badgeLabel)
                         .offset(x: classicTheme ? 2 : 5, y: classicTheme ? 1 : 4)
@@ -1532,7 +1542,7 @@ private struct RecentAppButton: View {
                     }
                 }
 
-                Text(isSelected && stripWidth > 0 ? window.appName : " ")
+                Text(isSelected && stripWidth > 0 ? displayTitle : " ")
                     .font(.caption2)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -1546,6 +1556,7 @@ private struct RecentAppButton: View {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .appContextMenu(AppContextMenuActions(
+            canQuit: !window.isLaunchableApp,
             quit: quitApp,
             forceQuit: forceQuitApp,
             canExcludeFromAI: canExcludeFromAI,

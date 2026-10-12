@@ -203,6 +203,9 @@ final class OverviewViewModel {
     private let taskGroupCache = TaskGroupCache()
     private let hiddenWindowStore = HiddenWindowStore()
     private let runningApps = RunningAppCatalog()
+    private let installedApps = InstalledAppCatalog()
+    /// A search should offer a few launchable apps, not bury the running ones under the whole Applications folder.
+    private static let maximumLaunchableApps = 6
     private static let excludeHiddenWindowsKey = "overview.excludeHiddenWindows"
     private static let thumbnailCardWidthKey = "overview.thumbnailCardWidth"
     private static let viewModeKey = "overview.viewMode"
@@ -232,6 +235,7 @@ final class OverviewViewModel {
         groupsGeneratedAt = taskGroupCache.generatedAt
         runningApps.onChange = { [weak self] in self?.syncSwitcherAppSnapshot() }
         runningApps.start()
+        installedApps.start()
     }
 
     private func appKey(for window: WindowItem) -> String {
@@ -306,8 +310,11 @@ final class OverviewViewModel {
     }
 
     var recentAppWindows: [WindowItem] {
-        if let switcherAppWindows { return switcherAppWindows }
-        return currentRecentAppWindows
+        let apps = switcherAppWindows ?? currentRecentAppWindows
+        // A search also offers installed apps that aren't running, so typing an app's
+        // name launches it. Smart Search is window-scoped, so skip there.
+        guard !query.isEmpty, smartSearchWindowIDs == nil else { return apps }
+        return apps + launchableApps(excluding: apps)
     }
 
     var filteredGitHubRepositories: [GitHubRepository] {
@@ -415,6 +422,38 @@ final class OverviewViewModel {
         }
     }
 
+    /// Installed apps matching the search that aren't running, ranked after every running
+    /// match. Reads the background-maintained catalog; this runs while presenting the
+    /// mini UI, so it must not touch LaunchServices or the disk.
+    private func launchableApps(excluding represented: [WindowItem]) -> [WindowItem] {
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        var presentKeys = Set(represented.map(appKey(for:)))
+        // Running apps that the strip hides (e.g. because the user is in them) are still running.
+        presentKeys.formUnion(runningApps.apps.map(\.appKey))
+
+        let matches = installedApps.apps.compactMap { application -> (item: WindowItem, rank: Int)? in
+            guard !presentKeys.contains(application.bundleIdentifier),
+                  !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier) else { return nil }
+            let item = WindowItem.launchableApp(
+                for: application,
+                lastSeen: storedAppLastSeen[application.localizedName]
+            )
+            guard let rank = item.searchRank(for: query) else { return nil }
+            return (item, rank)
+        }
+        return matches.enumerated().sorted { lhs, rhs in
+            if lhs.element.rank != rhs.element.rank { return lhs.element.rank < rhs.element.rank }
+            switch (lhs.element.item.lastSeen, rhs.element.item.lastSeen) {
+            case let (left?, right?) where left != right: return left > right
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return lhs.offset < rhs.offset
+            }
+        }
+        .prefix(Self.maximumLaunchableApps)
+        .map(\.element.item)
+    }
+
     var windowSections: [BrowserWindowSection] {
         if let focusedAppKey {
             return [BrowserWindowSection(
@@ -509,6 +548,10 @@ final class OverviewViewModel {
     func selectFirstFilteredWindow() {
         if let window = orderedFilteredWindows.first {
             selectedWindowID = window.id
+        } else if !query.isEmpty, let app = filteredRecentAppWindows.first {
+            // A search that matches only apps (windowless or not yet running) still
+            // needs a selection, so Return opens the app and the arrows start from it.
+            focusApp(app.id)
         } else {
             selectedRepositoryID = filteredGitHubRepositories.first?.id
         }
@@ -646,6 +689,7 @@ final class OverviewViewModel {
     }
 
     func quitApp(_ window: WindowItem) {
+        guard !window.isLaunchableApp else { return }
         guard window.bundleIdentifier?.caseInsensitiveCompare("com.apple.finder") != .orderedSame,
               window.appName.caseInsensitiveCompare("Finder") != .orderedSame else {
             SafeDiagnosticLog.shared.record("menu: ignored quit for Finder")
@@ -668,6 +712,7 @@ final class OverviewViewModel {
 
     /// Allowed even while a normal quit is pending — that's usually why it's needed.
     func forceQuitApp(_ window: WindowItem) {
+        guard !window.isLaunchableApp else { return }
         guard window.bundleIdentifier?.caseInsensitiveCompare("com.apple.finder") != .orderedSame,
               window.appName.caseInsensitiveCompare("Finder") != .orderedSame else {
             SafeDiagnosticLog.shared.record("menu: ignored force quit for Finder")

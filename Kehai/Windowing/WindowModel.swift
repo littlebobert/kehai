@@ -2,8 +2,9 @@ import AppKit
 import CoreGraphics
 
 struct WindowItem: Identifiable, Hashable, Sendable {
-    /// Synthetic IDs for browser tabs and running apps without enumerable windows.
-    /// Real CGWindowIDs stay well below these reserved high ranges.
+    /// Synthetic IDs for launchable (not running) apps, browser tabs, and running apps
+    /// without enumerable windows. Real CGWindowIDs stay well below these reserved high ranges.
+    static let launchableAppIDBase: CGWindowID = 0xD000_0000
     static let safariTabIDBase: CGWindowID = 0xE000_0000
     static let appPlaceholderIDBase: CGWindowID = 0xF000_0000
 
@@ -22,6 +23,8 @@ struct WindowItem: Identifiable, Hashable, Sendable {
     var safariTabs: [SafariTab] = []
     var safariTab: SafariTab?
     var sourceWindowID: CGWindowID?
+    /// Bundle location for a launchable app; nil for anything that is already running.
+    var applicationURL: URL?
 
     static func == (lhs: WindowItem, rhs: WindowItem) -> Bool {
         lhs.id == rhs.id && lhs.thumbnailRevision == rhs.thumbnailRevision
@@ -36,6 +39,12 @@ struct WindowItem: Identifiable, Hashable, Sendable {
     /// True when this item represents a running app with no open window in Kehai's inventory.
     var isAppPlaceholder: Bool {
         id >= Self.appPlaceholderIDBase
+    }
+
+    /// True when this item represents an installed app that is not running. Opening it
+    /// launches the app; there is no process to activate or window to raise.
+    var isLaunchableApp: Bool {
+        id >= Self.launchableAppIDBase && id < Self.safariTabIDBase
     }
 
     var isSafariTabEntry: Bool { safariTab != nil }
@@ -58,6 +67,31 @@ struct WindowItem: Identifiable, Hashable, Sendable {
         appPlaceholderIDBase | CGWindowID(UInt32(bitPattern: processID))
     }
 
+    static func launchableAppID(bundleIdentifier: String) -> CGWindowID {
+        var hash: UInt32 = 2_166_136_261
+        for byte in bundleIdentifier.utf8 {
+            hash = (hash ^ UInt32(byte)) &* 16_777_619
+        }
+        return launchableAppIDBase | (hash & 0x0FFF_FFFF)
+    }
+
+    /// A strip entry for an installed app that is not running. `processID` is -1 because
+    /// there is no process yet; callers must check `isLaunchableApp` before using it.
+    static func launchableApp(for application: InstalledAppInfo, lastSeen: Date?) -> WindowItem {
+        WindowItem(
+            id: launchableAppID(bundleIdentifier: application.bundleIdentifier),
+            processID: -1,
+            appName: application.localizedName,
+            bundleIdentifier: application.bundleIdentifier,
+            title: application.localizedName,
+            frame: .zero,
+            isOnScreen: false,
+            lastSeen: lastSeen,
+            appIcon: application.icon,
+            applicationURL: application.url
+        )
+    }
+
     static func appPlaceholder(
         for application: RunningAppInfo,
         lastSeen: Date?
@@ -77,8 +111,19 @@ struct WindowItem: Identifiable, Hashable, Sendable {
         )
     }
 
+    /// Launchable apps rank after every running match, however well their name fits:
+    /// a window the user already has open is almost always what they meant.
+    static let launchableAppRankOffset = 10
+
     func searchRank(for query: String) -> Int? {
         guard !query.isEmpty else { return 0 }
+        guard !isLaunchableApp else {
+            if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil {
+                return Self.launchableAppRankOffset
+            }
+            if appName.localizedCaseInsensitiveContains(query) { return Self.launchableAppRankOffset + 1 }
+            return nil
+        }
         if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 0 }
         if appName.localizedCaseInsensitiveContains(query) { return 1 }
         if title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 2 }

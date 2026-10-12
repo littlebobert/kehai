@@ -30,6 +30,10 @@ final class WindowActivator {
     private static let accessibilityMessagingTimeout: Float = 0.5
 
     func activate(_ item: WindowItem) {
+        if item.isLaunchableApp {
+            launch(item)
+            return
+        }
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
         // App-only strip entries (no open windows) just need the app frontmost.
         guard !item.isAppPlaceholder else {
@@ -45,6 +49,7 @@ final class WindowActivator {
     /// frontmost (`raisingAllWindows`) brings every unminimized window with it.
     @discardableResult
     func activateApp(_ item: WindowItem, raisingAllWindows: Bool) -> Bool {
+        if item.isLaunchableApp { return launch(item) }
         guard let app = NSRunningApplication(processIdentifier: item.processID), !app.isTerminated else {
             SafeDiagnosticLog.shared.record("app-activation: target process unavailable")
             return false
@@ -70,6 +75,24 @@ final class WindowActivator {
             }
         }
         SafeDiagnosticLog.shared.record("app-activation: workspace open requested")
+        return true
+    }
+
+    /// Launch an installed app that is not running, like clicking it in the Dock or
+    /// Launchpad. LaunchServices brings it frontmost once it finishes starting up.
+    @discardableResult
+    func launch(_ item: WindowItem) -> Bool {
+        guard let applicationURL = item.applicationURL else {
+            SafeDiagnosticLog.shared.record("app-launch: bundle URL unavailable")
+            return false
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { openedApp, error in
+            let launched = error == nil && openedApp != nil
+            SafeDiagnosticLog.shared.record("app-launch: workspace open completed launched=\(launched)")
+        }
+        SafeDiagnosticLog.shared.record("app-launch: workspace open requested")
         return true
     }
 
@@ -108,9 +131,14 @@ final class WindowActivator {
     /// Hand dropped files or links to the app that owns `item`, as if they were
     /// dropped on its Dock icon. The app decides which window opens them.
     func open(_ urls: [URL], with item: WindowItem) {
-        guard let app = NSRunningApplication(processIdentifier: item.processID),
-              !app.isTerminated,
-              let applicationURL = app.bundleURL else {
+        let applicationURL: URL
+        if item.isLaunchableApp, let launchURL = item.applicationURL {
+            applicationURL = launchURL
+        } else if let app = NSRunningApplication(processIdentifier: item.processID),
+                  !app.isTerminated,
+                  let bundleURL = app.bundleURL {
+            applicationURL = bundleURL
+        } else {
             SafeDiagnosticLog.shared.record("drop-open: target app unavailable")
             return
         }
@@ -123,6 +151,10 @@ final class WindowActivator {
 
     /// Raise the target window for a drag-redirect without forcing every app window up first.
     func activateForDragRedirect(_ item: WindowItem) {
+        if item.isLaunchableApp {
+            launch(item)
+            return
+        }
         guard let app = NSRunningApplication(processIdentifier: item.processID) else { return }
         if item.isAppPlaceholder {
             app.activate(options: [.activateAllWindows])
