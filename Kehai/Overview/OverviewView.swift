@@ -84,6 +84,7 @@ struct OverviewView: View {
                     } else {
                         windowScrollArea
                     }
+                    fileSection
                     repositorySection
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -237,7 +238,7 @@ struct OverviewView: View {
     }
 
     private var recentAppsStripContent: some View {
-        let allWindowsFocused = model.hoveredRepositoryID == nil && model.isAllWindowsAppSelected
+        let allWindowsFocused = !model.isHoveringShelfCard && model.isAllWindowsAppSelected
         return Group {
             if displayedAppWindows.isEmpty, !model.query.isEmpty {
                 HStack(spacing: 6) {
@@ -301,7 +302,7 @@ struct OverviewView: View {
                     ForEach(Array(displayedAppWindows.enumerated()), id: \.element.id) { index, window in
                         RecentAppButton(
                             window: window,
-                            isSelected: model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo,
+                            isSelected: !model.isHoveringShelfCard && model.isAppFocused(window.id) && !model.suppressSelectionHalo,
                             cellWidth: appStripCellWidth,
                             iconSize: appStripIconSize,
                             iconPadding: appStripIconPadding,
@@ -481,7 +482,7 @@ struct OverviewView: View {
             dusty: dusty,
             tint: tint,
             classicTheme: appearance.browserTheme == .classicMac,
-            isSelected: model.hoveredRepositoryID == nil && model.selectedWindowID == window.id && !model.suppressSelectionHalo,
+            isSelected: !model.isHoveringShelfCard && model.selectedWindowID == window.id && !model.suppressSelectionHalo,
             liveThumbnail: model.liveThumbnailWindowID == window.id ? model.liveThumbnail : nil,
             isRefreshingThumbnail: model.refreshingThumbnailWindowIDs.contains(window.physicalWindowID),
             thumbnailCellHeight: thumbnailCellHeight,
@@ -507,6 +508,81 @@ struct OverviewView: View {
         .frame(width: model.thumbnailCardWidth)
         .id(window.id)
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
+
+    @ViewBuilder
+    private var fileSection: some View {
+        if model.showsFileSection {
+            let files = model.filteredFileResults
+            if appearance.browserTheme == .classicMac {
+                Rectangle()
+                    .fill(.black)
+                    .frame(height: 2)
+            } else {
+                Divider()
+            }
+            ScrollViewReader { scrollProxy in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Files")
+                            .font(.headline)
+                            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.primary)
+                        if model.isSearchingFiles {
+                            ProgressView().controlSize(.small)
+                        }
+                        Spacer()
+                    }
+                    if files.isEmpty {
+                        Text(model.isSearchingFiles ? "Searching files…" : "No matching files")
+                            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
+                            .frame(height: 96, alignment: .topLeading)
+                    } else {
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 12) {
+                                ForEach(files) { file in
+                                    FileResultCard(
+                                        file: file,
+                                        isSelected: model.hoveredRepositoryID == nil
+                                            && (model.hoveredFileID.map { $0 == file.id } ?? (model.selectedFileID == file.id)),
+                                        compact: false,
+                                        classicTheme: appearance.browserTheme == .classicMac,
+                                        activate: {
+                                            if model.open(file) { close() }
+                                        },
+                                        reveal: {
+                                            model.revealInFinder(file)
+                                            close()
+                                        },
+                                        hoverChanged: { hovering in
+                                            if hovering {
+                                                model.setHoveredFile(file.id)
+                                            } else if model.hoveredFileID == file.id {
+                                                model.setHoveredFile(nil)
+                                            }
+                                        }
+                                    )
+                                    .frame(width: model.thumbnailCardWidth)
+                                    .id("file-\(file.id)")
+                                }
+                            }
+                        }
+                        .scrollIndicators(.never)
+                        .frame(height: 96)
+                    }
+                }
+                .padding(.horizontal, 30)
+                .padding(.top, 9)
+                .padding(.bottom, 10)
+                .onChange(of: model.selectedFileID) { _, fileID in
+                    guard let fileID else { return }
+                    var transaction = Transaction()
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        scrollProxy.scrollTo("file-\(fileID)", anchor: .center)
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -548,8 +624,9 @@ struct OverviewView: View {
                                 ForEach(repositories) { repository in
                                     RepositoryResultCard(
                                         repository: repository,
-                                        isSelected: model.hoveredRepositoryID.map { $0 == repository.id }
-                                            ?? (model.selectedRepositoryID == repository.id),
+                                        isSelected: model.hoveredFileID == nil
+                                            && (model.hoveredRepositoryID.map { $0 == repository.id }
+                                                ?? (model.selectedRepositoryID == repository.id)),
                                         compact: false,
                                         classicTheme: appearance.browserTheme == .classicMac,
                                         activate: {
@@ -689,6 +766,7 @@ struct CompactSwitcherView: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, 12)
                     compactRepositoryShelf
+                    compactFileShelf
                     appStrip
                         .padding(.bottom, 2)
                 } else {
@@ -700,6 +778,7 @@ struct CompactSwitcherView: View {
                         .padding(.top, 4)
                         .frame(maxHeight: .infinity, alignment: .top)
                         .padding(.horizontal, 12)
+                    compactFileShelf
                     compactRepositoryShelf
                         .padding(.bottom, 8)
                 }
@@ -844,7 +923,7 @@ struct CompactSwitcherView: View {
             compactIconLabel(
                 icon: Image(systemName: "square.grid.2x2"),
                 title: "All Windows",
-                selected: model.hoveredRepositoryID == nil && model.isAllWindowsAppSelected,
+                selected: !model.isHoveringShelfCard && model.isAllWindowsAppSelected,
                 itemIndex: itemIndex,
                 badgeLabel: nil
             )
@@ -859,7 +938,7 @@ struct CompactSwitcherView: View {
     }
 
     private func compactAppButton(_ window: WindowItem, itemIndex: Int) -> some View {
-        let selected = model.hoveredRepositoryID == nil && model.isAppFocused(window.id) && !model.suppressSelectionHalo
+        let selected = !model.isHoveringShelfCard && model.isAppFocused(window.id) && !model.suppressSelectionHalo
         return Button {
             if model.isAppFocused(window.id) {
                 model.activateApp(window)
@@ -1100,8 +1179,9 @@ struct CompactSwitcherView: View {
                                 ForEach(model.filteredGitHubRepositories) { repository in
                                     RepositoryResultCard(
                                         repository: repository,
-                                        isSelected: model.hoveredRepositoryID.map { $0 == repository.id }
-                                            ?? (model.selectedRepositoryID == repository.id),
+                                        isSelected: model.hoveredFileID == nil
+                                            && (model.hoveredRepositoryID.map { $0 == repository.id }
+                                                ?? (model.selectedRepositoryID == repository.id)),
                                         compact: true,
                                         classicTheme: appearance.browserTheme == .classicMac,
                                         activate: {
@@ -1143,6 +1223,77 @@ struct CompactSwitcherView: View {
     }
 
 
+    @ViewBuilder
+    private var compactFileShelf: some View {
+        if model.showsFileSection {
+            let files = model.filteredFileResults
+            Divider()
+                .padding(.horizontal, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    compactSectionLabel("Files")
+                    if model.isSearchingFiles, !files.isEmpty {
+                        ProgressView().controlSize(.mini)
+                    }
+                }
+                if files.isEmpty {
+                    HStack(spacing: 7) {
+                        if model.isSearchingFiles { ProgressView().controlSize(.small) }
+                        Text(model.isSearchingFiles ? "Searching files…" : "No matching files")
+                            .font(.caption)
+                            .foregroundStyle(appearance.browserTheme == .classicMac ? Color.black : Color.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+                } else {
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 7) {
+                                ForEach(files) { file in
+                                    FileResultCard(
+                                        file: file,
+                                        isSelected: model.hoveredRepositoryID == nil
+                                            && (model.hoveredFileID.map { $0 == file.id } ?? (model.selectedFileID == file.id)),
+                                        compact: true,
+                                        classicTheme: appearance.browserTheme == .classicMac,
+                                        activate: {
+                                            if model.open(file) { close() }
+                                        },
+                                        reveal: {
+                                            model.revealInFinder(file)
+                                            close()
+                                        },
+                                        hoverChanged: { hovering in
+                                            if hovering {
+                                                model.setHoveredFile(file.id)
+                                            } else if model.hoveredFileID == file.id {
+                                                model.setHoveredFile(nil)
+                                            }
+                                        }
+                                    )
+                                    .id("compact-file-\(file.id)")
+                                }
+                            }
+                        }
+                        .scrollIndicators(.never)
+                        .frame(height: 60)
+                        .onChange(of: model.selectedFileID) { _, fileID in
+                            guard let fileID else { return }
+                            var transaction = Transaction()
+                            transaction.disablesAnimations = true
+                            withTransaction(transaction) {
+                                scrollProxy.scrollTo("compact-file-\(fileID)", anchor: .center)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 5)
+        }
+    }
+
     private func compactSectionLabel(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.caption2.weight(.semibold))
@@ -1172,7 +1323,7 @@ struct CompactSwitcherView: View {
     }
 
     private func compactWindowButton(_ window: WindowItem) -> some View {
-        let selected = model.hoveredRepositoryID == nil && model.selectedWindowID == window.id && !model.suppressSelectionHalo
+        let selected = !model.isHoveringShelfCard && model.selectedWindowID == window.id && !model.suppressSelectionHalo
         return Button {
             model.activate(window)
             close()
@@ -1439,6 +1590,91 @@ private struct RepositoryResultCard: View {
                     Rectangle().strokeBorder(.black, lineWidth: 1)
                 }
             }
+    }
+}
+
+private struct FileResultCard: View {
+    let file: FileSearchResult
+    let isSelected: Bool
+    let compact: Bool
+    let classicTheme: Bool
+    let activate: () -> Void
+    let reveal: () -> Void
+    let hoverChanged: (Bool) -> Void
+
+    var body: some View {
+        Button(action: activate) {
+            HStack(alignment: .top, spacing: compact ? 7 : 10) {
+                Group {
+                    if let icon = file.icon {
+                        Image(nsImage: icon).resizable().scaledToFit()
+                    } else {
+                        Image(systemName: "doc").resizable().scaledToFit().padding(4)
+                    }
+                }
+                .frame(width: compact ? 30 : 38, height: compact ? 30 : 38)
+                VStack(alignment: .leading, spacing: compact ? 0 : 2) {
+                    Text(file.parentDisplayPath)
+                        .font(compact ? .caption2 : .caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                    Text(file.name)
+                        .font(compact ? .caption.weight(.semibold) : .headline)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let detail {
+                        Text(detail)
+                            .font(.system(size: compact ? 9 : 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(compact ? 7 : 12)
+            .frame(width: compact ? 200 : nil, height: compact ? 60 : 96, alignment: .leading)
+            .background {
+                if classicTheme {
+                    ClassicMacCardBackground(cornerRadius: 1, shadowOffset: 2)
+                } else {
+                    RoundedRectangle(cornerRadius: compact ? 4.5 : 6)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: classicTheme ? 1 : (compact ? 4.5 : 6))
+                    .strokeBorder(
+                        classicTheme
+                            ? isSelected ? Color(red: 0.25, green: 0.35, blue: 0.65) : Color.black
+                            : isSelected ? Color.accentColor.opacity(0.9) : Color(nsColor: .separatorColor).opacity(0.35),
+                        lineWidth: classicTheme || isSelected ? 2 : 1
+                    )
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(file.path)
+        .contextMenu {
+            Button("Open", action: activate)
+            Button("Reveal in Finder", action: reveal)
+        }
+        .onHover(perform: hoverChanged)
+        .animation(.easeOut(duration: 0.1), value: isSelected)
+    }
+
+    /// When the file was last opened or changed, and whether only its text matched.
+    private var detail: String? {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        var parts: [String] = []
+        if let lastUsed = file.lastUsed {
+            parts.append(L10n.format("Opened %@", formatter.localizedString(for: lastUsed, relativeTo: Date())))
+        } else if let modified = file.modified {
+            parts.append(L10n.format("Modified %@", formatter.localizedString(for: modified, relativeTo: Date())))
+        }
+        if file.matchedContentOnly { parts.append(L10n.string("Text match")) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
 

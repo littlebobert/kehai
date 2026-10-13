@@ -12,6 +12,10 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     private var compactWindow: NSWindow?
     private var compactWindowFrameHeight: CGFloat?
     private var compactWindowsAboveAppStrip = false
+    /// Whether the mini panel currently includes the extra height for the Files shelf.
+    private var compactFileShelfIsSized = false
+    /// Divider, section label, and one 60pt row of cards; matches the repository shelf.
+    private static let compactFileShelfHeight: CGFloat = 100
     private var isConstrainingCompactWindowFrame = false
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
@@ -90,6 +94,37 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             // After dwell-activate, hide Kehai so the raised window can receive the drop.
             self?.close()
         }
+        model.onFileSectionVisibilityChanged = { [weak self] visible in
+            self?.sizeCompactWindowForFileShelf(visible)
+        }
+    }
+
+    /// The mini panel has a fixed height, so it grows while a search shows files rather
+    /// than squeezing the window thumbnails. The edge holding the app strip stays put,
+    /// so the strip doesn't jump out from under the pointer.
+    private func sizeCompactWindowForFileShelf(_ visible: Bool) {
+        guard visible != compactFileShelfIsSized,
+              let panel = compactWindow,
+              let visibleFrame = (panel.screen ?? NSScreen.main)?.visibleFrame else { return }
+        let delta = visible ? Self.compactFileShelfHeight : -Self.compactFileShelfHeight
+        var frame = panel.frame
+        let newHeight = min(frame.height + delta, visibleFrame.height)
+        let appliedDelta = newHeight - frame.height
+        if !compactWindowsAboveAppStrip {
+            // The strip is at the top: keep the top edge and grow downward.
+            frame.origin.y -= appliedDelta
+        }
+        frame.size.height = newHeight
+        frame.origin.y = min(max(frame.minY, visibleFrame.minY), visibleFrame.maxY - frame.height)
+        compactFileShelfIsSized = visible
+        compactWindowFrameHeight = newHeight
+        panel.minSize.height = newHeight
+        panel.maxSize.height = newHeight
+        panel.contentMinSize.height += appliedDelta
+        panel.contentMaxSize.height += appliedDelta
+        isConstrainingCompactWindowFrame = true
+        panel.setFrame(frame, display: true)
+        isConstrainingCompactWindowFrame = false
     }
 
     var isVisible: Bool { isFullBrowserVisible || isMiniBrowserVisible }
@@ -400,6 +435,8 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
         compactWindow = panel
         compactWindowFrameHeight = fixedFrameHeight
+        compactFileShelfIsSized = false
+        sizeCompactWindowForFileShelf(model.showsFileSection)
         constrainCompactWindowToVisibleScreen(panel, screen: screen)
         updateAppearance()
         panel.standardWindowButton(.zoomButton)?.target = self
@@ -452,6 +489,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
         compactWindow?.contentView = nil
         compactWindow = nil
         compactWindowFrameHeight = nil
+        compactFileShelfIsSized = false
         if window?.isVisible != true {
             removeKeyMonitor()
             removeMouseMonitor()
@@ -952,7 +990,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 self.model.moveSelection(horizontal: 1, columnCount: self.model.keyboardColumnCount)
             case 125:
                 if event.window === self.compactWindow,
-                   self.model.moveCompactWindowSelectionToRepositories() {
+                   self.model.moveCompactWindowSelectionDown(windowsAboveAppStrip: windowsAboveAppStrip) {
                     break
                 }
                 self.model.moveSelection(

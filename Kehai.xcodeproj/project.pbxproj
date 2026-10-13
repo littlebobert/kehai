@@ -34,6 +34,7 @@
 		6DED32D6DB83CB0702A6DCD4 /* IdleGroupingSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F56007A78334F44FD333E64C /* IdleGroupingSettings.swift */; };
 		6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E64C863413D1E203C541734B /* Assets.xcassets */; };
 		7019B886602A31445572AB7E /* TaskGroupCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DFFEEE5FC0E3901757D61CC /* TaskGroupCache.swift */; };
+		71124062F23D20B276A3DE80 /* FileSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A502BB99CBC8813E45C83B /* FileSearchService.swift */; };
 		74738DD10716F4ED75D0AB4D /* OverviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9828342C2F7E02777B67673 /* OverviewView.swift */; };
 		7E737B2A17D9781F37E42E52 /* SafariTabService.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */; };
 		80DEA98F26311C9CB6764E62 /* WindowActivator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */; };
@@ -93,6 +94,7 @@
 		4997A750AC9A5A6444F8EFEA /* HotZoneSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotZoneSettings.swift; sourceTree = "<group>"; };
 		4AF36828CD74B41607115C48 /* GlobalHotKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKey.swift; sourceTree = "<group>"; };
 		510CF938B3EBB8E6AF8A7827 /* RunningAppCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunningAppCatalog.swift; sourceTree = "<group>"; };
+		56A502BB99CBC8813E45C83B /* FileSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileSearchService.swift; sourceTree = "<group>"; };
 		584098EB25E73AD7A58C80FE /* AIProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProvider.swift; sourceTree = "<group>"; };
 		598FF21B2EBC0162DC30A091 /* DockBadgeMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockBadgeMonitor.swift; sourceTree = "<group>"; };
 		5C87FFA152243E9392C0EF91 /* WindowCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowCatalog.swift; sourceTree = "<group>"; };
@@ -185,6 +187,14 @@
 			path = Overview;
 			sourceTree = "<group>";
 		};
+		8BA5A13FA82E96DAF5AB96FE /* Files */ = {
+			isa = PBXGroup;
+			children = (
+				56A502BB99CBC8813E45C83B /* FileSearchService.swift */,
+			);
+			path = Files;
+			sourceTree = "<group>";
+		};
 		8CE0557D53871BA90DB7E976 /* KehaiTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -225,6 +235,7 @@
 			isa = PBXGroup;
 			children = (
 				E15B1B6070FA5557C9211BF3 /* App */,
+				8BA5A13FA82E96DAF5AB96FE /* Files */,
 				2652FF9A402505BB97AB09C3 /* History */,
 				3DCF5395836948366350CB6B /* Intelligence */,
 				6CE99583433845D1AA21E63C /* Overview */,
@@ -398,6 +409,7 @@
 				D004D423F39AE4EE2D1EEB4C /* DockBadgeMonitor.swift in Sources */,
 				68D0F9034EB8164CA8976FDB /* DragHoverCatcher.swift in Sources */,
 				29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */,
+				71124062F23D20B276A3DE80 /* FileSearchService.swift in Sources */,
 				99C98054D2F387636D121099 /* GitHubRepositorySearchService.swift in Sources */,
 				3C9FE4A8DBF0AF227EB6235F /* GlobalHotKey.swift in Sources */,
 				377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */,

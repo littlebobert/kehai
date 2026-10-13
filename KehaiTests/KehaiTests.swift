@@ -92,6 +92,71 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(ordered.map(\.id), [runningTitleMatch.id, launchable.id])
     }
 
+    private func fileResult(
+        _ path: String,
+        lastUsed: Date? = nil,
+        modified: Date? = nil,
+        contentOnly: Bool = false,
+        contentType: String? = "public.plain-text"
+    ) -> FileSearchResult {
+        FileSearchResult(
+            path: path,
+            name: (path as NSString).lastPathComponent,
+            contentType: contentType,
+            lastUsed: lastUsed,
+            modified: modified,
+            matchedContentOnly: contentOnly,
+            icon: nil
+        )
+    }
+
+    func testFileRankingPrefersOpenedThenNamePrefixThenNameOverText() {
+        let now = Date()
+        let openedPrefix = fileResult("/Users/me/Documents/Lease 2026.pdf", lastUsed: now.addingTimeInterval(-86_400))
+        let openedWord = fileResult("/Users/me/Documents/Apartment lease.pdf", lastUsed: now)
+        let unopenedPrefix = fileResult("/Users/me/Downloads/lease-draft.pdf", modified: now)
+        let textOnly = fileResult("/Users/me/Documents/Notes.txt", lastUsed: now, contentOnly: true)
+        let newerOpenedPrefix = fileResult("/Users/me/Desktop/Lease scan.pdf", lastUsed: now.addingTimeInterval(-60))
+
+        let ranked = FileSearchRanking.rank(
+            [textOnly, unopenedPrefix, openedWord, openedPrefix, newerOpenedPrefix],
+            query: "lea",
+            limit: 10
+        )
+        XCTAssertEqual(ranked.map(\.name), ["Lease scan.pdf", "Lease 2026.pdf", "Apartment lease.pdf", "lease-draft.pdf", "Notes.txt"])
+        XCTAssertEqual(FileSearchRanking.rank(ranked, query: "lea", limit: 2).count, 2)
+    }
+
+    func testFileNoiseFilterDropsHiddenBuildAndAppPathsUnlessOpened() {
+        let home = "/Users/me"
+        XCTAssertTrue(FileSearchRanking.isNoise(fileResult("/Users/me/dev/app/.build/debug/Kehai.o"), homePath: home))
+        XCTAssertTrue(FileSearchRanking.isNoise(fileResult("/Users/me/dev/site/node_modules/lib/kehai.js"), homePath: home))
+        XCTAssertTrue(FileSearchRanking.isNoise(fileResult("/Users/me/Applications/Tool.app/Contents/Info.plist"), homePath: home))
+        XCTAssertTrue(FileSearchRanking.isNoise(fileResult("/Users/me/Applications/Tool.app", contentType: "com.apple.application-bundle"), homePath: home))
+        XCTAssertFalse(FileSearchRanking.isNoise(fileResult("/Users/me/dev/site/build/report.pdf", lastUsed: Date()), homePath: home))
+        XCTAssertTrue(FileSearchRanking.isNoise(fileResult("/Users/me/dev/site/build/report.pdf"), homePath: home))
+        XCTAssertFalse(FileSearchRanking.isNoise(fileResult("/Users/me/Documents/Taxes/2025.pdf"), homePath: home))
+    }
+
+    func testFileQueryMatchesEveryWordPrefixAndEscapesSyntax() {
+        XCTAssertEqual(
+            FileSearchService.matchExpression(attribute: "kMDItemDisplayName", words: ["apt", "lea"]),
+            #"((kMDItemDisplayName == "apt*"cdw) && (kMDItemDisplayName == "lea*"cdw))"#
+        )
+        XCTAssertEqual(FileSearchService.escape(#"a"b*c\d"#), #"a\"b\*c\\d"#)
+    }
+
+    func testFileResultShortensHomeInParentPath() {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        XCTAssertEqual(fileResult(home + "/Documents/Taxes/2025.pdf").parentDisplayPath, "~/Documents/Taxes")
+        XCTAssertEqual(fileResult(home + "/notes.txt").parentDisplayPath, "~")
+        XCTAssertEqual(fileResult("/Volumes/Backup/notes.txt").parentDisplayPath, "/Volumes/Backup")
+        XCTAssertEqual(
+            fileResult(home + "/Library/Mobile Documents/com~apple~CloudDocs/Taxes/2025.pdf").parentDisplayPath,
+            "iCloud Drive/Taxes"
+        )
+    }
+
     func testLaunchableAppIDIsStableAndStaysInItsReservedRange() {
         let first = WindowItem.launchableAppID(bundleIdentifier: "com.example.one")
         XCTAssertEqual(first, WindowItem.launchableAppID(bundleIdentifier: "com.example.one"))

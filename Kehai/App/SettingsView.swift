@@ -20,6 +20,7 @@ struct SettingsView: View {
     let githubRefreshIntervalChanged: () -> Void
     let exclusionsChanged: () -> Void
     @State private var selectedProvider = AIProvider.current
+    @AppStorage(OverviewViewModel.includesFilesKey) private var includesFiles = true
 
     var body: some View {
         TabView {
@@ -124,6 +125,20 @@ struct SettingsView: View {
                 .disabled(!hotZone.isEnabled)
             }
 
+            Section("Search") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Include Files")
+                        Text("Finds files by name, and by text in files you’ve opened, using Spotlight’s index. Kehai never opens or reads the files it lists.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 20)
+                    Toggle("", isOn: $includesFiles)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
         }
         .formStyle(.grouped)
     }

@@ -42,6 +42,7 @@ final class OverviewViewModel {
             if selectedWindowID != nil {
                 selectedAppWindowID = nil
                 selectedRepositoryID = nil
+                selectedFileID = nil
             }
             guard selectedWindowID != oldValue, liveThumbnailEnabled else { return }
             scheduleSelectedLiveThumbnail()
@@ -52,6 +53,7 @@ final class OverviewViewModel {
             if selectedAppWindowID != nil {
                 selectedWindowID = nil
                 selectedRepositoryID = nil
+                selectedFileID = nil
             }
         }
     }
@@ -61,15 +63,32 @@ final class OverviewViewModel {
             if selectedRepositoryID != nil {
                 selectedWindowID = nil
                 selectedAppWindowID = nil
+                selectedFileID = nil
                 focusedAppKey = nil
                 isAllWindowsAppSelected = false
             }
         }
     }
+    var hoveredFileID: String?
+    var selectedFileID: String? {
+        didSet {
+            if selectedFileID != nil {
+                selectedWindowID = nil
+                selectedAppWindowID = nil
+                selectedRepositoryID = nil
+                focusedAppKey = nil
+                isAllWindowsAppSelected = false
+            }
+        }
+    }
+    /// The pointer is over a repository or file card, so its highlight replaces the keyboard one.
+    var isHoveringShelfCard: Bool { hoveredRepositoryID != nil || hoveredFileID != nil }
     private(set) var focusedAppKey: String?
     private(set) var isAllWindowsAppSelected = false
     private var appWindowIDBeforeEnteringWindows: CGWindowID?
+    /// The window the keyboard left when it moved down into the file or repository shelves.
     private var windowIDBeforeEnteringRepositories: CGWindowID?
+    private var fileIDBeforeEnteringRepositories: String?
 
     private struct WindowSelectionSnapshot {
         let id: CGWindowID
@@ -147,8 +166,17 @@ final class OverviewViewModel {
             smartSearchWindowIDs = nil
             smartSearchStatus = nil
             preserveSelectionOrSelectFirst()
+            scheduleFileSearch()
         }
     }
+    private(set) var fileResults: [FileSearchResult] = []
+    private(set) var isSearchingFiles = false
+    /// Called when the Files section appears or disappears, so the mini browser can resize.
+    @ObservationIgnored var onFileSectionVisibilityChanged: ((Bool) -> Void)?
+    @ObservationIgnored private var fileSearchTask: Task<Void, Never>?
+    @ObservationIgnored private var lastFileSectionVisibility = false
+    private let fileSearch = FileSearchService()
+    static let includesFilesKey = "search.includesFiles"
     var isSmartSearching = false
     var smartSearchStatus: String?
     var isLoading = true
@@ -204,6 +232,7 @@ final class OverviewViewModel {
     private let hiddenWindowStore = HiddenWindowStore()
     private let runningApps = RunningAppCatalog()
     private let installedApps = InstalledAppCatalog()
+    private static let fileSearchDebounce: Duration = .milliseconds(140)
     /// A search should offer a few launchable apps, not bury the running ones under the whole Applications folder.
     private static let maximumLaunchableApps = 6
     private static let excludeHiddenWindowsKey = "overview.excludeHiddenWindows"
@@ -454,6 +483,76 @@ final class OverviewViewModel {
         .map(\.element.item)
     }
 
+    /// Files show only while searching, so the browser stays a switcher first.
+    var showsFileSection: Bool {
+        (UserDefaults.standard.object(forKey: Self.includesFilesKey) as? Bool ?? true)
+            && query.trimmingCharacters(in: .whitespacesAndNewlines).count >= FileSearchService.minimumQueryLength
+    }
+
+    var filteredFileResults: [FileSearchResult] {
+        showsFileSection ? fileResults : []
+    }
+
+    /// Waits briefly for typing to pause, then asks Spotlight. Results for an outdated
+    /// query are dropped; the previous results stay visible until new ones land.
+    private func scheduleFileSearch() {
+        fileSearchTask?.cancel()
+        let isVisible = showsFileSection
+        if isVisible != lastFileSectionVisibility {
+            lastFileSectionVisibility = isVisible
+            onFileSectionVisibilityChanged?(isVisible)
+        }
+        guard isVisible else {
+            fileResults = []
+            isSearchingFiles = false
+            if selectedFileID != nil { selectedFileID = nil }
+            return
+        }
+        isSearchingFiles = true
+        let searchedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        fileSearchTask = Task { [weak self, fileSearch] in
+            try? await Task.sleep(for: Self.fileSearchDebounce)
+            guard !Task.isCancelled else { return }
+            let started = Date()
+            let results = await fileSearch.search(searchedQuery)
+            guard let self, !Task.isCancelled,
+                  self.query.trimmingCharacters(in: .whitespacesAndNewlines) == searchedQuery else { return }
+            SafeDiagnosticLog.shared.record(
+                "file-search: completed results=\(results.count) ms=\(Int(Date().timeIntervalSince(started) * 1000))"
+            )
+            self.applyFileResults(results)
+        }
+    }
+
+    private func applyFileResults(_ results: [FileSearchResult]) {
+        fileResults = results
+        isSearchingFiles = false
+        if let selectedFileID, !results.contains(where: { $0.id == selectedFileID }) {
+            self.selectedFileID = nil
+            preserveSelectionOrSelectFirst()
+        }
+        let hasSelection = selectedWindowID != nil || selectedAppWindowID != nil
+            || selectedRepositoryID != nil || selectedFileID != nil || isAllWindowsAppSelected
+        if !hasSelection, let first = results.first {
+            selectedFileID = first.id
+        }
+    }
+
+    func setHoveredFile(_ fileID: String?) {
+        hoveredFileID = fileID
+    }
+
+    @discardableResult
+    func open(_ file: FileSearchResult) -> Bool {
+        let opened = NSWorkspace.shared.open(file.url)
+        SafeDiagnosticLog.shared.record("file-open: requested accepted=\(opened)")
+        return opened
+    }
+
+    func revealInFinder(_ file: FileSearchResult) {
+        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+    }
+
     var windowSections: [BrowserWindowSection] {
         if let focusedAppKey {
             return [BrowserWindowSection(
@@ -552,6 +651,8 @@ final class OverviewViewModel {
             // A search that matches only apps (windowless or not yet running) still
             // needs a selection, so Return opens the app and the arrows start from it.
             focusApp(app.id)
+        } else if let file = filteredFileResults.first {
+            selectedFileID = file.id
         } else {
             selectedRepositoryID = filteredGitHubRepositories.first?.id
         }
@@ -577,7 +678,12 @@ final class OverviewViewModel {
            filteredGitHubRepositories.contains(where: { $0.id == selectedRepositoryID }) {
             return
         }
+        if let selectedFileID,
+           filteredFileResults.contains(where: { $0.id == selectedFileID }) {
+            return
+        }
         selectedRepositoryID = nil
+        selectedFileID = nil
         selectFirstFilteredWindow()
     }
 
@@ -985,6 +1091,10 @@ final class OverviewViewModel {
         columnCount: Int,
         windowsAboveAppStrip: Bool = false
     ) {
+        if selectedFileID != nil {
+            moveFileSelection(horizontal: horizontal, vertical: vertical, windowsAboveAppStrip: windowsAboveAppStrip)
+            return
+        }
         if selectedRepositoryID != nil {
             moveRepositorySelection(
                 horizontal: horizontal,
@@ -1005,9 +1115,7 @@ final class OverviewViewModel {
         let visible = orderedFilteredWindows
         guard !visible.isEmpty else {
             selectedWindowID = nil
-            if vertical > 0, let repository = filteredGitHubRepositories.first {
-                selectedRepositoryID = repository.id
-            }
+            if vertical > 0 { enterShelvesBelowWindows(windowsAboveAppStrip: windowsAboveAppStrip) }
             return
         }
         if selectedWindowID == nil || !visible.contains(where: { $0.id == selectedWindowID }) {
@@ -1038,13 +1146,76 @@ final class OverviewViewModel {
         selectedWindowID = visible[targetIndex].id
     }
 
+    /// The mini browser's windows are a single row, so Down always leaves them.
     @discardableResult
-    func moveCompactWindowSelectionToRepositories() -> Bool {
-        guard let selectedWindowID,
-              let repository = filteredGitHubRepositories.first else { return false }
-        windowIDBeforeEnteringRepositories = selectedWindowID
-        selectedRepositoryID = repository.id
+    func moveCompactWindowSelectionDown(windowsAboveAppStrip: Bool) -> Bool {
+        guard selectedWindowID != nil else { return false }
+        return enterShelvesBelowWindows(windowsAboveAppStrip: windowsAboveAppStrip)
+    }
+
+    /// Files sit on the app strip's side of GitHub Repositories. The full browser and a
+    /// mini browser opening downward stack windows, files, repositories; a mini browser
+    /// opening upward stacks windows, repositories, files, then its app strip.
+    @discardableResult
+    private func enterShelvesBelowWindows(windowsAboveAppStrip: Bool) -> Bool {
+        let file = filteredFileResults.first
+        let repository = filteredGitHubRepositories.first
+        let previousWindowID = selectedWindowID
+        if windowsAboveAppStrip, let repository {
+            selectedRepositoryID = repository.id
+        } else if let file {
+            selectedFileID = file.id
+        } else if let repository {
+            selectedRepositoryID = repository.id
+        } else {
+            return false
+        }
+        windowIDBeforeEnteringRepositories = previousWindowID
+        fileIDBeforeEnteringRepositories = nil
         return true
+    }
+
+    private func restoreWindowSelectionAboveShelves() {
+        if let previousWindowID = windowIDBeforeEnteringRepositories,
+           orderedFilteredWindows.contains(where: { $0.id == previousWindowID }) {
+            selectedWindowID = previousWindowID
+        } else if let window = orderedFilteredWindows.first {
+            selectedWindowID = window.id
+        } else {
+            restoreAppStripSelection()
+        }
+        windowIDBeforeEnteringRepositories = nil
+    }
+
+    private func moveFileSelection(horizontal: Int, vertical: Int, windowsAboveAppStrip: Bool) {
+        let files = filteredFileResults
+        guard !files.isEmpty else {
+            selectedFileID = nil
+            preserveSelectionOrSelectFirst()
+            return
+        }
+        if vertical < 0 {
+            if windowsAboveAppStrip, let repository = filteredGitHubRepositories.first {
+                selectedRepositoryID = repository.id
+            } else {
+                restoreWindowSelectionAboveShelves()
+            }
+            return
+        }
+        if vertical > 0 {
+            if windowsAboveAppStrip {
+                restoreAppStripSelection()
+                windowIDBeforeEnteringRepositories = nil
+            } else if let repository = filteredGitHubRepositories.first {
+                fileIDBeforeEnteringRepositories = selectedFileID
+                selectedRepositoryID = repository.id
+            }
+            return
+        }
+        guard let selectedFileID,
+              let currentIndex = files.firstIndex(where: { $0.id == selectedFileID }) else { return }
+        let targetIndex = min(max(currentIndex + horizontal, 0), files.count - 1)
+        self.selectedFileID = files[targetIndex].id
     }
 
     private func moveRepositorySelection(
@@ -1059,22 +1230,25 @@ final class OverviewViewModel {
             return
         }
 
+        let files = filteredFileResults
         if vertical < 0 {
-            if let previousWindowID = windowIDBeforeEnteringRepositories,
-               orderedFilteredWindows.contains(where: { $0.id == previousWindowID }) {
-                selectedWindowID = previousWindowID
-            } else if let window = orderedFilteredWindows.first {
-                selectedWindowID = window.id
+            if !windowsAboveAppStrip, !files.isEmpty {
+                let previousFileID = fileIDBeforeEnteringRepositories
+                selectedFileID = files.contains(where: { $0.id == previousFileID }) ? previousFileID : files.first?.id
+                fileIDBeforeEnteringRepositories = nil
             } else {
-                restoreAppStripSelection()
+                restoreWindowSelectionAboveShelves()
             }
-            windowIDBeforeEnteringRepositories = nil
             return
         }
 
         if vertical > 0, windowsAboveAppStrip {
-            restoreAppStripSelection()
-            windowIDBeforeEnteringRepositories = nil
+            if let file = files.first {
+                selectedFileID = file.id
+            } else {
+                restoreAppStripSelection()
+                windowIDBeforeEnteringRepositories = nil
+            }
             return
         }
 
@@ -1108,12 +1282,18 @@ final class OverviewViewModel {
         let entersContent = windowsAboveAppStrip ? vertical < 0 : vertical > 0
         if entersContent {
             appWindowIDBeforeEnteringWindows = selectedAppWindowID
-            if windowsAboveAppStrip, let repository = filteredGitHubRepositories.first {
+            windowIDBeforeEnteringRepositories = nil
+            if windowsAboveAppStrip, let file = filteredFileResults.first {
+                // Opening upward, the file shelf sits directly above the app strip.
+                selectedFileID = file.id
+            } else if windowsAboveAppStrip, let repository = filteredGitHubRepositories.first {
                 selectedRepositoryID = repository.id
             } else if let mostRecentWindow = orderedFilteredWindows.first {
                 isAllWindowsAppSelected = false
                 selectedAppWindowID = nil
                 selectedWindowID = mostRecentWindow.id
+            } else if let file = filteredFileResults.first {
+                selectedFileID = file.id
             } else if let repository = filteredGitHubRepositories.first {
                 selectedRepositoryID = repository.id
             }
@@ -1137,10 +1317,7 @@ final class OverviewViewModel {
         }
         let targetRowIndex = rowIndex + direction
         guard rows.indices.contains(targetRowIndex) else {
-            if direction > 0, let repository = filteredGitHubRepositories.first {
-                windowIDBeforeEnteringRepositories = selectedWindowID
-                selectedRepositoryID = repository.id
-            }
+            if direction > 0 { enterShelvesBelowWindows(windowsAboveAppStrip: false) }
             return true
         }
         let targetRow = rows[targetRowIndex]
@@ -1198,6 +1375,10 @@ final class OverviewViewModel {
 
     @discardableResult
     func activateCurrentSelection() -> Bool {
+        if let selectedFileID,
+           let file = filteredFileResults.first(where: { $0.id == selectedFileID }) {
+            return open(file)
+        }
         if let selectedRepositoryID,
            let repository = filteredGitHubRepositories.first(where: { $0.id == selectedRepositoryID }) {
             return activate(repository)
@@ -1253,6 +1434,7 @@ final class OverviewViewModel {
         smartSearchWindowIDs = nil
         smartSearchStatus = nil
         hoveredRepositoryID = nil
+        hoveredFileID = nil
         isSmartSearching = false
         if !query.isEmpty {
             query = ""
@@ -1267,9 +1449,11 @@ final class OverviewViewModel {
         hoveredSwitcherWindowID = nil
         appWindowIDBeforeEnteringWindows = nil
         windowIDBeforeEnteringRepositories = nil
+        fileIDBeforeEnteringRepositories = nil
         clearTransientFilters(selectedGroupID: selectedGroupID)
         selectedAppWindowID = nil
         selectedRepositoryID = nil
+        selectedFileID = nil
         preserveSelectionOrSelectFirst()
     }
 
@@ -1321,7 +1505,9 @@ final class OverviewViewModel {
         selectedWindowID = nil
         selectedAppWindowID = nil
         selectedRepositoryID = nil
+        selectedFileID = nil
         hoveredRepositoryID = nil
+        hoveredFileID = nil
         hoveredSwitcherWindowID = nil
         isAllWindowsAppSelected = true
     }

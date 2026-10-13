@@ -169,3 +169,13 @@
 "No email compose service is available." = "メール作成サービスを利用できません。";
 "Grouped" = "グループ";
 "Recent" = "最近使った順";
+"Files" = "ファイル";
+"Searching files…" = "ファイルを検索中…";
+"No matching files" = "一致するファイルはありません";
+"Open" = "開く";
+"Reveal in Finder" = "Finderに表示";
+"Opened %@" = "%@に開いた";
+"Modified %@" = "%@に変更";
+"Text match" = "本文が一致";
+"Include Files" = "ファイルを含める";
+"Finds files by name, and by text in files you’ve opened, using Spotlight’s index. Kehai never opens or reads the files it lists." = "Spotlightのインデックスを使って、ファイル名と、開いたことのあるファイルの本文からファイルを探します。Kehaiが一覧のファイルを開いたり読んだりすることはありません。";
