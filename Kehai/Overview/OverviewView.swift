@@ -633,6 +633,10 @@ struct OverviewView: View {
                                             _ = model.activate(repository)
                                             close()
                                         },
+                                        openActions: {
+                                            _ = model.openActions(for: repository)
+                                            close()
+                                        },
                                         openPullRequests: {
                                             _ = model.openPullRequests(for: repository)
                                             close()
@@ -1188,6 +1192,10 @@ struct CompactSwitcherView: View {
                                             _ = model.activate(repository)
                                             close()
                                         },
+                                        openActions: {
+                                            _ = model.openActions(for: repository)
+                                            close()
+                                        },
                                         openPullRequests: {
                                             _ = model.openPullRequests(for: repository)
                                             close()
@@ -1422,6 +1430,7 @@ struct CompactSwitcherView: View {
 }
 
 private struct RepositoryResultCard: View {
+    @State private var isHoveringActions = false
     @State private var isHoveringPullRequests = false
 
     let repository: GitHubRepository
@@ -1429,8 +1438,14 @@ private struct RepositoryResultCard: View {
     let compact: Bool
     let classicTheme: Bool
     let activate: () -> Void
+    let openActions: () -> Void
     let openPullRequests: () -> Void
     let hoverChanged: (Bool) -> Void
+
+    /// Room the Actions and PRs buttons take out of the card's bottom-trailing corner,
+    /// measured from the text column's trailing edge. Only the rows that share the
+    /// buttons' height give it up; the owner and name rows keep the full width.
+    private var cornerButtonsReservedWidth: CGFloat { compact ? 84 : 88 }
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -1450,6 +1465,7 @@ private struct RepositoryResultCard: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                                .padding(.trailing, cornerButtonsReservedWidth)
                         }
                         HStack(spacing: 5) {
                             if repository.isFork { repoBadge("Fork") }
@@ -1464,10 +1480,10 @@ private struct RepositoryResultCard: View {
                                 .lineLimit(1)
                             }
                         }
+                        .padding(.trailing, cornerButtonsReservedWidth)
                     }
                     Spacer(minLength: 0)
                 }
-                .padding(.trailing, compact ? 30 : 38)
                 .padding(compact ? 7 : 12)
                 .frame(width: compact ? 200 : nil, height: compact ? 60 : 96, alignment: .leading)
                 .background {
@@ -1492,41 +1508,64 @@ private struct RepositoryResultCard: View {
             .buttonStyle(.plain)
             .help("Open \(repository.fullName) on GitHub")
 
-            Button(action: openPullRequests) {
-                Text("PRs")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(
-                        classicTheme
-                            ? isHoveringPullRequests ? Color.white : Color.black
-                            : isHoveringPullRequests ? Color.accentColor : Color.secondary
-                    )
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
-                    .background {
-                        if classicTheme {
-                            ZStack {
-                                Rectangle().fill(.black).offset(x: 1, y: 1)
-                                Rectangle().fill(isHoveringPullRequests ? Color.black : Color(white: 0.90))
-                            }
-                        } else {
-                            Capsule()
-                                .fill(isHoveringPullRequests ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12))
-                        }
-                    }
-                    .overlay {
-                        if classicTheme {
-                            Rectangle().strokeBorder(.black, lineWidth: 1)
-                        }
-                    }
+            HStack(spacing: 4) {
+                cornerButton(
+                    "Actions",
+                    help: "Open GitHub Actions for \(repository.fullName)",
+                    isHovering: $isHoveringActions,
+                    action: openActions
+                )
+                cornerButton(
+                    "PRs",
+                    help: "Open pull requests for \(repository.fullName)",
+                    isHovering: $isHoveringPullRequests,
+                    action: openPullRequests
+                )
             }
-            .buttonStyle(.plain)
-            .help("Open pull requests for \(repository.fullName)")
-            .onHover { isHoveringPullRequests = $0 }
-            .animation(.easeOut(duration: 0.1), value: isHoveringPullRequests)
             .padding(compact ? 6 : 10)
         }
         .onHover(perform: hoverChanged)
         .animation(.easeOut(duration: 0.1), value: isSelected)
+    }
+
+    /// One of the small link buttons in the card's bottom-trailing corner.
+    private func cornerButton(
+        _ title: LocalizedStringKey,
+        help: LocalizedStringKey,
+        isHovering: Binding<Bool>,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(
+                    classicTheme
+                        ? isHovering.wrappedValue ? Color.white : Color.black
+                        : isHovering.wrappedValue ? Color.accentColor : Color.secondary
+                )
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background {
+                    if classicTheme {
+                        ZStack {
+                            Rectangle().fill(.black).offset(x: 1, y: 1)
+                            Rectangle().fill(isHovering.wrappedValue ? Color.black : Color(white: 0.90))
+                        }
+                    } else {
+                        Capsule()
+                            .fill(isHovering.wrappedValue ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.12))
+                    }
+                }
+                .overlay {
+                    if classicTheme {
+                        Rectangle().strokeBorder(.black, lineWidth: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .onHover { isHovering.wrappedValue = $0 }
+        .animation(.easeOut(duration: 0.1), value: isHovering.wrappedValue)
     }
 
     @ViewBuilder

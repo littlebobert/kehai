@@ -1483,6 +1483,12 @@ final class OverviewViewModel {
     }
 
     @discardableResult
+    func openActions(for repository: GitHubRepository) -> Bool {
+        githubRepositoryStore.recordInteraction(repositoryID: repository.id)
+        return NSWorkspace.shared.open(repository.htmlURL.appending(path: "actions"))
+    }
+
+    @discardableResult
     func openPullRequests(for repository: GitHubRepository) -> Bool {
         githubRepositoryStore.recordInteraction(repositoryID: repository.id)
         let url = repository.htmlURL
