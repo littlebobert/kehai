@@ -131,7 +131,20 @@ final class OverviewViewModel {
     /// Windows shown in the browser grid/app strip. Uses a drag-time snapshot so
     /// in-flight inventory mutations cannot empty the UI under the cursor.
     private var displayWindows: [WindowItem] {
-        WindowItem.expandedSafariTabEntries(from: dragDisplayWindows ?? windows)
+        withAlternateAppNames(WindowItem.expandedSafariTabEntries(from: dragDisplayWindows ?? windows))
+    }
+
+    /// Window inventory doesn't read bundles, so borrow alternate names from the installed-app catalog.
+    private func withAlternateAppNames(_ windows: [WindowItem]) -> [WindowItem] {
+        let namesByBundleIdentifier = installedApps.alternateNamesByBundleIdentifier
+        guard !namesByBundleIdentifier.isEmpty else { return windows }
+        return windows.map { window in
+            guard let bundleIdentifier = window.bundleIdentifier,
+                  let names = namesByBundleIdentifier[bundleIdentifier] else { return window }
+            var window = window
+            window.alternateAppNames = names
+            return window
+        }
     }
 
     private var displayTaskGroups: [TaskGroup] {
@@ -433,21 +446,25 @@ final class OverviewViewModel {
                   !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier)
             else { return nil }
 
-            let name = application.localizedName ?? ""
-            if !trimmedQuery.isEmpty,
-               !name.localizedCaseInsensitiveContains(trimmedQuery),
-               !(application.bundleIdentifier?.localizedCaseInsensitiveContains(trimmedQuery) ?? false) {
-                return nil
-            }
-
             // Activation dates only cover this Kehai session; fall back to recorded
             // focus history before launch date, which can be days old.
             let activationDate = activityMonitor.activationDate(for: application.processID)
             let storedDate = application.localizedName.flatMap { storedAppLastSeen[$0] }
-            return WindowItem.appPlaceholder(
+            var item = WindowItem.appPlaceholder(
                 for: application,
                 lastSeen: [activationDate, storedDate].compactMap { $0 }.max() ?? application.launchDate
             )
+            item.alternateAppNames = application.bundleIdentifier
+                .flatMap { installedApps.alternateNamesByBundleIdentifier[$0] } ?? []
+
+            let name = application.localizedName ?? ""
+            if !trimmedQuery.isEmpty,
+               !name.localizedCaseInsensitiveContains(trimmedQuery),
+               !item.matchesAlternateAppName(trimmedQuery),
+               !(application.bundleIdentifier?.localizedCaseInsensitiveContains(trimmedQuery) ?? false) {
+                return nil
+            }
+            return item
         }
     }
 

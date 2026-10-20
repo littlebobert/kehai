@@ -92,6 +92,39 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(ordered.map(\.id), [runningTitleMatch.id, launchable.id])
     }
 
+    func testAlternateAppNamesMatchAsAppNames() {
+        let installed = InstalledAppInfo(
+            bundleIdentifier: "com.openai.codex",
+            localizedName: "ChatGPT",
+            url: URL(fileURLWithPath: "/Applications/ChatGPT.app"),
+            icon: nil,
+            alternateNames: ["Codex"]
+        )
+        let launchable = WindowItem.launchableApp(for: installed, lastSeen: nil)
+        XCTAssertEqual(launchable.searchRank(for: "chat"), WindowItem.launchableAppRankOffset)
+        XCTAssertEqual(launchable.searchRank(for: "codex"), WindowItem.launchableAppRankOffset + 1)
+        XCTAssertNil(launchable.searchRank(for: "claude"))
+
+        var chatGPTWindow = WindowItem(id: 1, processID: 1, appName: "ChatGPT", bundleIdentifier: "com.openai.codex", title: "New chat", frame: .zero, isOnScreen: true, lastSeen: nil)
+        let titleMatch = WindowItem(id: 2, processID: 2, appName: "Terminal", bundleIdentifier: nil, title: "codex --resume", frame: .zero, isOnScreen: true, lastSeen: Date())
+        XCTAssertNil(chatGPTWindow.searchRank(for: "codex"))
+        chatGPTWindow.alternateAppNames = installed.alternateNames
+        XCTAssertEqual(chatGPTWindow.searchRank(for: "codex"), 1)
+        XCTAssertEqual(
+            WindowItem.orderedBySearchRelevance([titleMatch, chatGPTWindow], query: "codex").map(\.id),
+            [chatGPTWindow.id, titleMatch.id]
+        )
+    }
+
+    func testAlternateAppNamesDropBlanksDuplicatesAndTheDisplayName() {
+        XCTAssertEqual(
+            InstalledAppCatalog.alternateNames(["Codex", " codex ", "", "ChatGPT", 42, "Codex CLI"], excluding: "ChatGPT"),
+            ["Codex", "Codex CLI"]
+        )
+        XCTAssertEqual(InstalledAppCatalog.alternateNames("Codex", excluding: "ChatGPT"), [])
+        XCTAssertEqual(InstalledAppCatalog.alternateNames(nil, excluding: "ChatGPT"), [])
+    }
+
     private func fileResult(
         _ path: String,
         lastUsed: Date? = nil,

@@ -25,6 +25,8 @@ struct WindowItem: Identifiable, Hashable, Sendable {
     var sourceWindowID: CGWindowID?
     /// Bundle location for a launchable app; nil for anything that is already running.
     var applicationURL: URL?
+    /// Other names the app is known by (`CFBundleAlternateNames`), matched like the app name.
+    var alternateAppNames: [String] = []
 
     static func == (lhs: WindowItem, rhs: WindowItem) -> Bool {
         lhs.id == rhs.id && lhs.thumbnailRevision == rhs.thumbnailRevision
@@ -88,7 +90,8 @@ struct WindowItem: Identifiable, Hashable, Sendable {
             isOnScreen: false,
             lastSeen: lastSeen,
             appIcon: application.icon,
-            applicationURL: application.url
+            applicationURL: application.url,
+            alternateAppNames: application.alternateNames
         )
     }
 
@@ -121,11 +124,13 @@ struct WindowItem: Identifiable, Hashable, Sendable {
             if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil {
                 return Self.launchableAppRankOffset
             }
-            if appName.localizedCaseInsensitiveContains(query) { return Self.launchableAppRankOffset + 1 }
+            if appName.localizedCaseInsensitiveContains(query) || matchesAlternateAppName(query) {
+                return Self.launchableAppRankOffset + 1
+            }
             return nil
         }
         if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 0 }
-        if appName.localizedCaseInsensitiveContains(query) { return 1 }
+        if appName.localizedCaseInsensitiveContains(query) || matchesAlternateAppName(query) { return 1 }
         if title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 2 }
         if title.localizedCaseInsensitiveContains(query) { return 3 }
         if safariTab?.url.localizedCaseInsensitiveContains(query) == true { return 4 }
@@ -137,6 +142,12 @@ struct WindowItem: Identifiable, Hashable, Sendable {
             return nil
         }
         return nestedRanks.min()
+    }
+
+    /// An alternate name is still the app's name, so it outranks title matches, but it
+    /// ranks below the shown name so "Codex" lists the real Codex app before ChatGPT.
+    func matchesAlternateAppName(_ query: String) -> Bool {
+        alternateAppNames.contains { $0.localizedCaseInsensitiveContains(query) }
     }
 
     static func orderedBySearchRelevance(_ windows: [WindowItem], query: String) -> [WindowItem] {

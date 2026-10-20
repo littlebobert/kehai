@@ -6,6 +6,9 @@ struct InstalledAppInfo: Sendable {
     let localizedName: String
     let url: URL
     let icon: NSImage?
+    /// Other names the app declares in `CFBundleAlternateNames` (e.g. ChatGPT lists
+    /// "Codex", its old name). Spotlight indexes these, so search should find them too.
+    var alternateNames: [String] = []
 }
 
 /// Keeps the list of launchable (installed, user-facing) apps current in the background.
@@ -17,7 +20,16 @@ struct InstalledAppInfo: Sendable {
 @MainActor
 @Observable
 final class InstalledAppCatalog {
-    private(set) var apps: [InstalledAppInfo] = []
+    private(set) var apps: [InstalledAppInfo] = [] {
+        didSet {
+            alternateNamesByBundleIdentifier = apps.reduce(into: [:]) { names, app in
+                guard !app.alternateNames.isEmpty else { return }
+                names[app.bundleIdentifier] = app.alternateNames
+            }
+        }
+    }
+    /// Lets running apps and their windows match the same alternate names as the installed copy.
+    private(set) var alternateNamesByBundleIdentifier: [String: [String]] = [:]
 
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
@@ -164,8 +176,21 @@ final class InstalledAppCatalog {
             bundleIdentifier: bundleIdentifier,
             localizedName: name,
             url: url,
-            icon: includeIcon ? NSWorkspace.shared.icon(forFile: url.path) : nil
+            icon: includeIcon ? NSWorkspace.shared.icon(forFile: url.path) : nil,
+            alternateNames: alternateNames(bundle.object(forInfoDictionaryKey: "CFBundleAlternateNames"), excluding: name)
         )
+    }
+
+    /// Drops blanks and repeats of the display name so only names that add a match remain.
+    nonisolated static func alternateNames(_ value: Any?, excluding name: String) -> [String] {
+        guard let names = value as? [Any] else { return [] }
+        var seen: Set<String> = [name.lowercased()]
+        return names.compactMap { entry in
+            guard let alternate = (entry as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !alternate.isEmpty,
+                  seen.insert(alternate.lowercased()).inserted else { return nil }
+            return alternate
+        }
     }
 
     /// Info.plist booleans show up as Bool, number, or "1"/"YES" strings depending on the author.
