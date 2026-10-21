@@ -1471,13 +1471,17 @@ private struct RepositoryResultCard: View {
                             if repository.isFork { repoBadge("Fork") }
                             if repository.isArchived { repoBadge("Archived") }
                             if let pushedAt = repository.pushedAt {
+                                let pushTime = relativePushTime(pushedAt)
+                                // Compact cards share this row with the Actions and PRs buttons,
+                                // so they show just the time and leave "Pushed" to the tooltip.
                                 HStack(spacing: 2) {
-                                    Text("Pushed")
-                                    Text(relativePushTime(pushedAt))
+                                    if !compact { Text("Pushed") }
+                                    Text(pushTime)
                                 }
                                 .font(.system(size: compact ? 9 : 10))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
+                                .help("Pushed \(pushTime)")
                             }
                         }
                         .padding(.trailing, cornerButtonsReservedWidth)
