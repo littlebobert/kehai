@@ -438,12 +438,14 @@ final class OverviewViewModel {
     /// Reads the background-maintained catalog; this runs while presenting the mini UI,
     /// so it must not touch LaunchServices or the disk.
     private func windowlessRunningApps(excluding represented: [WindowItem]) -> [WindowItem] {
-        let presentKeys = Set(represented.map { $0.bundleIdentifier ?? "pid:\($0.processID)" })
+        var presentKeys = Set(represented.map { $0.bundleIdentifier ?? "pid:\($0.processID)" })
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        // Several processes can share a bundle identifier (a second instance, or an old
+        // copy still quitting during an update); the strip shows each app once.
         return runningApps.apps.compactMap { application in
-            guard !presentKeys.contains(application.appKey),
-                  !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier)
+            guard !excludedAppStore.contains(bundleIdentifier: application.bundleIdentifier),
+                  presentKeys.insert(application.appKey).inserted
             else { return nil }
 
             // Activation dates only cover this Kehai session; fall back to recorded
