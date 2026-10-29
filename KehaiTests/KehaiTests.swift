@@ -77,7 +77,7 @@ final class KehaiTests: XCTestCase {
         )
     }
 
-    func testLaunchableAppRanksAfterEveryRunningMatch() {
+    func testLaunchableAppNameMatchRanksBetweenRunningNameAndTitleMatches() {
         let installed = InstalledAppInfo(bundleIdentifier: "com.apple.dt.Xcode", localizedName: "Xcode", url: URL(fileURLWithPath: "/Applications/Xcode.app"), icon: nil)
         let launchable = WindowItem.launchableApp(for: installed, lastSeen: Date())
         let runningTitleMatch = WindowItem(id: 7, processID: 7, appName: "Safari", bundleIdentifier: "com.apple.Safari", title: "Xcode release notes", frame: .zero, isOnScreen: true, lastSeen: Date().addingTimeInterval(-3_600))
@@ -88,8 +88,9 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(launchable.searchRank(for: "code"), WindowItem.launchableAppRankOffset + 1)
         XCTAssertNil(launchable.searchRank(for: "safari"))
 
-        let ordered = WindowItem.orderedBySearchRelevance([launchable, runningTitleMatch], query: "xc")
-        XCTAssertEqual(ordered.map(\.id), [runningTitleMatch.id, launchable.id])
+        let runningNameMatch = WindowItem(id: 8, processID: 8, appName: "Xcode Cloud", bundleIdentifier: "com.example.xcodecloud", title: "Builds", frame: .zero, isOnScreen: true, lastSeen: nil)
+        let ordered = WindowItem.orderedBySearchRelevance([runningTitleMatch, launchable, runningNameMatch], query: "xc")
+        XCTAssertEqual(ordered.map(\.id), [runningNameMatch.id, launchable.id, runningTitleMatch.id])
     }
 
     func testAlternateAppNamesMatchAsAppNames() {

@@ -114,9 +114,10 @@ struct WindowItem: Identifiable, Hashable, Sendable {
         )
     }
 
-    /// Launchable apps rank after every running match, however well their name fits:
-    /// a window the user already has open is almost always what they meant.
-    static let launchableAppRankOffset = 10
+    /// Launchable apps rank after running apps whose name matches, but before apps that
+    /// only match through a window title: typing "slack" should offer Slack ahead of a
+    /// ChatGPT window that mentions a Slack thread.
+    static let launchableAppRankOffset = 2
 
     func searchRank(for query: String) -> Int? {
         guard !query.isEmpty else { return 0 }
@@ -131,14 +132,14 @@ struct WindowItem: Identifiable, Hashable, Sendable {
         }
         if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 0 }
         if appName.localizedCaseInsensitiveContains(query) || matchesAlternateAppName(query) { return 1 }
-        if title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 2 }
-        if title.localizedCaseInsensitiveContains(query) { return 3 }
-        if safariTab?.url.localizedCaseInsensitiveContains(query) == true { return 4 }
+        if title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 4 }
+        if title.localizedCaseInsensitiveContains(query) { return 5 }
+        if safariTab?.url.localizedCaseInsensitiveContains(query) == true { return 6 }
 
         let nestedRanks = safariTabs.compactMap { tab -> Int? in
-            if tab.title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 2 }
-            if tab.title.localizedCaseInsensitiveContains(query) { return 3 }
-            if tab.url.localizedCaseInsensitiveContains(query) { return 4 }
+            if tab.title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 4 }
+            if tab.title.localizedCaseInsensitiveContains(query) { return 5 }
+            if tab.url.localizedCaseInsensitiveContains(query) { return 6 }
             return nil
         }
         return nestedRanks.min()
