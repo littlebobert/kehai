@@ -199,7 +199,7 @@ final class KehaiTests: XCTestCase {
         XCTAssertLessThan(first, WindowItem.safariTabIDBase)
     }
 
-    func testInstalledAppScanKeepsUserFacingAppsAndSkipsBackgroundOnesAndDuplicates() throws {
+    func testInstalledAppScanKeepsUserFacingAndMenuBarAppsAndSkipsBackgroundOnesAndDuplicates() throws {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "kehai-installed-apps-\(UUID().uuidString)", directoryHint: .isDirectory)
         let primary = root.appending(path: "Applications", directoryHint: .isDirectory)
@@ -241,6 +241,10 @@ final class KehaiTests: XCTestCase {
             withDestinationURL: linkedTarget
         )
         try makeApp(in: primary, name: ".Hidden Helper", bundleIdentifier: "com.example.dotprefixed")
+        // Like Xcode's Device Hub: an app shipped inside another app's Contents/Applications.
+        let host = primary.appending(path: "Zebra.app/Contents/Applications", directoryHint: .isDirectory)
+        try makeApp(in: host, name: "Embedded", bundleIdentifier: "com.example.embedded")
+        try makeApp(in: primary.appending(path: "Zebra.app/Contents/PrivateApplications"), name: "Private", bundleIdentifier: "com.example.private")
 
         let apps = InstalledAppCatalog.scan(
             directories: [primary, secondary],
@@ -248,7 +252,7 @@ final class KehaiTests: XCTestCase {
             includeIcons: false
         )
 
-        XCTAssertEqual(apps.map(\.localizedName), ["Alpha", "Linked", "Nested", "Zebra"])
+        XCTAssertEqual(apps.map(\.localizedName), ["Alpha", "Embedded", "Linked", "Menu Extra", "Nested", "Zebra"])
         XCTAssertEqual(apps.first(where: { $0.bundleIdentifier == "com.example.zebra" })?.url.lastPathComponent, "Zebra.app")
     }
 

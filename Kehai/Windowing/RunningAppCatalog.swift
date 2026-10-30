@@ -138,10 +138,12 @@ final class SwitchableApplicationCache: @unchecked Sendable {
         guard let executableURL = application.executableURL else { return false }
         guard !executableURL.pathComponents.contains(where: { $0.hasSuffix(".appex") }) else { return false }
 
+        // LSUIElement is not checked: callers already require a regular activation
+        // policy, and a menu-bar app that promotes itself (Tailscale with its window
+        // open) is in the Dock and Command-Tab, so it belongs in the strip too.
         guard let bundleURL = application.bundleURL,
               let bundle = Bundle(url: bundleURL) else { return true }
-        return (bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool) != true
-            && (bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool) != true
+        return (bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool) != true
             && bundle.object(forInfoDictionaryKey: "NSExtension") == nil
     }
 }

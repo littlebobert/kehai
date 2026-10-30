@@ -112,7 +112,9 @@ final class InstalledAppCatalog {
     }
 
     /// Finds user-facing `.app` bundles in `directories` and one level of subfolders
-    /// (e.g. `/Applications/Utilities`), de-duplicated by bundle identifier and sorted by name.
+    /// (e.g. `/Applications/Utilities`), plus apps shipped inside another app's
+    /// `Contents/Applications` (Xcode's Device Hub and Instruments), de-duplicated by
+    /// bundle identifier and sorted by name.
     nonisolated static func scan(
         directories: [URL],
         excludingBundleIdentifier ownBundleIdentifier: String?,
@@ -151,6 +153,7 @@ final class InstalledAppCatalog {
             let values = try? url.resourceValues(forKeys: keys)
             if url.pathExtension == "app", values?.isApplication == true || values?.isPackage == true {
                 bundles.append(url)
+                bundles.append(contentsOf: embeddedApplicationBundles(in: url))
             } else if depth < 1, values?.isDirectory == true, values?.isPackage != true {
                 bundles.append(contentsOf: applicationBundles(in: url, depth: depth + 1))
             }
@@ -158,14 +161,26 @@ final class InstalledAppCatalog {
         return bundles
     }
 
+    /// Spotlight lists these, so search should too. Only the bundle's own
+    /// `Contents/Applications` is read; private helper folders stay out.
+    private nonisolated static func embeddedApplicationBundles(in bundle: URL) -> [URL] {
+        let directory = bundle.appending(path: "Contents/Applications", directoryHint: .isDirectory)
+        guard let contents = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return [] }
+        return contents.filter { $0.pathExtension == "app" }
+    }
+
     private nonisolated static func installedApp(at url: URL, includeIcon: Bool) -> InstalledAppInfo? {
         guard let bundle = Bundle(url: url),
               let bundleIdentifier = bundle.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines),
               !bundleIdentifier.isEmpty,
               bundle.executableURL != nil else { return nil }
-        // Same rules as the running-app strip: menu-bar-only and faceless apps don't belong.
-        guard !plistFlag(bundle.object(forInfoDictionaryKey: "LSUIElement")),
-              !plistFlag(bundle.object(forInfoDictionaryKey: "LSBackgroundOnly")),
+        // Menu-bar apps like Tailscale stay: Spotlight launches them too. Faceless
+        // background apps and extensions have nothing to open.
+        guard !plistFlag(bundle.object(forInfoDictionaryKey: "LSBackgroundOnly")),
               bundle.object(forInfoDictionaryKey: "NSExtension") == nil else { return nil }
 
         let displayName = FileManager.default.displayName(atPath: url.path)
