@@ -3,26 +3,19 @@ import ApplicationServices
 
 @MainActor
 final class WindowInventoryMonitor {
-    private struct ApplicationObservation {
-        let applicationElement: AXUIElement
-        let observer: AXObserver
-        var windowElements: [AXUIElement]
-    }
-
     private let changed: @MainActor () -> Void
     private let focusedWindowChanged: @MainActor (pid_t) -> Void
     private var workspaceObservers: [NSObjectProtocol] = []
-    private var applicationObservations: [pid_t: ApplicationObservation] = [:]
     private var reconciliationTimer: Timer?
     private var changeTask: Task<Void, Never>?
-    private var initialEnumerationTask: Task<Void, Never>?
     private var isRunning = false
+    private lazy var observations = AccessibilityObservations { [weak self] processID, focusedWindowDidChange in
+        Task { @MainActor [weak self] in
+            self?.handleAXChange(processID: processID, focusedWindowDidChange: focusedWindowDidChange)
+        }
+    }
 
-    /// Ceiling for each synchronous Accessibility round-trip. Without it, a single
-    /// unresponsive app can stall a call for the system default (~6s).
-    private static let accessibilityMessagingTimeout: Float = 0.5
-    private static let initialEnumerationDelay = Duration.milliseconds(250)
-    private static let slowAccessibilityRefreshThreshold: TimeInterval = 0.25
+    private static let initialEnumerationDelay: TimeInterval = 0.25
 
     init(
         changed: @escaping @MainActor () -> Void,
@@ -50,21 +43,8 @@ final class WindowInventoryMonitor {
             })
         }
 
-        // Observing an app costs several synchronous Accessibility round-trips into
-        // that process. Leave launch-critical work and the first main-loop turns clear,
-        // then yield between apps so one enumeration does not monopolize the main actor.
-        initialEnumerationTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(for: Self.initialEnumerationDelay)
-            } catch {
-                return
-            }
-            for application in NSWorkspace.shared.runningApplications {
-                guard let self, self.isRunning, !Task.isCancelled else { return }
-                self.observe(application)
-                await Task.yield()
-            }
-        }
+        // Leave launch-critical work clear before observing every running app.
+        observations.observeAllRunningApplications(after: Self.initialEnumerationDelay)
 
         reconciliationTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -76,8 +56,6 @@ final class WindowInventoryMonitor {
     func stop() {
         guard isRunning else { return }
         isRunning = false
-        initialEnumerationTask?.cancel()
-        initialEnumerationTask = nil
         changeTask?.cancel()
         changeTask = nil
         reconciliationTimer?.invalidate()
@@ -87,9 +65,7 @@ final class WindowInventoryMonitor {
         workspaceObservers.forEach(center.removeObserver)
         workspaceObservers.removeAll()
 
-        for processID in Array(applicationObservations.keys) {
-            removeObservation(for: processID)
-        }
+        observations.removeAll()
     }
 
     private func handleWorkspaceChange(processID: pid_t?, launched: Bool) {
@@ -97,19 +73,118 @@ final class WindowInventoryMonitor {
             scheduleChange()
             return
         }
-        if launched, let application = NSRunningApplication(processIdentifier: processID) {
-            observe(application)
-        } else if !launched {
-            removeObservation(for: processID)
+        if launched {
+            observations.observe(processID: processID)
+        } else {
+            observations.remove(processID: processID)
         }
         scheduleChange()
     }
 
-    private func observe(_ application: NSRunningApplication) {
-        let processID = application.processIdentifier
-        guard processID != ProcessInfo.processInfo.processIdentifier,
-              application.activationPolicy == .regular,
-              applicationObservations[processID] == nil else { return }
+    private func handleAXChange(processID: pid_t, focusedWindowDidChange: Bool) {
+        guard isRunning else { return }
+        if processID != 0, focusedWindowDidChange { focusedWindowChanged(processID) }
+        scheduleChange()
+    }
+
+    private func scheduleChange(after delay: Duration = .milliseconds(350)) {
+        changeTask?.cancel()
+        changeTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled else { return }
+            changed()
+        }
+    }
+}
+
+/// Every AXObserver and Accessibility round-trip the inventory needs, confined to one
+/// background thread with its own run loop.
+///
+/// Each call is synchronous IPC into the observed app. A busy app (Xcode mid-build)
+/// can take the full messaging timeout to answer, and on the main thread that stalled
+/// the hot zone poll and every other UI update behind it.
+private final class AccessibilityObservations: @unchecked Sendable {
+    private struct ApplicationObservation {
+        let applicationElement: AXUIElement
+        let observer: AXObserver
+        var windowElements: [AXUIElement]
+    }
+
+    /// Ceiling for each synchronous Accessibility round-trip. Without it, a single
+    /// unresponsive app can stall a call for the system default (~6s).
+    private static let accessibilityMessagingTimeout: Float = 0.5
+    private static let slowAccessibilityRefreshThreshold: TimeInterval = 0.25
+
+    /// Called on the observation thread after an app's window list was re-read.
+    private let changed: @Sendable (pid_t, Bool) -> Void
+    // Only touched on the observation thread.
+    private var applicationObservations: [pid_t: ApplicationObservation] = [:]
+    private var isObserving = false
+    private let runLoop: CFRunLoop
+
+    init(changed: @escaping @Sendable (pid_t, Bool) -> Void) {
+        self.changed = changed
+        final class Handoff: @unchecked Sendable { var runLoop: CFRunLoop? }
+        let handoff = Handoff()
+        let ready = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            handoff.runLoop = CFRunLoopGetCurrent()
+            // A port keeps the run loop alive while no app is observed yet.
+            RunLoop.current.add(NSMachPort(), forMode: .default)
+            ready.signal()
+            while true { RunLoop.current.run() }
+        }
+        thread.name = "Kehai Accessibility observations"
+        thread.qualityOfService = .userInitiated
+        thread.start()
+        ready.wait()
+        runLoop = handoff.runLoop!
+    }
+
+    func observeAllRunningApplications(after delay: TimeInterval) {
+        perform { self.isObserving = true }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + delay) { [self] in
+            perform {
+                guard self.isObserving else { return }
+                for application in NSWorkspace.shared.runningApplications {
+                    self.observeOnThread(processID: application.processIdentifier)
+                }
+            }
+        }
+    }
+
+    func observe(processID: pid_t) {
+        perform { self.observeOnThread(processID: processID) }
+    }
+
+    func remove(processID: pid_t) {
+        perform { self.removeOnThread(processID: processID) }
+    }
+
+    func removeAll() {
+        perform {
+            self.isObserving = false
+            for processID in Array(self.applicationObservations.keys) {
+                self.removeOnThread(processID: processID)
+            }
+        }
+    }
+
+    private func perform(_ block: @escaping () -> Void) {
+        CFRunLoopPerformBlock(runLoop, CFRunLoopMode.defaultMode.rawValue, block)
+        CFRunLoopWakeUp(runLoop)
+    }
+
+    private func observeOnThread(processID: pid_t) {
+        guard isObserving,
+              processID != ProcessInfo.processInfo.processIdentifier,
+              applicationObservations[processID] == nil,
+              let application = NSRunningApplication(processIdentifier: processID),
+              application.activationPolicy == .regular else { return }
 
         var observer: AXObserver?
         guard AXObserverCreate(processID, Self.axCallback, &observer) == .success,
@@ -121,7 +196,7 @@ final class WindowInventoryMonitor {
         for notification in [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification] {
             AXObserverAddNotification(observer, applicationElement, notification as CFString, refcon)
         }
-        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observer), .defaultMode)
 
         applicationObservations[processID] = ApplicationObservation(
             applicationElement: applicationElement,
@@ -156,9 +231,9 @@ final class WindowInventoryMonitor {
         applicationObservations[processID] = observation
     }
 
-    private func removeObservation(for processID: pid_t) {
+    private func removeOnThread(processID: pid_t) {
         guard let observation = applicationObservations.removeValue(forKey: processID) else { return }
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observation.observer), .commonModes)
+        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), AXObserverGetRunLoopSource(observation.observer), .defaultMode)
     }
 
     private func handleAXChange(processID: pid_t, focusedWindowDidChange: Bool) {
@@ -172,32 +247,17 @@ final class WindowInventoryMonitor {
                         "windows=\(applicationObservations[processID]?.windowElements.count ?? 0)"
                 )
             }
-            if focusedWindowDidChange { focusedWindowChanged(processID) }
         }
-        scheduleChange()
+        changed(processID, focusedWindowDidChange)
     }
 
-    private func scheduleChange(after delay: Duration = .milliseconds(350)) {
-        changeTask?.cancel()
-        changeTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: delay)
-            } catch {
-                return
-            }
-            guard let self, !Task.isCancelled else { return }
-            changed()
-        }
-    }
-
-    private nonisolated static let axCallback: AXObserverCallback = { _, element, notification, refcon in
+    /// Runs on the observation thread, which owns every observer's run-loop source.
+    private static let axCallback: AXObserverCallback = { _, element, notification, refcon in
         guard let refcon else { return }
         var processID: pid_t = 0
         AXUIElementGetPid(element, &processID)
         let focusedWindowDidChange = notification as String == kAXFocusedWindowChangedNotification as String
-        let monitor = Unmanaged<WindowInventoryMonitor>.fromOpaque(refcon).takeUnretainedValue()
-        Task { @MainActor in
-            monitor.handleAXChange(processID: processID, focusedWindowDidChange: focusedWindowDidChange)
-        }
+        let observations = Unmanaged<AccessibilityObservations>.fromOpaque(refcon).takeUnretainedValue()
+        observations.handleAXChange(processID: processID, focusedWindowDidChange: focusedWindowDidChange)
     }
 }

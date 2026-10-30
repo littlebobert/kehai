@@ -47,13 +47,15 @@ final class ActivityMonitor {
 
     func recordFocusedWindow(processID: pid_t) async {
         let focusedAt = Date()
+        // Synchronous IPC into the app that just activated, which may be too busy to
+        // answer quickly (Xcode mid-build). Off the main actor, the hot zone and the
+        // rest of the UI keep running while it waits.
+        let focusedWindow = await Task.detached(priority: .userInitiated) {
+            Self.readFocusedWindow(processID: processID)
+        }.value
         let candidates = latestWindows.filter { $0.processID == processID }
 
-        let application = AXUIElementCreateApplication(processID)
-        var focusedValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &focusedValue) == .success,
-              let focusedValue,
-              CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else {
+        guard case .window(let signature) = focusedWindow else {
             if let item = candidates.first {
                 await store.record(item)
             } else {
@@ -62,8 +64,6 @@ final class ActivityMonitor {
             return
         }
 
-        let focusedWindow = focusedValue as! AXUIElement
-        let signature = windowSignature(for: focusedWindow)
         guard let item = Self.focusedWindow(matching: signature, in: candidates) else {
             // The focused window is usually brand new and not inventoried yet.
             // Crediting another window of the app would misorder both of them.
@@ -111,7 +111,28 @@ final class ActivityMonitor {
         windowFocused?(item.id, focusedAt)
     }
 
-    private func windowSignature(for element: AXUIElement) -> WindowMatchCandidate? {
+    private enum FocusedWindowRead: Sendable {
+        case unavailable
+        /// The focused window, with no signature when its frame couldn't be read.
+        case window(WindowMatchCandidate?)
+    }
+
+    /// Ceiling for each Accessibility round-trip; the system default is about six seconds.
+    private nonisolated static let accessibilityMessagingTimeout: Float = 0.5
+
+    private nonisolated static func readFocusedWindow(processID: pid_t) -> FocusedWindowRead {
+        let application = AXUIElementCreateApplication(processID)
+        AXUIElementSetMessagingTimeout(application, accessibilityMessagingTimeout)
+        var focusedValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &focusedValue) == .success,
+              let focusedValue,
+              CFGetTypeID(focusedValue) == AXUIElementGetTypeID() else { return .unavailable }
+        let focusedWindow = focusedValue as! AXUIElement
+        AXUIElementSetMessagingTimeout(focusedWindow, accessibilityMessagingTimeout)
+        return .window(windowSignature(for: focusedWindow))
+    }
+
+    private nonisolated static func windowSignature(for element: AXUIElement) -> WindowMatchCandidate? {
         var titleValue: CFTypeRef?
         var positionValue: CFTypeRef?
         var sizeValue: CFTypeRef?

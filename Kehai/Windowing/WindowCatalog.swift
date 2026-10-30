@@ -28,11 +28,19 @@ final class WindowCatalog {
     func snapshot(lastSeen: [CGWindowID: Date]) async throws -> WindowCatalogSnapshot {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
         let ownPID = ProcessInfo.processInfo.processIdentifier
+        // NSRunningApplication lookups go through LaunchServices; an app with many
+        // windows (Xcode, Safari) only needs one per snapshot.
+        var switchableByProcessID: [pid_t: Bool] = [:]
         let candidates = content.windows.filter { window in
-            guard let app = window.owningApplication,
-                  let runningApplication = NSRunningApplication(processIdentifier: app.processID),
-                  !runningApplication.isTerminated,
-                  Self.isUserSwitchableApplication(runningApplication) else { return false }
+            guard let app = window.owningApplication else { return false }
+            let isSwitchable = switchableByProcessID[app.processID] ?? {
+                let result = NSRunningApplication(processIdentifier: app.processID).map {
+                    !$0.isTerminated && Self.isUserSwitchableApplication($0)
+                } ?? false
+                switchableByProcessID[app.processID] = result
+                return result
+            }()
+            guard isSwitchable else { return false }
             return app.processID != ownPID
                 && !excludedApps.contains(bundleIdentifier: app.bundleIdentifier)
                 && window.windowLayer == 0

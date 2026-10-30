@@ -3,7 +3,7 @@ import ApplicationServices
 
 @MainActor
 final class DockBadgeMonitor {
-    struct Snapshot: Equatable {
+    struct Snapshot: Equatable, Sendable {
         var byBundleIdentifier: [String: String] = [:]
         var byAppName: [String: String] = [:]
     }
@@ -16,16 +16,18 @@ final class DockBadgeMonitor {
     func setActive(_ active: Bool) {
         if active {
             guard task == nil else { return }
-            refresh()
             task = Task { [weak self] in
                 while !Task.isCancelled {
+                    // Walking the Dock's Accessibility tree is dozens of synchronous IPC
+                    // round-trips; on the main actor they held up the hot zone and the UI.
+                    let snapshot = await Task.detached(priority: .utility) { Self.readSnapshot() }.value
+                    guard let self, !Task.isCancelled else { return }
+                    self.apply(snapshot)
                     do {
                         try await Task.sleep(for: .seconds(1))
                     } catch {
                         return
                     }
-                    guard let self else { return }
-                    self.refresh()
                 }
             }
         } else {
@@ -34,14 +36,13 @@ final class DockBadgeMonitor {
         }
     }
 
-    private func refresh() {
-        let snapshot = Self.readSnapshot()
+    private func apply(_ snapshot: Snapshot) {
         guard snapshot != lastSnapshot else { return }
         lastSnapshot = snapshot
         changed?(snapshot)
     }
 
-    private static func readSnapshot() -> Snapshot {
+    private nonisolated static func readSnapshot() -> Snapshot {
         guard AXIsProcessTrusted(),
               let dock = NSRunningApplication.runningApplications(
                 withBundleIdentifier: "com.apple.dock"
@@ -53,7 +54,7 @@ final class DockBadgeMonitor {
         return snapshot
     }
 
-    private static func collectBadges(
+    private nonisolated static func collectBadges(
         from element: AXUIElement,
         depth: Int,
         snapshot: inout Snapshot
@@ -84,7 +85,7 @@ final class DockBadgeMonitor {
         }
     }
 
-    private static func stringAttribute(_ attribute: String, from element: AXUIElement) -> String? {
+    private nonisolated static func stringAttribute(_ attribute: String, from element: AXUIElement) -> String? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
             return nil
@@ -92,7 +93,7 @@ final class DockBadgeMonitor {
         return value as? String
     }
 
-    private static func urlAttribute(from element: AXUIElement) -> URL? {
+    private nonisolated static func urlAttribute(from element: AXUIElement) -> URL? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             element,

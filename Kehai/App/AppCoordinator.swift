@@ -121,7 +121,7 @@ final class AppCoordinator: NSObject, NSMenuItemValidation {
             Task { await self?.viewModel.refresh() }
         }
     )
-    private static let hotZonePollingInterval: TimeInterval = 0.1
+    private static let hotZonePollingInterval: TimeInterval = 0.05
     private static let hotZoneDwellDuration: TimeInterval = 0
     private static let hotZoneTolerance: CGFloat = 5
     private static let hotZoneEdgePadding: CGFloat = 24
