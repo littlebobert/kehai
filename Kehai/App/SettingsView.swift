@@ -21,6 +21,7 @@ struct SettingsView: View {
     let exclusionsChanged: () -> Void
     @State private var selectedProvider = AIProvider.current
     @AppStorage(OverviewViewModel.includesFilesKey) private var includesFiles = true
+    @AppStorage(ProtectedFolderSearchSettings.includesKey) private var includesProtectedFolders = false
 
     var body: some View {
         TabView {
@@ -138,6 +139,33 @@ struct SettingsView: View {
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Include Desktop, Documents and Downloads")
+                        Text("macOS asks for access to each folder when you turn this on. If you chose Don’t Allow, change it in Files & Folders settings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Open Files & Folders Settings") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders")!)
+                        }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                    }
+                    Spacer(minLength: 20)
+                    Toggle("", isOn: Binding(
+                        get: { includesProtectedFolders },
+                        set: { newValue in
+                            includesProtectedFolders = newValue
+                            ProtectedFolderSearchSettings.set(includes: newValue)
+                            if newValue {
+                                Task { await FileSearchService.requestProtectedFolderAccess() }
+                            }
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                .disabled(!includesFiles)
             }
         }
         .formStyle(.grouped)

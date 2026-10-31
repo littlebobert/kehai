@@ -48,12 +48,37 @@ struct FileSearchResult: Identifiable, Hashable, Sendable {
     func hash(into hasher: inout Hasher) { hasher.combine(path) }
 }
 
+/// Whether search covers Desktop, Documents, and Downloads, and whether the user has been
+/// asked. Off by default, because turning it on is what shows macOS's folder prompts.
+enum ProtectedFolderSearchSettings {
+    static let includesKey = "search.includesProtectedFolders"
+    static let offerHandledKey = "search.protectedFoldersOfferHandled"
+
+    static func includes(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: includesKey)
+    }
+
+    static func shouldOffer(defaults: UserDefaults = .standard) -> Bool {
+        !defaults.bool(forKey: includesKey) && !defaults.bool(forKey: offerHandledKey)
+    }
+
+    static func set(includes: Bool, defaults: UserDefaults = .standard) {
+        defaults.set(includes, forKey: includesKey)
+        defaults.set(true, forKey: offerHandledKey)
+    }
+
+    static func dismissOffer(defaults: UserDefaults = .standard) {
+        defaults.set(true, forKey: offerHandledKey)
+    }
+}
+
 /// Searches Spotlight's existing index for files by name, and by text for files the
 /// user has opened before. Uses the public Metadata query API; no Full Disk Access needed.
 ///
-/// Queries always use Spotlight's home scope. Naming Desktop, Documents, or Downloads as
-/// a scope makes macOS show its folder-access prompt; the home scope doesn't, and leaves
-/// out files in those folders until the user has granted Kehai access to them.
+/// Searches use Spotlight's home scope. Naming Desktop, Documents, or Downloads as a scope
+/// makes macOS show its folder-access prompt; the home scope doesn't, and leaves out files
+/// in those folders until the user has granted Kehai access to them. So those folders are
+/// opt-in: `requestProtectedFolderAccess` names them once, when the user asks for that.
 ///
 /// Queries are capped on the Spotlight side. Uncapped, a two-letter search over a
 /// developer's home folder can match 100,000+ files and take over 20 seconds.
@@ -68,15 +93,34 @@ struct FileSearchService: Sendable {
     private static let anyNameCap = 2000
     private static let openedContentCap = 60
 
-    func search(_ query: String) async -> [FileSearchResult] {
+    func search(_ query: String, includingProtectedFolders: Bool) async -> [FileSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= Self.minimumQueryLength else { return [] }
         return await Task.detached(priority: .userInitiated) {
-            Self.runSearch(trimmed)
+            Self.runSearch(trimmed, includingProtectedFolders: includingProtectedFolders)
         }.value
     }
 
-    private nonisolated static func runSearch(_ query: String) -> [FileSearchResult] {
+    /// Shows macOS's prompt for each protected folder that hasn't been answered yet.
+    /// Returns once the user has answered them all. macOS never asks again after an
+    /// answer; changing one afterwards happens in System Settings.
+    static func requestProtectedFolderAccess() async {
+        await Task.detached(priority: .userInitiated) {
+            let home = FileManager.default.homeDirectoryForCurrentUser
+            let scopes = FileSearchRanking.protectedFolders.map { home.appending(path: $0).path }
+            guard let query = MDQueryCreate(
+                kCFAllocatorDefault,
+                "(kMDItemFSName == \"kehai-folder-access-request\")" as CFString,
+                nil,
+                nil
+            ) else { return }
+            MDQuerySetSearchScope(query, scopes as CFArray, 0)
+            MDQuerySetMaxCount(query, 1)
+            MDQueryExecute(query, CFOptionFlags(kMDQuerySynchronous.rawValue))
+        }.value
+    }
+
+    private nonisolated static func runSearch(_ query: String, includingProtectedFolders: Bool) -> [FileSearchResult] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return [] }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -106,6 +150,9 @@ struct FileSearchService: Sendable {
         var candidates: [String: FileSearchResult] = [:]
         for result in batches.withLock({ $0 }).joined()
         where candidates[result.path] == nil && !FileSearchRanking.isNoise(result, homePath: home) {
+            // Access can't be revoked from here, so a user who turns these folders off
+            // after granting access is still honored by dropping their results.
+            if !includingProtectedFolders, FileSearchRanking.isInProtectedFolder(result.path, homePath: home) { continue }
             candidates[result.path] = result
         }
         let ranked = FileSearchRanking.rank(Array(candidates.values), query: query, limit: resultLimit)
@@ -191,6 +238,11 @@ enum FileSearchRanking {
     ]
 
     private static let iCloudDriveRelativePath = "Library/Mobile Documents/com~apple~CloudDocs/"
+    static let protectedFolders = ["Desktop", "Documents", "Downloads"]
+
+    static func isInProtectedFolder(_ path: String, homePath: String) -> Bool {
+        protectedFolders.contains { path.hasPrefix("\(homePath)/\($0)/") }
+    }
 
     /// Apps belong to the Apps section. Hidden paths and app bundle contents are never
     /// useful. ~/Library holds caches and app containers, apart from iCloud Drive. Build

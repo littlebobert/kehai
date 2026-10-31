@@ -188,6 +188,7 @@ final class OverviewViewModel {
     @ObservationIgnored var onFileSectionVisibilityChanged: ((Bool) -> Void)?
     @ObservationIgnored private var fileSearchTask: Task<Void, Never>?
     @ObservationIgnored private var lastFileSectionVisibility = false
+    private var protectedFolderOfferRevision = 0
     private let fileSearch = FileSearchService()
     static let includesFilesKey = "search.includesFiles"
     var isSmartSearching = false
@@ -506,6 +507,30 @@ final class OverviewViewModel {
         showsFileSection ? fileResults : []
     }
 
+    /// Asks in the Files section instead of an alert, so searching is never interrupted.
+    var showsProtectedFolderOffer: Bool {
+        _ = protectedFolderOfferRevision
+        return showsFileSection && ProtectedFolderSearchSettings.shouldOffer()
+    }
+
+    func includeProtectedFolders() {
+        ProtectedFolderSearchSettings.set(includes: true)
+        protectedFolderOfferRevision += 1
+        SafeDiagnosticLog.shared.record("file-search: protected folders included from offer")
+        // Results for already-granted folders show now, and the rest once the prompts are answered.
+        scheduleFileSearch()
+        Task { [weak self] in
+            await FileSearchService.requestProtectedFolderAccess()
+            self?.scheduleFileSearch()
+        }
+    }
+
+    func declineProtectedFolders() {
+        ProtectedFolderSearchSettings.dismissOffer()
+        protectedFolderOfferRevision += 1
+        SafeDiagnosticLog.shared.record("file-search: protected folders declined from offer")
+    }
+
     /// Waits briefly for typing to pause, then asks Spotlight. Results for an outdated
     /// query are dropped; the previous results stay visible until new ones land.
     private func scheduleFileSearch() {
@@ -527,7 +552,10 @@ final class OverviewViewModel {
             try? await Task.sleep(for: Self.fileSearchDebounce)
             guard !Task.isCancelled else { return }
             let started = Date()
-            let results = await fileSearch.search(searchedQuery)
+            let results = await fileSearch.search(
+                searchedQuery,
+                includingProtectedFolders: ProtectedFolderSearchSettings.includes()
+            )
             guard let self, !Task.isCancelled,
                   self.query.trimmingCharacters(in: .whitespacesAndNewlines) == searchedQuery else { return }
             SafeDiagnosticLog.shared.record(

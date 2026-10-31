@@ -138,6 +138,36 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(merged.map(\.id), [safariWindow.id, finderOld.id, notes.id])
     }
 
+    func testProtectedFolderPathsMatchOnlyTopLevelHomeFolders() {
+        let home = "/Users/test"
+        XCTAssertTrue(FileSearchRanking.isInProtectedFolder("/Users/test/Desktop/a.txt", homePath: home))
+        XCTAssertTrue(FileSearchRanking.isInProtectedFolder("/Users/test/Documents/Taxes/a.pdf", homePath: home))
+        XCTAssertTrue(FileSearchRanking.isInProtectedFolder("/Users/test/Downloads/a.zip", homePath: home))
+        XCTAssertFalse(FileSearchRanking.isInProtectedFolder("/Users/test/Downloads 2/a.zip", homePath: home))
+        XCTAssertFalse(FileSearchRanking.isInProtectedFolder("/Users/test/dev/Documents/a.md", homePath: home))
+        XCTAssertFalse(FileSearchRanking.isInProtectedFolder("/Users/test/Library/Mobile Documents/com~apple~CloudDocs/Downloads/a.zip", homePath: home))
+    }
+
+    func testProtectedFolderOfferShowsUntilAnswered() {
+        let suiteName = "kehai.tests.protected-folders.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertTrue(ProtectedFolderSearchSettings.shouldOffer(defaults: defaults))
+        XCTAssertFalse(ProtectedFolderSearchSettings.includes(defaults: defaults))
+
+        ProtectedFolderSearchSettings.dismissOffer(defaults: defaults)
+        XCTAssertFalse(ProtectedFolderSearchSettings.shouldOffer(defaults: defaults))
+        XCTAssertFalse(ProtectedFolderSearchSettings.includes(defaults: defaults))
+
+        ProtectedFolderSearchSettings.set(includes: true, defaults: defaults)
+        XCTAssertTrue(ProtectedFolderSearchSettings.includes(defaults: defaults))
+
+        // Turning it back off in Settings doesn't bring the offer back.
+        ProtectedFolderSearchSettings.set(includes: false, defaults: defaults)
+        XCTAssertFalse(ProtectedFolderSearchSettings.shouldOffer(defaults: defaults))
+    }
+
     func testFileSearchTreatsLibraryAsNoiseExceptICloudDrive() {
         func isNoise(_ path: String) -> Bool {
             let result = FileSearchResult(path: path, name: (path as NSString).lastPathComponent, contentType: "public.data", lastUsed: nil, modified: nil, matchedContentOnly: false, icon: nil)

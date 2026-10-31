@@ -179,3 +179,8 @@
 "Text match" = "本文が一致";
 "Include Files" = "ファイルを含める";
 "Finds files by name, and by text in files you’ve opened, using Spotlight’s index. Kehai never opens or reads the files it lists." = "Spotlightのインデックスを使って、ファイル名と、開いたことのあるファイルの本文からファイルを探します。Kehaiが一覧のファイルを開いたり読んだりすることはありません。";
+"Also search Desktop, Documents and Downloads?" = "デスクトップ、書類、ダウンロードも検索しますか？";
+"Include" = "含める";
+"Include Desktop, Documents and Downloads" = "デスクトップ、書類、ダウンロードを含める";
+"macOS asks for access to each folder when you turn this on. If you chose Don’t Allow, change it in Files & Folders settings." = "オンにすると、macOSがフォルダごとにアクセスの許可を求めます。「許可しない」を選んだ場合は、「ファイルとフォルダ」の設定で変更できます。";
+"Open Files & Folders Settings" = "「ファイルとフォルダ」の設定を開く";

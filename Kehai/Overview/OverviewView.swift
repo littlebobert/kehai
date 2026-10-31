@@ -531,6 +531,9 @@ struct OverviewView: View {
                             ProgressView().controlSize(.small)
                         }
                         Spacer()
+                        if model.showsProtectedFolderOffer {
+                            ProtectedFolderOffer(model: model, classicTheme: appearance.browserTheme == .classicMac)
+                        }
                     }
                     if files.isEmpty {
                         Text(model.isSearchingFiles ? "Searching files…" : "No matching files")
@@ -1244,6 +1247,10 @@ struct CompactSwitcherView: View {
                     compactSectionLabel("Files")
                     if model.isSearchingFiles, !files.isEmpty {
                         ProgressView().controlSize(.mini)
+                    }
+                    if model.showsProtectedFolderOffer {
+                        Spacer(minLength: 8)
+                        ProtectedFolderOffer(model: model, classicTheme: appearance.browserTheme == .classicMac)
                     }
                 }
                 if files.isEmpty {
@@ -2147,5 +2154,28 @@ private struct WindowCard: View {
         .onHover(perform: hoverChanged)
         .dragHoverCatcher(onEntered: dragEntered, onExited: dragExited, onDrop: dropped)
         .opacity(dusty ? 0.62 : 1)
+    }
+}
+
+/// One line in the Files header, so it fits the compact shelf's fixed height.
+private struct ProtectedFolderOffer: View {
+    let model: OverviewViewModel
+    let classicTheme: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Also search Desktop, Documents and Downloads?")
+                .font(.caption)
+                .foregroundStyle(classicTheme ? Color.black : Color.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+            Button("Include", action: model.includeProtectedFolders)
+                .controlSize(.small)
+            Button("Not Now", action: model.declineProtectedFolders)
+                .controlSize(.small)
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(classicTheme ? Color.black : Color.secondary)
+        }
     }
 }
