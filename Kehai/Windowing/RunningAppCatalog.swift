@@ -7,8 +7,13 @@ struct RunningAppInfo: Sendable {
     let localizedName: String?
     let launchDate: Date?
     nonisolated(unsafe) let icon: NSImage?
+    var bundleURL: URL?
 
     var appKey: String { bundleIdentifier ?? "pid:\(processID)" }
+
+    /// False for a LaunchServices record with no process (`processID` is -1) and no live
+    /// process to resolve it to. Such an app can only be reached through its bundle.
+    var hasProcess: Bool { processID > 0 }
 }
 
 /// Keeps the list of user-switchable running apps current in the background.
@@ -95,14 +100,42 @@ final class RunningAppCatalog {
                   application.processIdentifier != ownProcessID,
                   SwitchableApplicationCache.shared.isUserSwitchable(application)
             else { return nil }
+            let processID = application.processIdentifier > 0
+                ? application.processIdentifier
+                : liveProcessID(for: application) ?? application.processIdentifier
+            guard processID != ownProcessID else { return nil }
             return RunningAppInfo(
-                processID: application.processIdentifier,
+                processID: processID,
                 bundleIdentifier: application.bundleIdentifier,
                 localizedName: application.localizedName,
                 launchDate: application.launchDate,
-                icon: application.icon
+                icon: application.icon,
+                bundleURL: application.bundleURL
             )
         }
+    }
+
+    /// LaunchServices can list a running app under a record with no process (PID -1)
+    /// while the real process is alive. Finds that PID by executable path, so the app
+    /// behaves like any other running app. The PID has to come from the scan: looking it
+    /// up returns the same record, whose `processIdentifier` is still -1.
+    private nonisolated static func liveProcessID(for record: NSRunningApplication) -> pid_t? {
+        guard let executablePath = record.executableURL?.standardizedFileURL.path else { return nil }
+        var processIDs = [pid_t](repeating: 0, count: 8192)
+        let count = proc_listallpids(&processIDs, Int32(MemoryLayout<pid_t>.size * processIDs.count))
+        guard count > 0 else { return nil }
+        var pathBuffer = [CChar](repeating: 0, count: 4096)
+        for processID in processIDs.prefix(Int(count)) where processID > 0 {
+            guard proc_pidpath(processID, &pathBuffer, UInt32(pathBuffer.count)) > 0,
+                  String(cString: pathBuffer) == executablePath,
+                  let application = NSRunningApplication(processIdentifier: processID),
+                  !application.isTerminated,
+                  application.activationPolicy == .regular,
+                  application.bundleIdentifier == record.bundleIdentifier
+            else { continue }
+            return processID
+        }
+        return nil
     }
 }
 
@@ -116,6 +149,8 @@ final class SwitchableApplicationCache: @unchecked Sendable {
 
     func isUserSwitchable(_ application: NSRunningApplication) -> Bool {
         let processID = application.processIdentifier
+        // Every process-less record shares PID -1, so it can't key the memo.
+        guard processID > 0 else { return Self.computeIsUserSwitchable(application) }
         lock.lock()
         let cached = resultsByProcessID[processID]
         lock.unlock()

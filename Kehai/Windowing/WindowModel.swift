@@ -43,8 +43,8 @@ struct WindowItem: Identifiable, Hashable, Sendable {
         id >= Self.appPlaceholderIDBase
     }
 
-    /// True when this item represents an installed app that is not running. Opening it
-    /// launches the app; there is no process to activate or window to raise.
+    /// True when this item represents an installed app with no process to activate or
+    /// window to raise. Opening it goes through the app's bundle.
     var isLaunchableApp: Bool {
         id >= Self.launchableAppIDBase && id < Self.safariTabIDBase
     }
@@ -112,6 +112,25 @@ struct WindowItem: Identifiable, Hashable, Sendable {
             lastSeen: lastSeen ?? application.launchDate,
             appIcon: application.icon
         )
+    }
+
+    /// The strip entry for a running app with no window in the inventory. A record with
+    /// no live process can't be activated by PID, so it opens through its bundle like a
+    /// launchable app. Nil when it has no bundle to open either.
+    static func windowlessApp(for application: RunningAppInfo, lastSeen: Date?) -> WindowItem? {
+        if application.hasProcess {
+            return appPlaceholder(for: application, lastSeen: lastSeen)
+        }
+        guard let bundleIdentifier = application.bundleIdentifier,
+              let bundleURL = application.bundleURL else { return nil }
+        let name = application.localizedName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let installed = InstalledAppInfo(
+            bundleIdentifier: bundleIdentifier,
+            localizedName: (name?.isEmpty == false) ? name! : "App",
+            url: bundleURL,
+            icon: application.icon
+        )
+        return launchableApp(for: installed, lastSeen: lastSeen ?? application.launchDate)
     }
 
     /// Launchable apps rank after running apps whose name matches, but before apps that
@@ -193,6 +212,23 @@ struct SafariTab: Identifiable, Codable, Hashable, Sendable {
 }
 
 extension WindowItem {
+    /// The switcher's app list after a change: keeps the order the user is looking at,
+    /// drops apps that are gone, and appends new ones. An entry standing in for an app
+    /// with no window gives way to what the app is now, so "Open Safari" can't outlive
+    /// the moment Safari's window or process shows up.
+    static func mergedSwitcherApps(snapshot: [WindowItem], live: [WindowItem]) -> [WindowItem] {
+        func key(_ item: WindowItem) -> String { item.bundleIdentifier ?? "pid:\(item.processID)" }
+        let liveByKey = Dictionary(live.map { (key($0), $0) }, uniquingKeysWith: { first, _ in first })
+        var knownKeys = Set<String>()
+        var merged = snapshot.compactMap { item -> WindowItem? in
+            guard let liveItem = liveByKey[key(item)] else { return nil }
+            knownKeys.insert(key(item))
+            return item.isAppPlaceholder || item.isLaunchableApp ? liveItem : item
+        }
+        merged.append(contentsOf: live.filter { knownKeys.insert(key($0)).inserted })
+        return merged
+    }
+
     /// One window per app, preserving input order. Safari expands into every tab,
     /// so prefer the visible tab as the app-strip representative instead of tab 1.
     static func uniquedAppRepresentatives(from windows: [WindowItem]) -> [WindowItem] {

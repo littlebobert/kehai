@@ -93,6 +93,51 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(ordered.map(\.id), [runningNameMatch.id, launchable.id, runningTitleMatch.id])
     }
 
+    func testWindowlessAppWithProcessIsPlaceholder() {
+        let running = RunningAppInfo(processID: 42, bundleIdentifier: "com.apple.Safari", localizedName: "Safari", launchDate: nil, icon: nil, bundleURL: URL(fileURLWithPath: "/Applications/Safari.app"))
+        let item = WindowItem.windowlessApp(for: running, lastSeen: nil)
+
+        XCTAssertEqual(item?.processID, 42)
+        XCTAssertEqual(item?.isAppPlaceholder, true)
+        XCTAssertEqual(item?.isLaunchableApp, false)
+    }
+
+    func testWindowlessAppWithoutProcessOpensThroughItsBundle() {
+        let bundleURL = URL(fileURLWithPath: "/Applications/Safari.app")
+        let phantom = RunningAppInfo(processID: -1, bundleIdentifier: "com.apple.Safari", localizedName: "Safari", launchDate: nil, icon: nil, bundleURL: bundleURL)
+        let item = WindowItem.windowlessApp(for: phantom, lastSeen: nil)
+
+        XCTAssertEqual(item?.isLaunchableApp, true)
+        XCTAssertEqual(item?.isAppPlaceholder, false)
+        XCTAssertEqual(item?.applicationURL, bundleURL)
+        XCTAssertEqual(item?.appName, "Safari")
+    }
+
+    func testWindowlessAppWithoutProcessOrBundleIsDropped() {
+        let noURL = RunningAppInfo(processID: -1, bundleIdentifier: "com.apple.Safari", localizedName: "Safari", launchDate: nil, icon: nil, bundleURL: nil)
+        let noBundleIdentifier = RunningAppInfo(processID: -1, bundleIdentifier: nil, localizedName: "Safari", launchDate: nil, icon: nil, bundleURL: URL(fileURLWithPath: "/Applications/Safari.app"))
+
+        XCTAssertNil(WindowItem.windowlessApp(for: noURL, lastSeen: nil))
+        XCTAssertNil(WindowItem.windowlessApp(for: noBundleIdentifier, lastSeen: nil))
+    }
+
+    func testSwitcherMergeReplacesStandInsAndKeepsOrder() {
+        let launchable = WindowItem.launchableApp(for: InstalledAppInfo(bundleIdentifier: "com.apple.Safari", localizedName: "Safari", url: URL(fileURLWithPath: "/Applications/Safari.app"), icon: nil), lastSeen: nil)
+        let finderOld = WindowItem(id: 1, processID: 1, appName: "Finder", bundleIdentifier: "com.apple.finder", title: "Old", frame: .zero, isOnScreen: true, lastSeen: nil)
+        let finderNew = WindowItem(id: 2, processID: 1, appName: "Finder", bundleIdentifier: "com.apple.finder", title: "New", frame: .zero, isOnScreen: true, lastSeen: nil)
+        let gone = WindowItem(id: 3, processID: 3, appName: "Gone", bundleIdentifier: "com.example.gone", title: "Gone", frame: .zero, isOnScreen: true, lastSeen: nil)
+        let safariWindow = WindowItem(id: 4, processID: 4, appName: "Safari", bundleIdentifier: "com.apple.Safari", title: "Start Page", frame: .zero, isOnScreen: true, lastSeen: nil)
+        let notes = WindowItem(id: 5, processID: 5, appName: "Notes", bundleIdentifier: "com.apple.Notes", title: "Notes", frame: .zero, isOnScreen: true, lastSeen: nil)
+
+        let merged = WindowItem.mergedSwitcherApps(
+            snapshot: [launchable, finderOld, gone],
+            live: [notes, finderNew, safariWindow]
+        )
+
+        // The stand-in becomes the real window; a real window entry stays put.
+        XCTAssertEqual(merged.map(\.id), [safariWindow.id, finderOld.id, notes.id])
+    }
+
     func testAlternateAppNamesMatchAsAppNames() {
         let installed = InstalledAppInfo(
             bundleIdentifier: "com.openai.codex",

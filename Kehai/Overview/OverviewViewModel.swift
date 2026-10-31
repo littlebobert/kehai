@@ -391,13 +391,7 @@ final class OverviewViewModel {
 
     private func syncSwitcherAppSnapshot() {
         guard let switcherAppWindows else { return }
-        let liveApps = currentRecentAppWindows
-        let liveKeys = Set(liveApps.map(appKey(for:)))
-        var knownKeys = Set<String>()
-        var updated = switcherAppWindows.filter { liveKeys.contains(appKey(for: $0)) }
-        for app in updated { knownKeys.insert(appKey(for: app)) }
-        let newApps = liveApps.filter { knownKeys.insert(appKey(for: $0)).inserted }
-        updated.append(contentsOf: newApps)
+        let updated = WindowItem.mergedSwitcherApps(snapshot: switcherAppWindows, live: currentRecentAppWindows)
         guard updated.map(\.id) != switcherAppWindows.map(\.id) else { return }
         self.switcherAppWindows = updated
     }
@@ -452,10 +446,10 @@ final class OverviewViewModel {
             // focus history before launch date, which can be days old.
             let activationDate = activityMonitor.activationDate(for: application.processID)
             let storedDate = application.localizedName.flatMap { storedAppLastSeen[$0] }
-            var item = WindowItem.appPlaceholder(
+            guard var item = WindowItem.windowlessApp(
                 for: application,
                 lastSeen: [activationDate, storedDate].compactMap { $0 }.max() ?? application.launchDate
-            )
+            ) else { return nil }
             item.alternateAppNames = application.bundleIdentifier
                 .flatMap { installedApps.alternateNamesByBundleIdentifier[$0] } ?? []
 
