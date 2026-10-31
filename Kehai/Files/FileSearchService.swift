@@ -4,8 +4,7 @@ import os
 import UniformTypeIdentifiers
 
 /// A file or folder from Spotlight's index. Built only from index metadata: Kehai never
-/// opens, reads, or thumbnails the file itself, because touching files in Desktop,
-/// Documents, or Downloads can trigger macOS's folder-access prompt.
+/// opens, reads, or thumbnails the file itself.
 struct FileSearchResult: Identifiable, Hashable, Sendable {
     var id: String { path }
     let path: String
@@ -52,6 +51,10 @@ struct FileSearchResult: Identifiable, Hashable, Sendable {
 /// Searches Spotlight's existing index for files by name, and by text for files the
 /// user has opened before. Uses the public Metadata query API; no Full Disk Access needed.
 ///
+/// Queries always use Spotlight's home scope. Naming Desktop, Documents, or Downloads as
+/// a scope makes macOS show its folder-access prompt; the home scope doesn't, and leaves
+/// out files in those folders until the user has granted Kehai access to them.
+///
 /// Queries are capped on the Spotlight side. Uncapped, a two-letter search over a
 /// developer's home folder can match 100,000+ files and take over 20 seconds.
 struct FileSearchService: Sendable {
@@ -60,7 +63,9 @@ struct FileSearchService: Sendable {
     static let resultLimit = 20
 
     private static let openedNameCap = 100
-    private static let anyNameCap = 400
+    /// Larger than the results shown because ~/Library matches count toward it until
+    /// `FileSearchRanking.isNoise` removes them; they can be 90% of a short query's matches.
+    private static let anyNameCap = 2000
     private static let openedContentCap = 60
 
     func search(_ query: String) async -> [FileSearchResult] {
@@ -74,8 +79,6 @@ struct FileSearchService: Sendable {
     private nonisolated static func runSearch(_ query: String) -> [FileSearchResult] {
         let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return [] }
-        let scopes = searchScopes()
-        guard !scopes.isEmpty else { return [] }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
 
         let nameMatch = matchExpression(attribute: "kMDItemDisplayName", words: words)
@@ -96,7 +99,7 @@ struct FileSearchService: Sendable {
         let batches = OSAllocatedUnfairLock(initialState: Array(repeating: [FileSearchResult](), count: queries.count))
         DispatchQueue.concurrentPerform(iterations: queries.count) { index in
             let spec = queries[index]
-            let batch = execute(spec.text, scopes: scopes, cap: spec.cap, contentOnly: spec.contentOnly)
+            let batch = execute(spec.text, cap: spec.cap, contentOnly: spec.contentOnly)
             batches.withLock { $0[index] = batch }
         }
 
@@ -115,27 +118,6 @@ struct FileSearchService: Sendable {
             iconsByType[typeKey] = icon
             return result.withIcon(icon)
         }
-    }
-
-    /// Every top-level folder in the home folder except Library and Applications, plus
-    /// iCloud Drive. ~/Library holds caches and app containers that swamp name matches.
-    private nonisolated static func searchScopes() -> [String] {
-        let fileManager = FileManager.default
-        let home = fileManager.homeDirectoryForCurrentUser
-        let skipped: Set<String> = ["Library", "Applications"]
-        var scopes = ((try? fileManager.contentsOfDirectory(
-            at: home,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? [])
-        .filter { url in
-            !skipped.contains(url.lastPathComponent)
-                && (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-        }
-        .map(\.path)
-        let iCloudDrive = home.appending(path: "Library/Mobile Documents/com~apple~CloudDocs").path
-        if fileManager.fileExists(atPath: iCloudDrive) { scopes.append(iCloudDrive) }
-        return scopes
     }
 
     /// Every word must start a word in the attribute: "apt lea" matches "Apartment Lease.pdf".
@@ -164,7 +146,6 @@ struct FileSearchService: Sendable {
 
     private nonisolated static func execute(
         _ queryString: String,
-        scopes: [String],
         cap: Int,
         contentOnly: Bool
     ) -> [FileSearchResult] {
@@ -174,7 +155,7 @@ struct FileSearchService: Sendable {
             prefetchedAttributes as CFArray,
             nil
         ) else { return [] }
-        MDQuerySetSearchScope(query, scopes as CFArray, 0)
+        MDQuerySetSearchScope(query, [kMDQueryScopeHome] as CFArray, 0)
         MDQuerySetMaxCount(query, cap)
         guard MDQueryExecute(query, CFOptionFlags(kMDQuerySynchronous.rawValue)) else { return [] }
 
@@ -209,13 +190,21 @@ enum FileSearchRanking {
         "vendor", "__pycache__", "site-packages", "tmp", "xcuserdata"
     ]
 
+    private static let iCloudDriveRelativePath = "Library/Mobile Documents/com~apple~CloudDocs/"
+
     /// Apps belong to the Apps section. Hidden paths and app bundle contents are never
-    /// useful. Build and dependency folders are noise unless the user opened the file.
+    /// useful. ~/Library holds caches and app containers, apart from iCloud Drive. Build
+    /// and dependency folders are noise unless the user opened the file.
     static func isNoise(_ result: FileSearchResult, homePath: String) -> Bool {
         if result.contentType == UTType.applicationBundle.identifier { return true }
-        let relative = result.path.hasPrefix(homePath + "/")
+        let isInHome = result.path.hasPrefix(homePath + "/")
+        let relative = isInHome
             ? String(result.path.dropFirst(homePath.count + 1))
             : result.path
+        if isInHome {
+            if relative.hasPrefix("Applications/") { return true }
+            if relative.hasPrefix("Library/"), !relative.hasPrefix(iCloudDriveRelativePath) { return true }
+        }
         let components = relative.split(separator: "/")
         if components.contains(where: { $0.hasPrefix(".") }) { return true }
         if components.dropLast().contains(where: { $0.hasSuffix(".app") }) { return true }

@@ -138,6 +138,20 @@ final class KehaiTests: XCTestCase {
         XCTAssertEqual(merged.map(\.id), [safariWindow.id, finderOld.id, notes.id])
     }
 
+    func testFileSearchTreatsLibraryAsNoiseExceptICloudDrive() {
+        func isNoise(_ path: String) -> Bool {
+            let result = FileSearchResult(path: path, name: (path as NSString).lastPathComponent, contentType: "public.data", lastUsed: nil, modified: nil, matchedContentOnly: false, icon: nil)
+            return FileSearchRanking.isNoise(result, homePath: "/Users/test")
+        }
+
+        XCTAssertTrue(isNoise("/Users/test/Library/Caches/report.txt"))
+        XCTAssertTrue(isNoise("/Users/test/Library/Mobile Documents/com~apple~Numbers/report.numbers"))
+        XCTAssertTrue(isNoise("/Users/test/Applications/Tool/report.txt"))
+        XCTAssertFalse(isNoise("/Users/test/Library/Mobile Documents/com~apple~CloudDocs/report.txt"))
+        XCTAssertFalse(isNoise("/Users/test/Downloads/report.txt"))
+        XCTAssertFalse(isNoise("/Users/test/report.txt"))
+    }
+
     func testAlternateAppNamesMatchAsAppNames() {
         let installed = InstalledAppInfo(
             bundleIdentifier: "com.openai.codex",
