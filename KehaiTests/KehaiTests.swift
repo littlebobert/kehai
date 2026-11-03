@@ -84,8 +84,8 @@ final class KehaiTests: XCTestCase {
 
         XCTAssertTrue(launchable.isLaunchableApp)
         XCTAssertFalse(launchable.isAppPlaceholder)
-        XCTAssertEqual(launchable.searchRank(for: "xc"), WindowItem.launchableAppRankOffset)
-        XCTAssertEqual(launchable.searchRank(for: "code"), WindowItem.launchableAppRankOffset + 1)
+        XCTAssertEqual(launchable.searchRank(for: "xc"), 1)
+        XCTAssertEqual(launchable.searchRank(for: "code"), 3)
         XCTAssertNil(launchable.searchRank(for: "safari"))
 
         let runningNameMatch = WindowItem(id: 8, processID: 8, appName: "Xcode Cloud", bundleIdentifier: "com.example.xcodecloud", title: "Builds", frame: .zero, isOnScreen: true, lastSeen: nil)
@@ -182,6 +182,17 @@ final class KehaiTests: XCTestCase {
         XCTAssertFalse(isNoise("/Users/test/report.txt"))
     }
 
+    func testLaunchableAppNamePrefixOutranksRunningAppNameSubstring() {
+        let installed = InstalledAppInfo(bundleIdentifier: "com.apple.iCal", localizedName: "Calendar", url: URL(fileURLWithPath: "/System/Applications/Calendar.app"), icon: nil)
+        let calendar = WindowItem.launchableApp(for: installed, lastSeen: nil)
+        let tailscale = WindowItem(id: 9, processID: 9, appName: "Tailscale", bundleIdentifier: "io.tailscale.ipn.macsys", title: "", frame: .zero, isOnScreen: false, lastSeen: Date())
+
+        XCTAssertEqual(
+            WindowItem.orderedBySearchRelevance([tailscale, calendar], query: "cale").map(\.id),
+            [calendar.id, tailscale.id]
+        )
+    }
+
     func testAlternateAppNamesMatchAsAppNames() {
         let installed = InstalledAppInfo(
             bundleIdentifier: "com.openai.codex",
@@ -191,15 +202,15 @@ final class KehaiTests: XCTestCase {
             alternateNames: ["Codex"]
         )
         let launchable = WindowItem.launchableApp(for: installed, lastSeen: nil)
-        XCTAssertEqual(launchable.searchRank(for: "chat"), WindowItem.launchableAppRankOffset)
-        XCTAssertEqual(launchable.searchRank(for: "codex"), WindowItem.launchableAppRankOffset + 1)
+        XCTAssertEqual(launchable.searchRank(for: "chat"), 1)
+        XCTAssertEqual(launchable.searchRank(for: "codex"), 3)
         XCTAssertNil(launchable.searchRank(for: "claude"))
 
         var chatGPTWindow = WindowItem(id: 1, processID: 1, appName: "ChatGPT", bundleIdentifier: "com.openai.codex", title: "New chat", frame: .zero, isOnScreen: true, lastSeen: nil)
         let titleMatch = WindowItem(id: 2, processID: 2, appName: "Terminal", bundleIdentifier: nil, title: "codex --resume", frame: .zero, isOnScreen: true, lastSeen: Date())
         XCTAssertNil(chatGPTWindow.searchRank(for: "codex"))
         chatGPTWindow.alternateAppNames = installed.alternateNames
-        XCTAssertEqual(chatGPTWindow.searchRank(for: "codex"), 1)
+        XCTAssertEqual(chatGPTWindow.searchRank(for: "codex"), 2)
         XCTAssertEqual(
             WindowItem.orderedBySearchRelevance([titleMatch, chatGPTWindow], query: "codex").map(\.id),
             [chatGPTWindow.id, titleMatch.id]

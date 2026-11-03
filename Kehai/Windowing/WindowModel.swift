@@ -133,24 +133,27 @@ struct WindowItem: Identifiable, Hashable, Sendable {
         return launchableApp(for: installed, lastSeen: lastSeen ?? application.launchDate)
     }
 
-    /// Launchable apps rank after running apps whose name matches, but before apps that
-    /// only match through a window title: typing "slack" should offer Slack ahead of a
-    /// ChatGPT window that mentions a Slack thread.
-    static let launchableAppRankOffset = 2
+    /// How the app's name matches, ahead of any title match. A name that starts with the
+    /// query beats one that only contains it, running or not: "cale" offers Calendar ahead
+    /// of a running Tailscale. Within each, running apps rank before launchable ones, and
+    /// launchable apps still rank before apps that only match through a window title:
+    /// typing "slack" offers Slack ahead of a ChatGPT window that mentions a Slack thread.
+    private func appNameSearchRank(for query: String) -> Int? {
+        let nameRank: Int
+        if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil {
+            nameRank = 0
+        } else if appName.localizedCaseInsensitiveContains(query) || matchesAlternateAppName(query) {
+            nameRank = 1
+        } else {
+            return nil
+        }
+        return nameRank * 2 + (isLaunchableApp ? 1 : 0)
+    }
 
     func searchRank(for query: String) -> Int? {
         guard !query.isEmpty else { return 0 }
-        guard !isLaunchableApp else {
-            if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil {
-                return Self.launchableAppRankOffset
-            }
-            if appName.localizedCaseInsensitiveContains(query) || matchesAlternateAppName(query) {
-                return Self.launchableAppRankOffset + 1
-            }
-            return nil
-        }
-        if appName.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 0 }
-        if appName.localizedCaseInsensitiveContains(query) || matchesAlternateAppName(query) { return 1 }
+        if let nameRank = appNameSearchRank(for: query) { return nameRank }
+        guard !isLaunchableApp else { return nil }
         if title.range(of: query, options: [.anchored, .caseInsensitive, .diacriticInsensitive]) != nil { return 4 }
         if title.localizedCaseInsensitiveContains(query) { return 5 }
         if safariTab?.url.localizedCaseInsensitiveContains(query) == true { return 6 }
