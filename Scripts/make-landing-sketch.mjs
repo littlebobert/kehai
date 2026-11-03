@@ -216,21 +216,21 @@ push({});
 let order = [];
 for (const k of [0, 1, 2, 3, 4]) {
   order = [...order, k];
-  for (let f = 0; f < 3; f++) push({ shown: k + 1, order, front: k, pop: f === 0 ? k : -1 });
+  for (let f = 0; f < 2; f++) push({ shown: k + 1, order, front: k, pop: f === 0 ? k : -1 });
 }
 for (const k of [1, 3, 0]) {
   order = [...order.filter((n) => n !== k), k];
-  for (let f = 0; f < 7; f++) push({ shown: 5, order, front: k });
+  for (let f = 0; f < 4; f++) push({ shown: 5, order, front: k });
 }
-for (let i = 1; i <= 14; i++) {
-  const t = i / 14;
+for (let i = 1; i <= 10; i++) {
+  const t = i / 10;
   push({ shown: 5, order, front: 0, move: t, details: 1 - part(t, 0, 0.55) });
 }
-for (let i = 1; i <= 18; i++) {
-  push({ shown: 5, order, front: 0, move: 1, details: 0, light: 1 - part(i, 8, 14), outline: 1 - part(i, 2, 18), ink: strokes.map((_, s) => part(i, s * 2, s * 2 + 3)) });
+for (let i = 1; i <= 15; i++) {
+  push({ shown: 5, order, front: 0, move: 1, details: 0, light: 1 - part(i, 6, 11), outline: 1 - part(i, 2, 15), ink: strokes.map((_, s) => part(i, s * 1.6, s * 1.6 + 3)) });
 }
 const done = { shown: 0, order, front: 0, move: 1, details: 0, light: 0, outline: 0, ink: strokes.map(() => 1) };
-for (let i = 0; i < 28; i++) push(done);
+for (let i = 0; i < 24; i++) push(done);
 for (const fade of [0.7, 0.4, 0.15]) push({ ...done, fade });
 
 const defs = `<filter id="pencil" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
