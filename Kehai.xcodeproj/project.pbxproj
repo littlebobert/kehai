@@ -11,9 +11,12 @@
 		0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B6D04E4995D3D1D88E95201 /* ActivityMonitor.swift */; };
 		0F93E1FED95C0C1B57ACE315 /* TaskGroupingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20DF904A7221F9043B1CB6BE /* TaskGroupingService.swift */; };
 		10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */; };
+		1BB5F742CFCDB7180899F815 /* kehai-icon-sketch.mp4 in Resources */ = {isa = PBXBuildFile; fileRef = 64028101BE7B93D2628720EC /* kehai-icon-sketch.mp4 */; };
 		1EE53AAFD3831D747BA4B7E6 /* RunningAppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 510CF938B3EBB8E6AF8A7827 /* RunningAppCatalog.swift */; };
 		231B3F5EB67B273FEFE90D45 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */; };
+		28FDEB41A5CBBE5BC8381662 /* kehai-icon-sketch.jpg in Resources */ = {isa = PBXBuildFile; fileRef = AF8E16F6EB41BD901EA17574 /* kehai-icon-sketch.jpg */; };
 		29693A41EE5FBBD0EA519091 /* ExcludedAppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3758627FAA44C50D06C3802A /* ExcludedAppStore.swift */; };
+		2A27F597B8843027DDC159C3 /* AnimatedAppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18047FABFA73548C8A3831B /* AnimatedAppIcon.swift */; };
 		3426FF3F3C0E976E3EEC3113 /* AppContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 636BE7D907FA953CF30AFD6A /* AppContextMenu.swift */; };
 		3640ADB8CDEBD61BDD4779E1 /* APIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D43D6AE8A3D759A25E18A3 /* APIKeyStore.swift */; };
 		377CEEA4EB2D2CAA27937E5B /* HiddenWindowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */; };
@@ -103,6 +106,7 @@
 		5F9FF6A6CD286F95C24745AE /* WindowActivator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowActivator.swift; sourceTree = "<group>"; };
 		621EE2F9EC9738189063682A /* KehaiApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KehaiApp.swift; sourceTree = "<group>"; };
 		636BE7D907FA953CF30AFD6A /* AppContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContextMenu.swift; sourceTree = "<group>"; };
+		64028101BE7B93D2628720EC /* kehai-icon-sketch.mp4 */ = {isa = PBXFileReference; path = "kehai-icon-sketch.mp4"; sourceTree = "<group>"; };
 		6EEF963F2217DDBE06F29587 /* ActivityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityStore.swift; sourceTree = "<group>"; };
 		70EFEF0B56A45347356BE54D /* Localizable.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = Localizable.strings; path = ja.lproj/Localizable.strings; sourceTree = "<group>"; };
 		7C7A9F684F183045909AD322 /* WindowInventoryMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInventoryMonitor.swift; sourceTree = "<group>"; };
@@ -113,8 +117,10 @@
 		8FF4AF6A4861A2EC5B9A291D /* HiddenWindowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HiddenWindowStore.swift; sourceTree = "<group>"; };
 		9AE08E0A0B53B213288F3E96 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		A052F2C3738D3029828695D5 /* Localization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localization.swift; sourceTree = "<group>"; };
+		A18047FABFA73548C8A3831B /* AnimatedAppIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedAppIcon.swift; sourceTree = "<group>"; };
 		A6293BE8EA7A3D2863C70B4F /* WindowInventoryPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowInventoryPolicy.swift; sourceTree = "<group>"; };
 		A6DAC0EE6A5FD1F1C9B90543 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionManager.swift; sourceTree = "<group>"; };
+		AF8E16F6EB41BD901EA17574 /* kehai-icon-sketch.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "kehai-icon-sketch.jpg"; sourceTree = "<group>"; };
 		C2F443FAB9945628682B0572 /* Kehai.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kehai.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D57C5BE757B41B4FD3795131 /* PermissionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionView.swift; sourceTree = "<group>"; };
 		D6F9FB77E8ABEFD857A50ACE /* SafariTabService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariTabService.swift; sourceTree = "<group>"; };
@@ -259,6 +265,7 @@
 			isa = PBXGroup;
 			children = (
 				FFA6FB20A8E95482B1F949FF /* AboutWindowController.swift */,
+				A18047FABFA73548C8A3831B /* AnimatedAppIcon.swift */,
 				3F57F54502835DAA3AEAC189 /* AppCoordinator.swift */,
 				0B555A1137CC688518C03637 /* AppDelegate.swift */,
 				FDD56318C0B786481A7DDEFB /* AppearanceSettings.swift */,
@@ -287,6 +294,8 @@
 				FC0B9EAC45E33E16A541EBC0 /* AppIconSource.png */,
 				E64C863413D1E203C541734B /* Assets.xcassets */,
 				05B4814C0CDF87EB11EBCC22 /* InfoPlist.strings */,
+				AF8E16F6EB41BD901EA17574 /* kehai-icon-sketch.jpg */,
+				64028101BE7B93D2628720EC /* kehai-icon-sketch.mp4 */,
 				70EFEF0B56A45347356BE54D /* Localizable.strings */,
 			);
 			path = Resources;
@@ -385,6 +394,8 @@
 				6E02950372DAC93791E70EDC /* Assets.xcassets in Resources */,
 				5DA9D8116AC2635EC23782E6 /* InfoPlist.strings in Resources */,
 				5C5D13DABD3074C2A0993400 /* Localizable.strings in Resources */,
+				28FDEB41A5CBBE5BC8381662 /* kehai-icon-sketch.jpg in Resources */,
+				1BB5F742CFCDB7180899F815 /* kehai-icon-sketch.mp4 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -400,6 +411,7 @@
 				10307E86CBF0CD686A7F2373 /* AboutWindowController.swift in Sources */,
 				0732A95E01A24D1FD8A7A25D /* ActivityMonitor.swift in Sources */,
 				ADBB87BA36505F42E5559938 /* ActivityStore.swift in Sources */,
+				2A27F597B8843027DDC159C3 /* AnimatedAppIcon.swift in Sources */,
 				3426FF3F3C0E976E3EEC3113 /* AppContextMenu.swift in Sources */,
 				BD5E91E283C7D680D1C65FF2 /* AppCoordinator.swift in Sources */,
 				F18C6F75DE94FF5E1CDFDEE1 /* AppDelegate.swift in Sources */,

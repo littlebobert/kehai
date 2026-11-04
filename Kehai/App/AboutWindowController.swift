@@ -12,12 +12,9 @@ struct AboutView: View {
 
     var body: some View {
         VStack(spacing: 7) {
-            if let icon = NSApp.applicationIconImage {
-                Image(nsImage: icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
-            }
+            // The size of the art in the 96-point app icon this replaced, so the layout holds.
+            AnimatedAppIcon(name: "kehai-icon-sketch", size: 78)
+                .padding(9)
             Text("Kehai")
                 .font(.system(size: 22, weight: .semibold))
                 .padding(.bottom, -3)
