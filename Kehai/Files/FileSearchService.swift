@@ -19,6 +19,11 @@ struct FileSearchResult: Identifiable, Hashable, Sendable {
     var url: URL { URL(fileURLWithPath: path) }
     var wasOpenedByUser: Bool { lastUsed != nil }
 
+    /// A plain folder (not a package such as an app), which Finder itself opens.
+    var isFolder: Bool {
+        contentType.flatMap(UTType.init)?.conforms(to: .folder) == true
+    }
+
     /// The containing folder, with iCloud Drive named as Finder names it and the home
     /// folder shortened to "~".
     var parentDisplayPath: String {

@@ -1707,7 +1707,9 @@ private struct FileResultCard: View {
         .help(file.path)
         .contextMenu {
             Button("Open", action: activate)
-            Button("Reveal in Finder", action: reveal)
+            if !file.isFolder {
+                Button("Reveal in Finder", action: reveal)
+            }
         }
         .onHover(perform: hoverChanged)
         .animation(.easeOut(duration: 0.1), value: isSelected)
