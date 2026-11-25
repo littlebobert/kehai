@@ -2,11 +2,11 @@ import AppKit
 import AVFoundation
 import SwiftUI
 
-/// The landing page's pencil sketch of the icon, in the icon's shape, as in Karui for Mac's
-/// About window. The still stays underneath and is all that shows with Reduce Motion on;
+/// The landing page's animation of the icon in its black glass, in the icon's shape, as in
+/// Karui for Mac's About window. Made by Scripts/make-landing-animation.py. The still stays underneath and is all that shows with Reduce Motion on;
 /// the video plays only while its window is on screen.
 struct AnimatedAppIcon: View {
-    /// The bundled sketch: `<name>.jpg` for the still and `<name>.mp4` for the flipbook.
+    /// The bundled animation: `<name>.jpg` for the still and `<name>.mp4` for the loop.
     let name: String
     /// Shown under the video while it starts, when that's not the finished still.
     var firstFrameName: String?
