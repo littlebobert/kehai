@@ -1021,13 +1021,14 @@ final class OverviewViewModel {
     }
 
     func finishTermination() async {
-        // Don't await `liveThumbnailTask`. It may be parked inside a
-        // ScreenCaptureKit call that ignores cancellation, and there is nothing
-        // left to wait for: both this type and LiveThumbnailService are
-        // @MainActor, so `prepareForTermination` cannot have interleaved between
-        // the service's pre-capture guard and `startCapture()`, which means it
-        // already saw and tore down any stream that will ever exist.
+        // Don't await `liveThumbnailTask`; it may be parked in a ScreenCaptureKit
+        // call that ignores cancellation. Stop the live capture first instead:
+        // if quit arrived while `startCapture()` was in flight, the service left
+        // that stream running, since it can't be stopped until it has started,
+        // and `stop()` waits for the start to land and then stops it. Quitting
+        // first leaves macOS capturing for a process that no longer exists.
         liveThumbnailTask = nil
+        await liveThumbnails.stop()
 
         // An in-flight refresh bails at its next suspension point, but the call
         // it is currently parked in (ScreenCaptureKit, Accessibility, Apple
@@ -1037,7 +1038,6 @@ final class OverviewViewModel {
         while activeRefreshCount > 0, ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(25))
         }
-        await liveThumbnails.stop()
     }
 
     private func scheduleSelectedLiveThumbnail() {

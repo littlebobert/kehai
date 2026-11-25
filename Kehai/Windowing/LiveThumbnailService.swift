@@ -11,6 +11,10 @@ final class LiveThumbnailService {
     private var output: LiveStreamOutput?
     private var generation = 0
     private var isTerminating = false
+    /// The `startCapture()` call in flight, if any. macOS rejects stopping a
+    /// capture that hasn't finished starting (SCStreamError -3808) and then
+    /// keeps it running, even after Kehai quits, so a stop waits for this first.
+    private var pendingStart: Task<Void, Error>?
 
     func start(windowID: CGWindowID, maximumSize: CGSize, frame: @escaping @MainActor (NSImage) -> Void) async {
         guard !isTerminating, !Task.isCancelled else { return }
@@ -58,7 +62,14 @@ final class LiveThumbnailService {
             guard !isTerminating, !Task.isCancelled else { return }
             self.output = output
             self.stream = stream
-            try await stream.startCapture()
+            let startCapture = Task { try await stream.startCapture() }
+            pendingStart = startCapture
+            let started = await startCapture.result
+            if pendingStart == startCapture { pendingStart = nil }
+            try started.get()
+            // A stop() that arrived meanwhile waited for this start and owns the
+            // teardown once `stream` is no longer this one.
+            guard self.stream === stream else { return }
             guard !isTerminating, !Task.isCancelled else {
                 await stop()
                 return
@@ -75,6 +86,7 @@ final class LiveThumbnailService {
 
     func stop() async {
         generation += 1
+        if let pendingStart { _ = await pendingStart.result }
         guard let stream else {
             output = nil
             return
@@ -85,8 +97,9 @@ final class LiveThumbnailService {
         logger.notice("Live capture stopped")
     }
 
-    /// Best-effort synchronous teardown for app termination, where awaiting
-    /// an async `stop()` would never get a chance to run before process exit.
+    /// Synchronous teardown at the start of app termination. A capture that is
+    /// still starting can't be stopped yet, so it is left for the `stop()` that
+    /// `OverviewViewModel.finishTermination()` awaits before the quit goes ahead.
     func prepareForTermination() {
         isTerminating = true
         generation += 1
@@ -94,6 +107,7 @@ final class LiveThumbnailService {
             output = nil
             return
         }
+        guard pendingStart == nil else { return }
         self.stream = nil
         output = nil
         stream.stopCapture { _ in }
