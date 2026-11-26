@@ -479,6 +479,7 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
     }
 
     private func closeCompactSwitcher() {
+        model.endPinnedSwitcherFiltering()
         dismissesCompactWindowWhenApplicationDeactivates = false
         hasPointerEnteredHotZoneCompactWindow = false
         hasInteractedWithHotZoneCompactWindow = false
@@ -875,6 +876,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
                 && self.model.isSwitcherMode
                 && !self.isShortcutSessionActive()
             if event.keyCode == 53 {
+                if isPinnedMiniBrowser {
+                    self.model.endPinnedSwitcherFiltering()
+                }
                 if editingText {
                     if isPinnedMiniBrowser {
                         self.model.compactSearchBlurRequest += 1
@@ -935,7 +939,9 @@ final class OverviewPanelController: NSObject, NSWindowDelegate {
             if isPinnedMiniBrowser,
                modifiers.isEmpty,
                event.keyCode == 51,
-               !self.model.query.isEmpty {
+               !self.model.query.isEmpty || self.model.isPinnedSwitcherFiltering {
+                // Once filtering, Delete only edits the query; on an empty query it's
+                // swallowed so an extra press doesn't open the exclusion chooser.
                 self.model.deleteLastPinnedSwitcherQueryCharacter()
                 return nil
             }

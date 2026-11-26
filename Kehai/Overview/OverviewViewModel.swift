@@ -160,6 +160,10 @@ final class OverviewViewModel {
     var compactSearchBlurRequest = 0
     private var pendingSearchText = ""
     private var pendingCompactSearchText = ""
+    /// Set once the user types into the mini browser's query. While set, Delete on an
+    /// empty query is swallowed instead of opening the exclusion/action chooser, until
+    /// Escape or the mini browser closes.
+    private(set) var isPinnedSwitcherFiltering = false
     var actionChooserWindow: WindowItem?
     var actionChooserStage: WindowActionChooserStage?
     var actionChooserSelection = 0
@@ -1597,6 +1601,7 @@ final class OverviewViewModel {
         if query.isEmpty {
             selectAllWindowsApp()
         } else {
+            isPinnedSwitcherFiltering = true
             focusFirstPinnedSwitcherSearchResult()
         }
     }
@@ -1613,7 +1618,12 @@ final class OverviewViewModel {
         }
     }
 
+    func endPinnedSwitcherFiltering() {
+        isPinnedSwitcherFiltering = false
+    }
+
     func clearPinnedSwitcherQuery() {
+        isPinnedSwitcherFiltering = false
         guard !query.isEmpty else { return }
         query = ""
         selectAllWindowsApp()
